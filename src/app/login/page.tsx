@@ -19,13 +19,26 @@ export default function LoginPage() {
     setError("");
 
     if (!isSupabaseConfigured()) {
-      setError("اضبط ملف .env.local أولا بقيم Supabase.");
+      setError(
+        "إعدادات Supabase غير موجودة على الموقع المنشور. في Vercel: Environment Variables (الرابط + المفتاح) ثم Redeploy."
+      );
       return;
     }
 
     setLoading(true);
-    const supabase = createClient();
-    const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    let supabase;
+    try {
+      supabase = createClient();
+    } catch (configError) {
+      setLoading(false);
+      setError(configError instanceof Error ? configError.message : "إعدادات Supabase غير صحيحة.");
+      return;
+    }
+
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
 
     if (signInError) {
       setLoading(false);
