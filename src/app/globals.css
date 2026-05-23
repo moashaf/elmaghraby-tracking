@@ -1,0 +1,189 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --primary: #0f766e;
+  --primary-foreground: #ffffff;
+  --surface: #ffffff;
+  --muted: #64748b;
+  --border: #cbd5e1;
+  --danger: #dc2626;
+  --navy: #123c5a;
+  --shadow-soft: 0 12px 28px rgb(15 23 42 / 8%);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-surface: var(--surface);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --font-sans: var(--font-cairo), ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.card {
+  border: 1px solid color-mix(in srgb, var(--border), transparent 20%);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-weight: 600;
+  border: 1px solid transparent;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.btn-secondary {
+  background: var(--surface);
+  color: var(--foreground);
+  border-color: var(--border);
+}
+
+.btn-danger {
+  background: var(--danger);
+}
+
+.input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+}
+
+.input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgb(15 118 110 / 12%);
+}
+
+.label {
+  display: grid;
+  gap: 6px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.table-head {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.row-hover:hover {
+  background: #f8fafc;
+}
+
+html.dark {
+  --background: #0f172a;
+  --foreground: #e2e8f0;
+  --surface: #1e293b;
+  --muted: #94a3b8;
+  --border: #334155;
+  --navy: #0b2a42;
+}
+
+html.dark .input {
+  background: #0f172a;
+  color: var(--foreground);
+}
+
+html.dark .table-head {
+  background: #334155;
+  color: #e2e8f0;
+}
+
+@media print {
+  aside,
+  header,
+  nav,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  @page {
+    margin: 12mm;
+    size: A4 landscape;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .card {
+    box-shadow: none !important;
+    border-color: #94a3b8 !important;
+    break-inside: avoid;
+  }
+
+  .report-print-root {
+    padding: 0 !important;
+  }
+
+  .report-print-title {
+    display: block !important;
+    margin-bottom: 12px;
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  table {
+    font-size: 11px;
+  }
+
+  th,
+  td {
+    border: 1px solid #cbd5e1 !important;
+    padding: 6px 8px !important;
+  }
+}
+
+.status-badge {
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-in_sea {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.status-customs {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.status-closed {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.safe-area-pb {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}

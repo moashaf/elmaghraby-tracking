@@ -1,0 +1,43 @@
+{
+  "name": "elmaghraby-tracing",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "db:apply": "node scripts/apply-migrations.mjs",
+    "dev": "next dev",
+    "desktop:dev": "node scripts/sync-desktop-url.mjs dev && tauri dev",
+    "desktop:build": "node scripts/sync-desktop-url.mjs prod && tauri build",
+    "desktop:configure": "node scripts/sync-desktop-url.mjs prod",
+    "desktop:info": "tauri info",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^5.4.0",
+    "@supabase/supabase-js": "^2.106.1",
+    "@tanstack/react-query": "^5.100.11",
+    "@tauri-apps/api": "^2.11.0",
+    "date-fns": "^4.2.1",
+    "lucide-react": "^1.16.0",
+    "next": "16.2.6",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-hook-form": "^7.76.0",
+    "xlsx": "^0.18.5",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "pg": "^8.16.3",
+    "@tailwindcss/postcss": "^4",
+    "@tauri-apps/cli": "^2.11.2",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.6",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

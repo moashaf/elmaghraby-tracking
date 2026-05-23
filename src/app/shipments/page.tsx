@@ -1,0 +1,208 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Eye, Plus, RefreshCw } from "lucide-react";
+import { ErrorMessage, PageHeader } from "@/components/ui";
+import {
+  getNextStatusAction,
+  NEXT_ACTION_LABELS,
+  SHIPMENT_STATUS_LABELS,
+  SHIPMENT_STATUSES,
+  type ShipmentStatus,
+} from "@/lib/constants";
+import { useProfile } from "@/context/profile-context";
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import type { Shipment } from "@/lib/types";
+
+export default function ShipmentsPage() {
+  const router = useRouter();
+  const { canWrite } = useProfile();
+  const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [status, setStatus] = useState<ShipmentStatus | "">(() => {
+    if (typeof window === "undefined") return "";
+    const value = new URLSearchParams(window.location.search).get("status");
+    return SHIPMENT_STATUSES.includes(value as ShipmentStatus) ? (value as ShipmentStatus) : "";
+  });
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  async function load() {
+    setError("");
+    if (!isSupabaseConfigured()) {
+      setLoading(false);
+      setError("اضبط ملف .env.local أولا بقيم Supabase.");
+      return;
+    }
+
+    setLoading(true);
+    const supabase = createClient();
+    await supabase.rpc("auto_move_shipments_to_customs");
+    let request = supabase
+      .from("shipments")
+      .select("*,companies(name_ar),suppliers(name_ar)")
+      .order("created_at", { ascending: false });
+
+    if (status) request = request.eq("status", status);
+    if (query.trim()) request = request.or(`shipment_number.ilike.%${query.trim()}%,acid.ilike.%${query.trim()}%`);
+
+    const result = await request;
+    setLoading(false);
+
+    if (result.error) {
+      setError(result.error.message);
+      return;
+    }
+
+    setShipments((result.data as Shipment[] | null) ?? []);
+  }
+
+  useEffect(() => {
+    void Promise.resolve().then(load);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
+
+  const counts = useMemo(
+    () =>
+      SHIPMENT_STATUSES.map((item) => ({
+        status: item,
+        count: shipments.filter((shipment) => shipment.status === item).length,
+      })),
+    [shipments]
+  );
+
+  async function transition(shipment: Shipment) {
+    const action = getNextStatusAction(shipment.status);
+    if (!action) return;
+    if (action !== "to_customs") {
+      router.push(`/shipments/${shipment.id}`);
+      return;
+    }
+
+    setActionLoading(shipment.id);
+    const result = await createClient().rpc("transition_shipment_status", {
+      shipment_id: shipment.id,
+      target_status: "customs",
+    });
+    setActionLoading(null);
+
+    if (result.error) {
+      setError(result.error.message);
+      return;
+    }
+
+    await load();
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        title="الشحنات"
+        description="قائمة الشحنات مع فلترة الحالة وزر التالي بجانب كل حالة."
+        actions={
+          canWrite ? (
+            <Link className="btn" href="/shipments/new">
+              <Plus className="h-4 w-4" />
+              شحنة جديدة
+            </Link>
+          ) : null
+        }
+      />
+
+      <ErrorMessage message={error} />
+
+      <div className="grid gap-4 md:grid-cols-3">
+        {counts.map((item) => (
+          <button
+            className={`card p-4 text-right transition hover:border-[#0f766e] ${status === item.status ? "border-[#0f766e]" : ""}`}
+            key={item.status}
+            onClick={() => setStatus(status === item.status ? "" : item.status)}
+            type="button"
+          >
+            <span className={`status-badge status-${item.status}`}>{SHIPMENT_STATUS_LABELS[item.status]}</span>
+            <div className="mt-3 text-3xl font-bold">{item.count}</div>
+          </button>
+        ))}
+      </div>
+
+      <div className="card grid gap-3 p-4 md:grid-cols-[1fr_220px_auto]">
+        <input className="input" placeholder="بحث برقم الشحنة أو ACID" value={query} onChange={(event) => setQuery(event.target.value)} />
+        <select className="input" value={status} onChange={(event) => setStatus(event.target.value as ShipmentStatus | "")}>
+          <option value="">كل الحالات</option>
+          {SHIPMENT_STATUSES.map((item) => (
+            <option key={item} value={item}>
+              {SHIPMENT_STATUS_LABELS[item]}
+            </option>
+          ))}
+        </select>
+        <button className="btn btn-secondary" onClick={load} type="button">
+          <RefreshCw className="h-4 w-4" />
+          تحديث
+        </button>
+      </div>
+
+      <div className="card overflow-hidden">
+        <div className="overflow-auto">
+          <table className="min-w-full text-sm">
+            <thead className="table-head">
+              <tr>
+                <th className="p-3 text-right">رقم الشحنة</th>
+                <th className="p-3 text-right">ACID</th>
+                <th className="p-3 text-right">الشركة</th>
+                <th className="p-3 text-right">المورد</th>
+                <th className="p-3 text-right">ميناء الشحن</th>
+                <th className="p-3 text-right">ETA</th>
+                <th className="p-3 text-right">الحالة</th>
+                <th className="p-3 text-right">إجراءات</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td className="p-4 text-[var(--muted)]" colSpan={8}>جاري التحميل...</td>
+                </tr>
+              ) : shipments.length ? (
+                shipments.map((shipment) => {
+                  const action = getNextStatusAction(shipment.status);
+                  return (
+                    <tr className="row-hover border-t border-[var(--border)]" key={shipment.id}>
+                      <td className="p-3 font-semibold">{shipment.shipment_number}</td>
+                      <td className="p-3">{shipment.acid}</td>
+                      <td className="p-3">{shipment.companies?.name_ar ?? "-"}</td>
+                      <td className="p-3">{shipment.suppliers?.name_ar ?? "-"}</td>
+                      <td className="p-3">{shipment.shipping_port}</td>
+                      <td className="p-3">{shipment.eta}</td>
+                      <td className="p-3">
+                        <span className={`status-badge status-${shipment.status}`}>{SHIPMENT_STATUS_LABELS[shipment.status]}</span>
+                      </td>
+                      <td className="p-3">
+                        <div className="flex flex-wrap gap-2">
+                          <Link className="btn btn-secondary px-2 py-1 text-xs" href={`/shipments/${shipment.id}`}>
+                            <Eye className="h-4 w-4" />
+                            عرض
+                          </Link>
+                          {action && canWrite ? (
+                            <button className="btn px-2 py-1 text-xs" disabled={actionLoading === shipment.id} onClick={() => transition(shipment)} type="button">
+                              {actionLoading === shipment.id ? "..." : NEXT_ACTION_LABELS[action]}
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td className="p-4 text-[var(--muted)]" colSpan={8}>لا توجد شحنات مطابقة.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}

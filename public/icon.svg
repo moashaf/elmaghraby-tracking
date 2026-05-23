@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Elmaghraby Tracing">
+  <rect width="128" height="128" rx="24" fill="#123c5a"/>
+  <path d="M25 78h78l-9 18H36L25 78Z" fill="#0f766e"/>
+  <path d="M35 46h58v32H35V46Z" fill="#ffffff"/>
+  <path d="M43 54h12v16H43V54Zm20 0h12v16H63V54Zm20 0h6v16h-6V54Z" fill="#123c5a"/>
+  <path d="M44 33h40l9 13H35l9-13Z" fill="#dbeafe"/>
+</svg>

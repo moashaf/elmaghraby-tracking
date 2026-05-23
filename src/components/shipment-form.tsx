@@ -1,0 +1,709 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { FileUp, Plus, Save, Trash2, X } from "lucide-react";
+import { SearchableSelect } from "@/components/searchable-select";
+import { ErrorMessage } from "@/components/ui";
+import { PORT_SELECT_OPTIONS } from "@/lib/port-options";
+import { addDaysToIsoDate, findRouteDuration } from "@/lib/eta";
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { shipmentContainerFilePath, shipmentInvPath } from "@/lib/storage-path";
+import type {
+  Company,
+  ContainerDraft,
+  Product,
+  ProductCategory,
+  Shipment,
+  ShipmentContainer,
+  ShipmentFormValues,
+  ShipmentProduct,
+  ShipmentProductDraft,
+  ShippingRoute,
+  Supplier,
+} from "@/lib/types";
+
+const bucket = "container-files";
+const today = new Date().toISOString().slice(0, 10);
+
+const emptyForm: ShipmentFormValues = {
+  acid: "",
+  company_id: "",
+  supplier_id: "",
+  shipping_port: "",
+  arrival_port: "",
+  shipped_at: today,
+  eta: today,
+  shipping_duration_days: "",
+  shipment_type: "",
+  total_weight_kg: "",
+  total_cartons: "",
+  containers_count: "",
+  route: "",
+  notes: "",
+};
+
+const emptyContainer: ContainerDraft = {
+  container_number: "",
+  weight_kg: "",
+  cartons_count: "",
+  notes: "",
+  excel_file: null,
+};
+
+const emptyProduct: ShipmentProductDraft = {
+  product_id: "",
+  quantity: "",
+  cartons_count: "",
+  notes: "",
+  is_new_incoming_product: false,
+};
+
+function formFromShipment(shipment?: Shipment): ShipmentFormValues {
+  if (!shipment) return emptyForm;
+
+  return {
+    acid: shipment.acid,
+    company_id: shipment.company_id,
+    supplier_id: shipment.supplier_id,
+    shipping_port: shipment.shipping_port,
+    arrival_port: shipment.arrival_port,
+    shipped_at: shipment.shipped_at,
+    eta: shipment.eta,
+    shipping_duration_days: shipment.shipping_duration_days?.toString() ?? "",
+    shipment_type: shipment.shipment_type ?? "",
+    total_weight_kg: shipment.total_weight_kg?.toString() ?? "",
+    total_cartons: shipment.total_cartons?.toString() ?? "",
+    containers_count: "",
+    route: shipment.route ?? "",
+    notes: shipment.notes ?? "",
+  };
+}
+
+function containerDrafts(rows?: ShipmentContainer[]): ContainerDraft[] {
+  if (!rows?.length) return [];
+
+  return rows.map((row) => ({
+    container_number: row.container_number,
+    weight_kg: row.weight_kg?.toString() ?? "",
+    cartons_count: row.cartons_count?.toString() ?? "",
+    notes: row.notes ?? "",
+    excel_file: null,
+  }));
+}
+
+function productDrafts(rows?: ShipmentProduct[]): ShipmentProductDraft[] {
+  if (!rows?.length) return [{ ...emptyProduct }];
+
+  return rows.map((row) => ({
+    product_id: row.product_id,
+    quantity: row.quantity.toString(),
+    cartons_count: row.cartons_count?.toString() ?? "",
+    notes: row.notes ?? "",
+    is_new_incoming_product: row.is_new_incoming_product,
+  }));
+}
+
+function toNullableNumber(value: string) {
+  if (!value.trim()) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toPositiveNumber(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function resizeContainers(count: number, current: ContainerDraft[]) {
+  if (count <= 0) return [{ ...emptyContainer }];
+  if (current.length === count) return current;
+  if (current.length < count) {
+    return [...current, ...Array.from({ length: count - current.length }, () => ({ ...emptyContainer }))];
+  }
+  return current.slice(0, count);
+}
+
+export function ShipmentForm({
+  shipment,
+  initialContainers,
+  initialProducts,
+}: {
+  shipment?: Shipment;
+  initialContainers?: ShipmentContainer[];
+  initialProducts?: ShipmentProduct[];
+}) {
+  const router = useRouter();
+  const isNew = !shipment;
+  const [form, setForm] = useState<ShipmentFormValues>(() => formFromShipment(shipment));
+  const [containers, setContainers] = useState<ContainerDraft[]>(() =>
+    containerDrafts(initialContainers).length ? containerDrafts(initialContainers) : [{ ...emptyContainer }]
+  );
+  const [shipmentProducts, setShipmentProducts] = useState<ShipmentProductDraft[]>(() => productDrafts(initialProducts));
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
+  const [routes, setRoutes] = useState<ShippingRoute[]>([]);
+  const [invFile, setInvFile] = useState<File | null>(null);
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const productOptions = useMemo(
+    () =>
+      products.map((product) => ({
+        value: product.id,
+        label: `${product.sku} — ${product.name_ar}`,
+        keywords: `${product.sku} ${product.name_ar} ${product.category ?? ""}`,
+      })),
+    [products]
+  );
+
+  const productById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
+
+  useEffect(() => {
+    async function loadLookups() {
+      if (!isSupabaseConfigured()) {
+        setError("اضبط ملف .env.local أولا بقيم Supabase.");
+        return;
+      }
+
+      const supabase = createClient();
+      const [companiesResult, suppliersResult, productsResult, categoriesResult, routesResult] = await Promise.all([
+        supabase.from("companies").select("id,name_ar,name_en,code,is_active").eq("is_active", true).order("name_ar"),
+        supabase.from("suppliers").select("id,name_ar,code,country,contact_phone,is_active").eq("is_active", true).order("name_ar"),
+        supabase.from("products").select("id,sku,name_ar,name_en,category,category_id,unit,is_active").eq("is_active", true).order("name_ar"),
+        supabase.from("product_categories").select("id,name_ar,code,parent_id,is_active").eq("is_active", true).order("name_ar"),
+        supabase.from("shipping_routes").select("id,shipping_port,arrival_port,duration_days,is_active").eq("is_active", true),
+      ]);
+
+      if (companiesResult.error || suppliersResult.error || productsResult.error || categoriesResult.error) {
+        setError(
+          companiesResult.error?.message ||
+            suppliersResult.error?.message ||
+            productsResult.error?.message ||
+            categoriesResult.error?.message ||
+            "تعذر تحميل البيانات الأساسية."
+        );
+        return;
+      }
+
+      if (routesResult.error) {
+        console.warn("[routes]", routesResult.error.message);
+      }
+
+      setCompanies((companiesResult.data ?? []) as Company[]);
+      setSuppliers((suppliersResult.data ?? []) as Supplier[]);
+      setProducts((productsResult.data ?? []) as Product[]);
+      setCategories((categoriesResult.data ?? []) as ProductCategory[]);
+      setRoutes((routesResult.data ?? []) as ShippingRoute[]);
+    }
+
+    void loadLookups();
+  }, []);
+
+  useEffect(() => {
+    const duration = findRouteDuration(routes, form.shipping_port, form.arrival_port);
+    if (!duration || !form.shipped_at) return;
+
+    setForm((current) => ({
+      ...current,
+      shipping_duration_days: String(duration),
+      eta: addDaysToIsoDate(form.shipped_at, duration),
+    }));
+  }, [form.shipping_port, form.arrival_port, form.shipped_at, routes]);
+
+  useEffect(() => {
+    const count = Number(form.containers_count);
+    if (!Number.isFinite(count) || count < 1) return;
+    setContainers((current) => resizeContainers(Math.min(Math.floor(count), 50), current));
+  }, [form.containers_count]);
+
+  function setField<K extends keyof ShipmentFormValues>(key: K, value: ShipmentFormValues[K]) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateContainer(index: number, value: ContainerDraft) {
+    setContainers((current) => current.map((row, rowIndex) => (rowIndex === index ? value : row)));
+  }
+
+  function updateShipmentProduct(index: number, value: ShipmentProductDraft) {
+    setShipmentProducts((current) => current.map((row, rowIndex) => (rowIndex === index ? value : row)));
+  }
+
+  async function uploadStorage(path: string, file: File) {
+    const supabase = createClient();
+    const { error: uploadError } = await supabase.storage.from(bucket).upload(path, file, { upsert: true });
+    if (uploadError) throw new Error(uploadError.message);
+    return path;
+  }
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+
+    if (!isSupabaseConfigured()) {
+      setError("اضبط ملف .env.local أولا بقيم Supabase.");
+      return;
+    }
+
+    if (isNew && !invFile) {
+      setError("ارفع ملف INV بصيغة PDF قبل حفظ الشحنة.");
+      return;
+    }
+
+    if (isNew && invFile && invFile.type !== "application/pdf") {
+      setError("ملف INV يجب أن يكون PDF.");
+      return;
+    }
+
+    const validContainers = containers.filter((container) => container.container_number.trim());
+    const validProducts = shipmentProducts.filter((row) => row.product_id && toPositiveNumber(row.quantity) > 0);
+
+    if (!validContainers.length) {
+      setError("أضف حاوية واحدة على الأقل.");
+      return;
+    }
+
+    if (!validProducts.length) {
+      setError("أضف منتجا واحدا على الأقل بكمية صحيحة.");
+      return;
+    }
+
+    setLoading(true);
+    const supabase = createClient();
+    const user = await supabase.auth.getUser();
+    const shipmentPayload = {
+      acid: form.acid.trim(),
+      company_id: form.company_id,
+      supplier_id: form.supplier_id,
+      shipping_port: form.shipping_port.trim(),
+      arrival_port: form.arrival_port.trim(),
+      shipped_at: form.shipped_at,
+      eta: form.eta,
+      shipping_duration_days: form.shipping_duration_days ? Number(form.shipping_duration_days) : null,
+      shipment_type: form.shipment_type.trim() || "—",
+      total_weight_kg: toNullableNumber(form.total_weight_kg),
+      total_cartons: toNullableNumber(form.total_cartons),
+      route: form.route.trim() || null,
+      notes: form.notes.trim() || null,
+      created_by: user.data.user?.id ?? null,
+    };
+
+    const savedShipment = shipment
+      ? await supabase.from("shipments").update(shipmentPayload).eq("id", shipment.id).select("id").single()
+      : await supabase.from("shipments").insert(shipmentPayload).select("id").single();
+
+    if (savedShipment.error) {
+      setLoading(false);
+      setError(savedShipment.error.message);
+      return;
+    }
+
+    const shipmentId = savedShipment.data.id as string;
+
+    if (shipment) {
+      const [containersDelete, productsDelete] = await Promise.all([
+        supabase.from("shipment_containers").delete().eq("shipment_id", shipmentId),
+        supabase.from("shipment_products").delete().eq("shipment_id", shipmentId),
+      ]);
+
+      if (containersDelete.error || productsDelete.error) {
+        setLoading(false);
+        setError(containersDelete.error?.message || productsDelete.error?.message || "تعذر تحديث تفاصيل الشحنة.");
+        return;
+      }
+    }
+
+    const containersInsert = await supabase
+      .from("shipment_containers")
+      .insert(
+        validContainers.map((container) => ({
+          shipment_id: shipmentId,
+          container_number: container.container_number.trim(),
+          weight_kg: toNullableNumber(container.weight_kg),
+          cartons_count: toNullableNumber(container.cartons_count),
+          notes: container.notes.trim() || null,
+        }))
+      )
+      .select("id, container_number");
+
+    if (containersInsert.error) {
+      setLoading(false);
+      setError(containersInsert.error.message);
+      return;
+    }
+
+    const insertedContainers = containersInsert.data ?? [];
+
+    if (isNew && invFile) {
+      try {
+        const invPath = shipmentInvPath(shipmentId, invFile.name);
+        await uploadStorage(invPath, invFile);
+        const invRow = await supabase.from("shipment_documents").insert({
+          shipment_id: shipmentId,
+          doc_type: "INV",
+          file_name: invFile.name,
+          storage_path: invPath,
+          mime_type: invFile.type,
+          size_bytes: invFile.size,
+          uploaded_by: user.data.user?.id ?? null,
+        });
+        if (invRow.error) throw new Error(invRow.error.message);
+      } catch (uploadError) {
+        setLoading(false);
+        setError(uploadError instanceof Error ? uploadError.message : "تعذر رفع ملف INV.");
+        return;
+      }
+    }
+
+    for (let index = 0; index < validContainers.length; index += 1) {
+      const draft = validContainers[index];
+      const file = draft.excel_file;
+      const containerRow = insertedContainers[index];
+      if (!file || !containerRow?.id) continue;
+
+      try {
+        const path = shipmentContainerFilePath(shipmentId, containerRow.id, file.name);
+        await uploadStorage(path, file);
+        const fileRow = await supabase.from("container_files").insert({
+          container_id: containerRow.id,
+          file_name: file.name,
+          storage_path: path,
+          mime_type: file.type || null,
+          size_bytes: file.size,
+          uploaded_by: user.data.user?.id ?? null,
+        });
+        if (fileRow.error) throw new Error(fileRow.error.message);
+      } catch (uploadError) {
+        setLoading(false);
+        setError(uploadError instanceof Error ? uploadError.message : "تعذر رفع ملف الحاوية.");
+        return;
+      }
+    }
+
+    const productsInsert = await supabase.from("shipment_products").insert(
+      validProducts.map((row) => ({
+        shipment_id: shipmentId,
+        product_id: row.product_id,
+        quantity: toPositiveNumber(row.quantity),
+        cartons_count: toNullableNumber(row.cartons_count),
+        notes: row.notes.trim() || null,
+        is_new_incoming_product: row.is_new_incoming_product,
+      }))
+    );
+
+    setLoading(false);
+
+    if (productsInsert.error) {
+      setError(productsInsert.error.message);
+      return;
+    }
+
+    router.push(`/shipments/${shipmentId}`);
+    router.refresh();
+  }
+
+  return (
+    <>
+      <form className="card space-y-6 p-5" onSubmit={submit}>
+        <ErrorMessage message={error} />
+
+        <section className="space-y-3">
+          <h2 className="font-bold">البيانات الأساسية</h2>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <label className="label">
+              رقم ACID
+              <input className="input" required value={form.acid} onChange={(event) => setField("acid", event.target.value)} />
+            </label>
+            <label className="label">
+              الشركة
+              <select className="input" required value={form.company_id} onChange={(event) => setField("company_id", event.target.value)}>
+                <option value="">اختر الشركة</option>
+                {companies.map((company) => (
+                  <option key={company.id} value={company.id}>
+                    {company.code ? `${company.code} — ` : ""}
+                    {company.name_ar}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="label">
+              المورد
+              <select className="input" required value={form.supplier_id} onChange={(event) => setField("supplier_id", event.target.value)}>
+                <option value="">اختر المورد</option>
+                {suppliers.map((supplier) => (
+                  <option key={supplier.id} value={supplier.id}>
+                    {supplier.code ? `${supplier.code} — ` : ""}
+                    {supplier.name_ar}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="label">
+              نوع / وصف البضاعة
+              <input
+                className="input"
+                placeholder="مثال: خردوات — كشاف"
+                required
+                value={form.shipment_type}
+                onChange={(event) => setField("shipment_type", event.target.value)}
+              />
+            </label>
+            <label className="label">
+              ميناء الشحن
+              <SearchableSelect
+                options={PORT_SELECT_OPTIONS}
+                required
+                value={form.shipping_port}
+                onChange={(value) => setField("shipping_port", value)}
+                placeholder="اختر ميناء الشحن"
+              />
+            </label>
+            <label className="label">
+              ميناء الوصول
+              <SearchableSelect
+                options={PORT_SELECT_OPTIONS}
+                required
+                value={form.arrival_port}
+                onChange={(value) => setField("arrival_port", value)}
+                placeholder="اختر ميناء الوصول"
+              />
+            </label>
+            <label className="label">
+              تاريخ الشحن
+              <input className="input" required type="date" value={form.shipped_at} onChange={(event) => setField("shipped_at", event.target.value)} />
+            </label>
+            <label className="label">
+              تاريخ الوصول المتوقع
+              <input className="input" required type="date" value={form.eta} onChange={(event) => setField("eta", event.target.value)} />
+            </label>
+            <label className="label">
+              مدة الشحن بالأيام
+              <input className="input" min={0} readOnly type="number" value={form.shipping_duration_days} />
+            </label>
+            <label className="label">
+              وزن الشحنة الكلي (كجم)
+              <input className="input" min={0} type="number" value={form.total_weight_kg} onChange={(event) => setField("total_weight_kg", event.target.value)} />
+            </label>
+            <label className="label">
+              إجمالي الكراتين
+              <input className="input" min={0} type="number" value={form.total_cartons} onChange={(event) => setField("total_cartons", event.target.value)} />
+            </label>
+            <label className="label">
+              عدد الحاويات
+              <input
+                className="input"
+                min={1}
+                type="number"
+                value={form.containers_count}
+                onChange={(event) => setField("containers_count", event.target.value)}
+                placeholder="يفتح صفوف الحاويات تلقائيا"
+              />
+            </label>
+            <label className="label xl:col-span-2">
+              خط السير
+              <input className="input" value={form.route} onChange={(event) => setField("route", event.target.value)} />
+            </label>
+          </div>
+
+          {isNew ? (
+            <label className="label block max-w-md">
+              ملف INV (PDF) — إلزامي
+              <input
+                accept="application/pdf,.pdf"
+                className="input"
+                required
+                type="file"
+                onChange={(event) => setInvFile(event.target.files?.[0] ?? null)}
+              />
+            </label>
+          ) : null}
+
+          <label className="label">
+            ملاحظات
+            <textarea className="input min-h-24" value={form.notes} onChange={(event) => setField("notes", event.target.value)} />
+          </label>
+        </section>
+
+        <section className="space-y-3 border-t border-[var(--border)] pt-5">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-bold">الحاويات</h2>
+            <button className="btn btn-secondary text-sm" onClick={() => setContainers((current) => [...current, { ...emptyContainer }])} type="button">
+              <Plus className="h-4 w-4" />
+              حاوية
+            </button>
+          </div>
+          <div className="space-y-3">
+            {containers.map((container, index) => (
+              <div className="grid gap-3 rounded-md border border-[var(--border)] p-3 lg:grid-cols-[1fr_120px_120px_1fr_auto_auto]" key={index}>
+                <input className="input" placeholder="رقم الحاوية" value={container.container_number} onChange={(event) => updateContainer(index, { ...container, container_number: event.target.value })} />
+                <input className="input" min={0} placeholder="الوزن" type="number" value={container.weight_kg} onChange={(event) => updateContainer(index, { ...container, weight_kg: event.target.value })} />
+                <input className="input" min={0} placeholder="الكرتين" type="number" value={container.cartons_count} onChange={(event) => updateContainer(index, { ...container, cartons_count: event.target.value })} />
+                <input className="input" placeholder="ملاحظات" value={container.notes} onChange={(event) => updateContainer(index, { ...container, notes: event.target.value })} />
+                <label className="btn btn-secondary cursor-pointer text-xs">
+                  <FileUp className="h-4 w-4" />
+                  {container.excel_file?.name ?? "Excel"}
+                  <input
+                    accept=".xlsx,.xls,.csv"
+                    className="hidden"
+                    type="file"
+                    onChange={(event) =>
+                      updateContainer(index, { ...container, excel_file: event.target.files?.[0] ?? null })
+                    }
+                  />
+                </label>
+                <button className="btn btn-secondary px-2" onClick={() => setContainers((current) => current.length === 1 ? [{ ...emptyContainer }] : current.filter((_, rowIndex) => rowIndex !== index))} type="button">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="space-y-3 border-t border-[var(--border)] pt-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-bold">منتجات الشحنة</h2>
+            <div className="flex flex-wrap gap-2">
+              <button className="btn btn-secondary text-sm" onClick={() => setShowProductModal(true)} type="button">
+                <Plus className="h-4 w-4" />
+                منتج جديد
+              </button>
+              <button className="btn btn-secondary text-sm" onClick={() => setShipmentProducts((current) => [...current, { ...emptyProduct }])} type="button">
+                <Plus className="h-4 w-4" />
+                سطر منتج
+              </button>
+            </div>
+          </div>
+          <div className="space-y-3">
+            {shipmentProducts.map((row, index) => {
+              const selected = productById.get(row.product_id);
+              return (
+                <div className="grid gap-3 rounded-md border border-[var(--border)] p-3 md:grid-cols-[1fr_130px_130px_150px_auto]" key={index}>
+                  <SearchableSelect
+                    options={productOptions}
+                    value={row.product_id}
+                    onChange={(value) => updateShipmentProduct(index, { ...row, product_id: value })}
+                    placeholder="ابحث عن المنتج (SKU أو الاسم)"
+                  />
+                  <input className="input" min={0} placeholder="الكمية" type="number" value={row.quantity} onChange={(event) => updateShipmentProduct(index, { ...row, quantity: event.target.value })} />
+                  <input className="input" min={0} placeholder="الكرتين" type="number" value={row.cartons_count} onChange={(event) => updateShipmentProduct(index, { ...row, cartons_count: event.target.value })} />
+                  <label className="flex items-center gap-2 text-sm text-[var(--muted)]">
+                    <input checked={row.is_new_incoming_product} onChange={(event) => updateShipmentProduct(index, { ...row, is_new_incoming_product: event.target.checked })} type="checkbox" />
+                    منتج وارد جديد
+                  </label>
+                  <button className="btn btn-secondary px-2" onClick={() => setShipmentProducts((current) => current.length === 1 ? [{ ...emptyProduct }] : current.filter((_, rowIndex) => rowIndex !== index))} type="button">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                  {selected ? <input className="input md:col-span-5" placeholder="ملاحظات المنتج" value={row.notes} onChange={(event) => updateShipmentProduct(index, { ...row, notes: event.target.value })} /> : null}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <button className="btn" disabled={loading} type="submit">
+          <Save className="h-4 w-4" />
+          {loading ? "جاري الحفظ..." : shipment ? "حفظ الشحنة" : "حفظ الشحنة"}
+        </button>
+      </form>
+
+      {showProductModal ? (
+        <QuickProductModal
+          categories={categories}
+          onClose={() => setShowProductModal(false)}
+          onCreated={(product) => {
+            setProducts((current) => [product, ...current]);
+            setShipmentProducts((current) => {
+              const next = current.length === 1 && !current[0].product_id ? [{ ...current[0], product_id: product.id }] : [...current, { ...emptyProduct, product_id: product.id }];
+              return next;
+            });
+            setShowProductModal(false);
+          }}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function QuickProductModal({
+  categories,
+  onClose,
+  onCreated,
+}: {
+  categories: ProductCategory[];
+  onClose: () => void;
+  onCreated: (product: Product) => void;
+}) {
+  const [form, setForm] = useState({ name_ar: "", category_id: "", unit: "piece" });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setLoading(true);
+
+    const category = categories.find((row) => row.id === form.category_id);
+    const result = await createClient()
+      .from("products")
+      .insert({
+        name_ar: form.name_ar.trim(),
+        category: category?.name_ar ?? null,
+        category_id: form.category_id || null,
+        unit: form.unit.trim() || "piece",
+      })
+      .select("id,sku,name_ar,name_en,category,category_id,unit,is_active")
+      .single();
+
+    setLoading(false);
+
+    if (result.error) {
+      setError(result.error.message);
+      return;
+    }
+
+    onCreated(result.data as Product);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4" onClick={onClose}>
+      <form className="card w-full max-w-lg space-y-4 p-5" onClick={(event) => event.stopPropagation()} onSubmit={submit}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold">منتج جديد</h2>
+          <button className="btn btn-secondary p-2" onClick={onClose} type="button">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <ErrorMessage message={error} />
+        <p className="text-xs text-[var(--muted)]">سيتم توليد SKU تلقائيا من كود الفئة.</p>
+        <label className="label">
+          اسم المنتج
+          <input className="input" required value={form.name_ar} onChange={(event) => setForm({ ...form, name_ar: event.target.value })} />
+        </label>
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="label">
+            الفئة
+            <select className="input" value={form.category_id} onChange={(event) => setForm({ ...form, category_id: event.target.value })}>
+              <option value="">اختر الفئة</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.code ? `${category.code} — ` : ""}
+                  {category.name_ar}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="label">
+            الوحدة
+            <input className="input" value={form.unit} onChange={(event) => setForm({ ...form, unit: event.target.value })} />
+          </label>
+        </div>
+        <button className="btn" disabled={loading} type="submit">
+          {loading ? "جاري الحفظ..." : "حفظ المنتج"}
+        </button>
+      </form>
+    </div>
+  );
+}
