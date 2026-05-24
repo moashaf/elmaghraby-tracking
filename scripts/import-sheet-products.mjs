@@ -1,9 +1,11 @@
 /**
- * Import products from a single-sheet Excel (barcode + name columns).
- * Creates one category per sheet (or file name when sheet is Sheet1, Sheet2, ...).
+ * Import products from Excel (barcode col A, name col B).
  *
- * Usage:
- *   node scripts/import-sheet-products.mjs "c:/Users/hp/Downloads/ازالة.xlsx"
+ * Root category (default):
+ *   node scripts/import-sheet-products.mjs "c:/path/file.xlsx"
+ *
+ * Subcategory under a parent (e.g. خردوات):
+ *   node scripts/import-sheet-products.mjs "c:/path/file.xlsx" --parent خردوات
  */
 
 import { basename, extname } from "path";
@@ -11,13 +13,31 @@ import { readFileSync } from "fs";
 import pg from "pg";
 import XLSX from "xlsx";
 
-const filePath = process.argv[2];
+const args = process.argv.slice(2);
+const parentArgIndex = args.indexOf("--parent");
+const parentName = parentArgIndex >= 0 ? args[parentArgIndex + 1] : null;
+const filePath = args.find((arg) => !arg.startsWith("--") && arg !== parentName);
+
 if (!filePath) {
-  console.error("Usage: node scripts/import-sheet-products.mjs <path-to-xlsx>");
+  console.error("Usage: node scripts/import-sheet-products.mjs <path-to-xlsx> [--parent <main-category>]");
   process.exit(1);
 }
 
-const CATEGORY_CODES = {
+const PARENT_CODES = {
+  "PERSONAL CARE": "PC",
+  كشاف: "KSHF",
+  APPLIANCE: "APPL",
+  "طبي + TV": "MEDTV",
+  "راديو + مشترك + حجر + تليفون": "RDMP",
+  خردوات: "HRDW",
+  هدايا: "GIFT",
+  "مستلزمات مطبخ": "KITC",
+  "سيريا رمضان": "RAMS",
+  "متنوع رمضان": "RAMM",
+  "عدد ومفكات": "TOOL",
+};
+
+const ROOT_CATEGORY_CODES = {
   ازالة: "AZAL",
 };
 
@@ -51,15 +71,24 @@ function isGenericSheetName(name) {
   return /^Sheet\d+$/i.test(String(name).trim());
 }
 
-function resolveCategoryLabel(sheetName, path) {
+function resolveSubcategoryLabel(sheetName, path) {
   if (isGenericSheetName(sheetName)) {
     return basename(path, extname(path));
   }
   return sheetName;
 }
 
-function categoryCode(name) {
-  if (CATEGORY_CODES[name]) return CATEGORY_CODES[name];
+function parentCode(name) {
+  if (PARENT_CODES[name]) return PARENT_CODES[name];
+  const latin = String(name)
+    .normalize("NFKD")
+    .replace(/[^\w]+/g, "")
+    .toUpperCase();
+  return (latin.slice(0, 6) || "CAT") + Math.random().toString(36).slice(2, 4).toUpperCase();
+}
+
+function rootCategoryCode(name) {
+  if (ROOT_CATEGORY_CODES[name]) return ROOT_CATEGORY_CODES[name];
   const latin = String(name)
     .normalize("NFKD")
     .replace(/[^\w]+/g, "")
@@ -83,7 +112,7 @@ function parseWorkbook(path) {
 
   for (const sheetName of workbook.SheetNames) {
     const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: "" });
-    const categoryName = resolveCategoryLabel(sheetName, path);
+    const subcategoryName = resolveSubcategoryLabel(sheetName, path);
     const items = [];
 
     for (let index = 1; index < rows.length; index += 1) {
@@ -95,7 +124,7 @@ function parseWorkbook(path) {
       });
     }
 
-    groups.push({ sheetName, categoryName, items });
+    groups.push({ sheetName, subcategoryName, items });
   }
 
   return groups;
@@ -111,21 +140,70 @@ if (!databaseUrl) {
 
 const client = new pg.Client({ connectionString: databaseUrl, ssl: { rejectUnauthorized: false } });
 
-async function ensureCategory(client, categoryName) {
+async function ensureRootCategory(client, categoryName) {
   const existing = await client.query(
     `select id, code from public.product_categories where name_ar = $1 and parent_id is null limit 1`,
     [categoryName]
   );
   if (existing.rows[0]?.id) {
-    return existing.rows[0];
+    const row = existing.rows[0];
+    if (!row.code) {
+      const code = rootCategoryCode(categoryName);
+      await client.query(`update public.product_categories set code = $1 where id = $2`, [code, row.id]);
+      return { id: row.id, code };
+    }
+    return row;
   }
 
-  const code = categoryCode(categoryName);
+  const code = rootCategoryCode(categoryName);
   const inserted = await client.query(
     `insert into public.product_categories (name_ar, code, parent_id, is_active)
      values ($1, $2, null, true)
      returning id, code`,
     [categoryName, code]
+  );
+  return inserted.rows[0];
+}
+
+async function ensureParentCategory(client, name) {
+  const existing = await client.query(
+    `select id, code from public.product_categories where name_ar = $1 and parent_id is null limit 1`,
+    [name]
+  );
+  if (!existing.rows[0]?.id) {
+    throw new Error(`الفئة الرئيسية «${name}» غير موجودة. أضفها من صفحة الفئات أولا.`);
+  }
+  const row = existing.rows[0];
+  if (!row.code) {
+    const code = parentCode(name);
+    await client.query(`update public.product_categories set code = $1 where id = $2`, [code, row.id]);
+    return { id: row.id, code };
+  }
+  return row;
+}
+
+async function ensureSubCategory(client, parent, subcategoryName) {
+  const existing = await client.query(
+    `select id, code from public.product_categories where name_ar = $1 and parent_id = $2 limit 1`,
+    [subcategoryName, parent.id]
+  );
+  if (existing.rows[0]?.id) {
+    return existing.rows[0];
+  }
+
+  const countResult = await client.query(
+    `select count(*)::int as count from public.product_categories where parent_id = $1`,
+    [parent.id]
+  );
+  const index = Number(countResult.rows[0]?.count ?? 0) + 1;
+  const prefix = parent.code || parentCode(parent.name_ar ?? "خردوات");
+  const code = `${prefix}-${String(index).padStart(2, "0")}`;
+
+  const inserted = await client.query(
+    `insert into public.product_categories (name_ar, code, parent_id, is_active)
+     values ($1, $2, $3, true)
+     returning id, code`,
+    [subcategoryName, code, parent.id]
   );
   return inserted.rows[0];
 }
@@ -141,7 +219,18 @@ async function main() {
     const summary = [];
 
     for (const group of groups) {
-      const category = await ensureCategory(client, group.categoryName);
+      let category;
+      let categoryLabel;
+
+      if (parentName) {
+        const parent = await ensureParentCategory(client, parentName);
+        category = await ensureSubCategory(client, parent, group.subcategoryName);
+        categoryLabel = `${parentName} / ${group.subcategoryName}`;
+      } else {
+        category = await ensureRootCategory(client, group.subcategoryName);
+        categoryLabel = group.subcategoryName;
+      }
+
       let sheetInserted = 0;
 
       for (const item of group.items) {
@@ -157,7 +246,7 @@ async function main() {
           await client.query(
             `insert into public.products (name_ar, category, category_id, barcode, unit, sku, is_active)
              values ($1, $2, $3, $4, 'piece', '', true)`,
-            [item.name_ar, group.categoryName, category.id, item.barcode]
+            [item.name_ar, group.subcategoryName, category.id, item.barcode]
           );
           inserted += 1;
           sheetInserted += 1;
@@ -172,7 +261,7 @@ async function main() {
 
       summary.push({
         sheet: group.sheetName,
-        category: group.categoryName,
+        category: categoryLabel,
         code: category.code,
         products: sheetInserted,
         rows: group.items.length,
@@ -182,8 +271,9 @@ async function main() {
     await client.query("commit");
 
     console.log(`Imported from: ${filePath}`);
+    if (parentName) console.log(`Parent category: ${parentName}`);
     for (const row of summary) {
-      console.log(`  [${row.sheet}] → فئة «${row.category}» (${row.code}): ${row.products}/${row.rows} منتج`);
+      console.log(`  [${row.sheet}] → ${row.category} (${row.code}): ${row.products}/${row.rows} منتج`);
     }
     console.log(`Total inserted: ${inserted}`);
     console.log(`Skipped duplicate barcodes: ${skippedDuplicate}`);
