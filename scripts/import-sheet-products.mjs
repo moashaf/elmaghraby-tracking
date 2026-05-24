@@ -6,6 +6,9 @@
  *
  * Subcategory under a parent (e.g. خردوات):
  *   node scripts/import-sheet-products.mjs "c:/path/file.xlsx" --parent خردوات
+ *
+ * Custom subcategory name:
+ *   node scripts/import-sheet-products.mjs "c:/path/file.xlsx" --parent "العاب اطفال" --subcategory كورة
  */
 
 import { basename, extname } from "path";
@@ -15,11 +18,22 @@ import XLSX from "xlsx";
 
 const args = process.argv.slice(2);
 const parentArgIndex = args.indexOf("--parent");
+const subArgIndex = args.indexOf("--subcategory");
 const parentName = parentArgIndex >= 0 ? args[parentArgIndex + 1] : null;
-const filePath = args.find((arg) => !arg.startsWith("--") && arg !== parentName);
+const subcategoryOverride = subArgIndex >= 0 ? args[subArgIndex + 1] : null;
+const filePath = args.find(
+  (arg, index) =>
+    !arg.startsWith("--") &&
+    arg !== parentName &&
+    arg !== subcategoryOverride &&
+    index !== parentArgIndex + 1 &&
+    index !== subArgIndex + 1
+);
 
 if (!filePath) {
-  console.error("Usage: node scripts/import-sheet-products.mjs <path-to-xlsx> [--parent <main-category>]");
+  console.error(
+    "Usage: node scripts/import-sheet-products.mjs <path-to-xlsx> [--parent <main>] [--subcategory <sub>]"
+  );
   process.exit(1);
 }
 
@@ -35,10 +49,12 @@ const PARENT_CODES = {
   "سيريا رمضان": "RAMS",
   "متنوع رمضان": "RAMM",
   "عدد ومفكات": "TOOL",
+  "العاب اطفال": "TOYS",
 };
 
 const ROOT_CATEGORY_CODES = {
   ازالة: "AZAL",
+  "العاب اطفال": "TOYS",
 };
 
 function loadEnv() {
@@ -106,13 +122,13 @@ function normalizeBarcode(value) {
   return trimmed || null;
 }
 
-function parseWorkbook(path) {
+function parseWorkbook(path, subOverride) {
   const workbook = XLSX.readFile(path);
   const groups = [];
 
   for (const sheetName of workbook.SheetNames) {
     const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: "" });
-    const subcategoryName = resolveSubcategoryLabel(sheetName, path);
+    const subcategoryName = subOverride ?? resolveSubcategoryLabel(sheetName, path);
     const items = [];
 
     for (let index = 1; index < rows.length; index += 1) {
@@ -166,20 +182,7 @@ async function ensureRootCategory(client, categoryName) {
 }
 
 async function ensureParentCategory(client, name) {
-  const existing = await client.query(
-    `select id, code from public.product_categories where name_ar = $1 and parent_id is null limit 1`,
-    [name]
-  );
-  if (!existing.rows[0]?.id) {
-    throw new Error(`الفئة الرئيسية «${name}» غير موجودة. أضفها من صفحة الفئات أولا.`);
-  }
-  const row = existing.rows[0];
-  if (!row.code) {
-    const code = parentCode(name);
-    await client.query(`update public.product_categories set code = $1 where id = $2`, [code, row.id]);
-    return { id: row.id, code };
-  }
-  return row;
+  return ensureRootCategory(client, name);
 }
 
 async function ensureSubCategory(client, parent, subcategoryName) {
@@ -209,7 +212,7 @@ async function ensureSubCategory(client, parent, subcategoryName) {
 }
 
 async function main() {
-  const groups = parseWorkbook(filePath);
+  const groups = parseWorkbook(filePath, subcategoryOverride);
   await client.connect();
   await client.query("begin");
 
