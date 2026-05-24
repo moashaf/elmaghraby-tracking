@@ -460,6 +460,18 @@ export function ShipmentForm({
   const fieldClass = readOnly ? "input bg-[var(--surface)] opacity-90" : "input";
   const disabled = readOnly || loading;
 
+  const cartonStats = useMemo(() => {
+    const entered = shipmentProducts.reduce((sum, row) => {
+      const value = Number(row.cartons_count);
+      return sum + (Number.isFinite(value) && value > 0 ? value : 0);
+    }, 0);
+    const target = Number(form.total_cartons);
+    return {
+      entered,
+      target: Number.isFinite(target) && target > 0 ? target : null,
+    };
+  }, [form.total_cartons, shipmentProducts]);
+
   return (
     <>
       <form className="card space-y-6 p-5" onSubmit={readOnly ? (event) => event.preventDefault() : submit}>
@@ -631,8 +643,29 @@ export function ShipmentForm({
         </section>
 
         <section className="space-y-3 border-t border-[var(--border)] pt-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-bold">منتجات الشحنة</h2>
+          <div className="sticky top-16 z-[15] flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-white/95 px-3 py-3 shadow-sm backdrop-blur-sm">
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="font-bold">منتجات الشحنة</h2>
+              {cartonStats.target != null ? (
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                    cartonStats.entered === cartonStats.target
+                      ? "bg-emerald-100 text-emerald-800"
+                      : cartonStats.entered > cartonStats.target
+                        ? "bg-red-100 text-red-800"
+                        : "bg-amber-100 text-amber-800"
+                  }`}
+                >
+                  الكراتين: {cartonStats.entered} / {cartonStats.target}
+                </span>
+              ) : cartonStats.entered > 0 ? (
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                  الكراتين المدخلة: {cartonStats.entered}
+                </span>
+              ) : (
+                <span className="text-xs text-[var(--muted)]">حدّد إجمالي الكراتين في بيانات الشحنة</span>
+              )}
+            </div>
             {!readOnly ? (
               <div className="flex flex-wrap gap-2">
                 <button className="btn btn-secondary text-sm" onClick={() => setShowProductModal(true)} type="button">
