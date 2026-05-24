@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Edit2, Plus, Save } from "lucide-react";
+import { Edit2, Plus, Save, Search } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage, PageHeader } from "@/components/ui";
 import { ALL_COUNTRIES } from "@/lib/data/countries";
@@ -30,6 +30,7 @@ const countryOptions = ALL_COUNTRIES.map((country) => ({ value: country, label: 
 export default function SuppliersPage() {
   const [rows, setRows] = useState<Supplier[]>([]);
   const [form, setForm] = useState<SupplierForm>(emptyForm);
+  const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -67,6 +68,14 @@ export default function SuppliersPage() {
     }
     return countryOptions;
   }, [form.country]);
+
+  const filtered = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return rows;
+    return rows.filter((row) =>
+      [row.name_ar, row.code, row.country, row.contact_phone].some((value) => value?.toLowerCase().includes(term))
+    );
+  }, [query, rows]);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -126,6 +135,18 @@ export default function SuppliersPage() {
         </div>
       </form>
 
+      <div className="card p-4">
+        <label className="relative block">
+          <Search className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-[var(--muted)]" />
+          <input
+            className="input pr-9"
+            placeholder="بحث بالاسم أو الكود أو الدولة"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+      </div>
+
       <div className="card overflow-auto">
         <table className="min-w-full text-sm">
           <thead className="table-head">
@@ -146,7 +167,7 @@ export default function SuppliersPage() {
                 </td>
               </tr>
             ) : (
-              rows.map((row) => (
+              filtered.map((row) => (
                 <tr className="border-t border-[var(--border)]" key={row.id}>
                   <td className="p-3 font-semibold">{row.name_ar}</td>
                   <td className="p-3">{row.code ?? "-"}</td>

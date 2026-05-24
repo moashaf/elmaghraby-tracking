@@ -2,8 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Edit2, FolderTree, Plus, Save, Search, Trash2, X } from "lucide-react";
+import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage, PageHeader, StatusPill } from "@/components/ui";
+import {
+  buildCategorySelectOptions,
+  filterCategoryRows,
+  type CategoryListFilter,
+} from "@/lib/category-options";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { fetchAllFromTable } from "@/lib/supabase/fetch-all";
 import type { ProductCategory } from "@/lib/types";
 
 type CategoryForm = {
@@ -21,10 +28,18 @@ const emptyForm: CategoryForm = {
   is_active: true,
 };
 
+const LIST_FILTERS: Array<{ id: CategoryListFilter; label: string }> = [
+  { id: "commercial", label: "التشغيل (بدون مفكك)" },
+  { id: "roots", label: "رئيسية فقط" },
+  { id: "mfkk", label: "مفكك فقط" },
+  { id: "all", label: "الكل" },
+];
+
 export default function CategoriesPage() {
   const [rows, setRows] = useState<ProductCategory[]>([]);
   const [form, setForm] = useState<CategoryForm>(emptyForm);
   const [query, setQuery] = useState("");
+  const [listFilter, setListFilter] = useState<CategoryListFilter>("commercial");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState("");
@@ -39,25 +54,31 @@ export default function CategoriesPage() {
     }
 
     setLoading(true);
-    const result = await createClient()
-      .from("product_categories")
-      .select("id,name_ar,code,parent_id,is_active,created_at")
-      .order("created_at", { ascending: false });
+    const { data: flat, error: loadError } = await fetchAllFromTable<{
+      id: string;
+      name_ar: string;
+      code: string | null;
+      parent_id: string | null;
+      is_active: boolean;
+      created_at?: string;
+    }>(createClient(), "product_categories", "id,name_ar,code,parent_id,is_active,created_at", {
+      column: "name_ar",
+      ascending: true,
+    });
     setLoading(false);
 
-    if (result.error) {
-      setError(result.error.message);
+    if (loadError) {
+      setError(loadError);
       return;
     }
 
-    const flat = (result.data ?? []) as Omit<ProductCategory, "parent">[];
     const byId = new Map(flat.map((row) => [row.id, row]));
-
     setRows(
       flat.map((row) => {
         const parentRow = row.parent_id ? byId.get(row.parent_id) : undefined;
         return {
           ...row,
+          code: row.code,
           parent: parentRow ? { id: parentRow.id, name_ar: parentRow.name_ar } : null,
         };
       })
@@ -68,18 +89,20 @@ export default function CategoriesPage() {
     void Promise.resolve().then(load);
   }, []);
 
+  const parentOptions = useMemo(() => {
+    const candidates = rows.filter((row) => row.id !== form.id);
+    return buildCategorySelectOptions(candidates);
+  }, [form.id, rows]);
+
+  const scopedRows = useMemo(() => filterCategoryRows(rows, listFilter), [listFilter, rows]);
+
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
-    if (!term) return rows;
-    return rows.filter((row) =>
+    if (!term) return scopedRows;
+    return scopedRows.filter((row) =>
       [row.name_ar, row.code, row.parent?.name_ar].some((value) => value?.toLowerCase().includes(term))
     );
-  }, [query, rows]);
-
-  const mainCategories = useMemo(
-    () => rows.filter((row) => !row.parent_id && row.id !== form.id),
-    [form.id, rows]
-  );
+  }, [query, scopedRows]);
 
   const activeCount = rows.filter((row) => row.is_active).length;
 
@@ -124,20 +147,29 @@ export default function CategoriesPage() {
     await load();
   }
 
+  function parentPath(row: ProductCategory) {
+    if (!row.parent_id) return "رئيسية";
+    const parent = rows.find((item) => item.id === row.parent_id);
+    if (!parent) return row.parent?.name_ar ?? "-";
+    if (!parent.parent_id) return parent.name_ar;
+    const grand = rows.find((item) => item.id === parent.parent_id);
+    return grand ? `${grand.name_ar} / ${parent.name_ar}` : parent.name_ar;
+  }
+
   return (
     <div className="space-y-5">
       <PageHeader
         title="الفئات"
-        description="فئات المنتجات الرئيسية والفرعية المستخدمة عند إنشاء المنتجات والشحنات."
+        description="فئات المنتجات الرئيسية والفرعية. لإضافة فئة تحت «كشاف»: اختر كشاف في «تحت فئة»."
         actions={
           <StatusPill className="bg-emerald-50 text-emerald-700">
-            <FolderTree className="inline h-3.5 w-3.5" /> {activeCount} نشطة
+            <FolderTree className="inline h-3.5 w-3.5" /> {rows.length} فئة — {activeCount} نشطة
           </StatusPill>
         }
       />
       <ErrorMessage message={error} />
 
-      <form className="card grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-[1fr_160px_1fr_140px_140px]" onSubmit={submit}>
+      <form className="card grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-[1fr_140px_1fr_120px_120px]" onSubmit={submit}>
         <input
           className="input"
           placeholder="اسم الفئة"
@@ -147,18 +179,16 @@ export default function CategoriesPage() {
         />
         <input
           className="input"
-          placeholder="كود"
+          placeholder="كود (اختياري)"
           value={form.code}
           onChange={(event) => setForm({ ...form, code: event.target.value })}
         />
-        <select className="input" value={form.parent_id} onChange={(event) => setForm({ ...form, parent_id: event.target.value })}>
-          <option value="">فئة رئيسية</option>
-          {mainCategories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name_ar}
-            </option>
-          ))}
-        </select>
+        <SearchableSelect
+          options={parentOptions}
+          placeholder="تحت فئة — ابحث (فاضي = رئيسية)"
+          value={form.parent_id}
+          onChange={(value) => setForm({ ...form, parent_id: value })}
+        />
         <label className="flex min-h-11 items-center gap-2 rounded-md border border-[var(--border)] px-3 text-sm text-[var(--muted)]">
           <input
             checked={form.is_active}
@@ -180,12 +210,24 @@ export default function CategoriesPage() {
         </button>
       ) : null}
 
-      <div className="card p-4">
+      <div className="card space-y-3 p-4">
+        <div className="flex flex-wrap gap-2">
+          {LIST_FILTERS.map((item) => (
+            <button
+              className={`btn text-xs ${listFilter === item.id ? "" : "btn-secondary"}`}
+              key={item.id}
+              onClick={() => setListFilter(item.id)}
+              type="button"
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
         <label className="relative block">
           <Search className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-[var(--muted)]" />
           <input
             className="input pr-9"
-            placeholder="بحث بالاسم أو الكود أو الفئة الرئيسية"
+            placeholder="بحث بالاسم أو الكود أو الفئة الأب"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -215,7 +257,7 @@ export default function CategoriesPage() {
                 <tr className="border-t border-[var(--border)]" key={row.id}>
                   <td className="p-3 font-semibold">{row.name_ar}</td>
                   <td className="p-3">{row.code ?? "-"}</td>
-                  <td className="p-3">{row.parent?.name_ar ?? "رئيسية"}</td>
+                  <td className="p-3">{parentPath(row)}</td>
                   <td className="p-3">{row.is_active ? "نشطة" : "متوقفة"}</td>
                   <td className="flex flex-wrap gap-2 p-3">
                     <button

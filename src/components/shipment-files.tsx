@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Download, FileUp, Upload } from "lucide-react";
+import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage } from "@/components/ui";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { shipmentContainerFilePath, shipmentDocumentPath } from "@/lib/storage-path";
@@ -24,6 +25,27 @@ export function ShipmentFiles({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const effectiveContainerId = containerId || containers[0]?.id || "";
+
+  const containerOptions = useMemo(
+    () =>
+      containers.map((container) => ({
+        value: container.id,
+        label: container.container_number,
+        keywords: container.container_number,
+      })),
+    [containers]
+  );
+
+  const docTypeOptions = useMemo(
+    () => [
+      { value: "invoice", label: "فاتورة" },
+      { value: "packing_list", label: "Packing list" },
+      { value: "bill_of_lading", label: "Bill of lading" },
+      { value: "INV", label: "INV" },
+      { value: "other", label: "أخرى" },
+    ],
+    []
+  );
 
   async function load() {
     setError("");
@@ -150,13 +172,12 @@ export function ShipmentFiles({
             <FileUp className="h-5 w-5 text-[#0f766e]" />
             <h2 className="font-bold">ملفات الحاويات Excel/CSV</h2>
           </div>
-          <select className="input" value={effectiveContainerId} onChange={(event) => setContainerId(event.target.value)}>
-            {containers.map((container) => (
-              <option key={container.id} value={container.id}>
-                {container.container_number}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            options={containerOptions}
+            placeholder="ابحث عن الحاوية..."
+            value={effectiveContainerId}
+            onChange={setContainerId}
+          />
           <label className="btn w-fit cursor-pointer">
             <Upload className="h-4 w-4" />
             {uploading ? "جاري الرفع..." : "رفع ملف"}
@@ -169,12 +190,12 @@ export function ShipmentFiles({
             <FileUp className="h-5 w-5 text-[#0f766e]" />
             <h2 className="font-bold">مستندات الشحنة</h2>
           </div>
-          <select className="input" value={docType} onChange={(event) => setDocType(event.target.value)}>
-            <option value="invoice">فاتورة</option>
-            <option value="packing_list">Packing list</option>
-            <option value="bill_of_lading">Bill of lading</option>
-            <option value="other">أخرى</option>
-          </select>
+          <SearchableSelect
+            options={docTypeOptions}
+            placeholder="نوع المستند"
+            value={docType}
+            onChange={setDocType}
+          />
           <label className="btn w-fit cursor-pointer">
             <Upload className="h-4 w-4" />
             {uploading ? "جاري الرفع..." : "رفع مستند"}

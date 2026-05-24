@@ -5,9 +5,12 @@ import { useRouter } from "next/navigation";
 import { FileUp, Plus, Save, Trash2, X } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage } from "@/components/ui";
+import { toEntityOptions } from "@/lib/entity-options";
 import { PORT_SELECT_OPTIONS } from "@/lib/port-options";
+import { buildCategorySelectOptions } from "@/lib/category-options";
 import { addDaysToIsoDate, findRouteDuration } from "@/lib/eta";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { fetchAllFromTable } from "@/lib/supabase/fetch-all";
 import { shipmentContainerFilePath, shipmentInvPath } from "@/lib/storage-path";
 import type {
   Company,
@@ -128,10 +131,14 @@ export function ShipmentForm({
   shipment,
   initialContainers,
   initialProducts,
+  readOnly = false,
+  onSaved,
 }: {
   shipment?: Shipment;
   initialContainers?: ShipmentContainer[];
   initialProducts?: ShipmentProduct[];
+  readOnly?: boolean;
+  onSaved?: () => void;
 }) {
   const router = useRouter();
   const isNew = !shipment;
@@ -160,6 +167,28 @@ export function ShipmentForm({
     [products]
   );
 
+  const companyOptions = useMemo(
+    () =>
+      toEntityOptions(
+        companies,
+        (company) => `${company.code ? `${company.code} — ` : ""}${company.name_ar}`,
+        (company) => `${company.code ?? ""} ${company.name_ar} ${company.name_en ?? ""}`
+      ),
+    [companies]
+  );
+
+  const supplierOptions = useMemo(
+    () =>
+      toEntityOptions(
+        suppliers,
+        (supplier) => `${supplier.code ? `${supplier.code} — ` : ""}${supplier.name_ar}`,
+        (supplier) => `${supplier.code ?? ""} ${supplier.name_ar} ${supplier.country ?? ""}`
+      ),
+    [suppliers]
+  );
+
+  const categoryOptions = useMemo(() => buildCategorySelectOptions(categories), [categories]);
+
   const productById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
 
   useEffect(() => {
@@ -173,8 +202,8 @@ export function ShipmentForm({
       const [companiesResult, suppliersResult, productsResult, categoriesResult, routesResult] = await Promise.all([
         supabase.from("companies").select("id,name_ar,name_en,code,is_active").eq("is_active", true).order("name_ar"),
         supabase.from("suppliers").select("id,name_ar,code,country,contact_phone,is_active").eq("is_active", true).order("name_ar"),
-        supabase.from("products").select("id,sku,name_ar,name_en,category,category_id,unit,is_active").eq("is_active", true).order("name_ar"),
-        supabase.from("product_categories").select("id,name_ar,code,parent_id,is_active").eq("is_active", true).order("name_ar"),
+        fetchAllFromTable(supabase, "products", "id,sku,name_ar,name_en,category,category_id,unit,is_active", { column: "name_ar" }),
+        fetchAllFromTable(supabase, "product_categories", "id,name_ar,code,parent_id,is_active", { column: "name_ar" }),
         supabase.from("shipping_routes").select("id,shipping_port,arrival_port,duration_days,is_active").eq("is_active", true),
       ]);
 
@@ -182,8 +211,8 @@ export function ShipmentForm({
         setError(
           companiesResult.error?.message ||
             suppliersResult.error?.message ||
-            productsResult.error?.message ||
-            categoriesResult.error?.message ||
+            productsResult.error ||
+            categoriesResult.error ||
             "تعذر تحميل البيانات الأساسية."
         );
         return;
@@ -271,8 +300,26 @@ export function ShipmentForm({
       return;
     }
 
+    const containerNumbers = validContainers.map((container) => container.container_number.trim().toLowerCase());
+    const duplicateContainer = containerNumbers.find((number, index) => containerNumbers.indexOf(number) !== index);
+    if (duplicateContainer) {
+      setError("رقم الحاوية مكرر داخل نفس الشحنة.");
+      return;
+    }
+
     setLoading(true);
     const supabase = createClient();
+
+    const acidValue = form.acid.trim();
+    let acidQuery = supabase.from("shipments").select("id").ilike("acid", acidValue);
+    if (shipment?.id) acidQuery = acidQuery.neq("id", shipment.id);
+    const acidCheck = await acidQuery.maybeSingle();
+    if (acidCheck.data?.id) {
+      setLoading(false);
+      setError("رقم ACID مستخدم في شحنة أخرى ولا يمكن تكراره.");
+      return;
+    }
+
     const user = await supabase.auth.getUser();
     const shipmentPayload = {
       acid: form.acid.trim(),
@@ -401,13 +448,26 @@ export function ShipmentForm({
       return;
     }
 
+    if (onSaved) {
+      onSaved();
+      return;
+    }
+
     router.push(`/shipments/${shipmentId}`);
     router.refresh();
   }
 
+  const fieldClass = readOnly ? "input bg-[var(--surface)] opacity-90" : "input";
+  const disabled = readOnly || loading;
+
   return (
     <>
-      <form className="card space-y-6 p-5" onSubmit={submit}>
+      <form className="card space-y-6 p-5" onSubmit={readOnly ? (event) => event.preventDefault() : submit}>
+        {readOnly ? (
+          <p className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 text-sm text-[var(--muted)]">
+            وضع العرض فقط — اضغط «تعديل» أعلاه لتغيير البيانات.
+          </p>
+        ) : null}
         <ErrorMessage message={error} />
 
         <section className="space-y-3">
@@ -415,38 +475,38 @@ export function ShipmentForm({
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <label className="label">
               رقم ACID
-              <input className="input" required value={form.acid} onChange={(event) => setField("acid", event.target.value)} />
+              <input className={fieldClass} required readOnly={readOnly} disabled={disabled} value={form.acid} onChange={(event) => setField("acid", event.target.value)} />
             </label>
             <label className="label">
               الشركة
-              <select className="input" required value={form.company_id} onChange={(event) => setField("company_id", event.target.value)}>
-                <option value="">اختر الشركة</option>
-                {companies.map((company) => (
-                  <option key={company.id} value={company.id}>
-                    {company.code ? `${company.code} — ` : ""}
-                    {company.name_ar}
-                  </option>
-                ))}
-              </select>
+              <SearchableSelect
+                options={companyOptions}
+                required
+                disabled={disabled}
+                placeholder="ابحث عن الشركة..."
+                value={form.company_id}
+                onChange={(value) => setField("company_id", value)}
+              />
             </label>
             <label className="label">
               المورد
-              <select className="input" required value={form.supplier_id} onChange={(event) => setField("supplier_id", event.target.value)}>
-                <option value="">اختر المورد</option>
-                {suppliers.map((supplier) => (
-                  <option key={supplier.id} value={supplier.id}>
-                    {supplier.code ? `${supplier.code} — ` : ""}
-                    {supplier.name_ar}
-                  </option>
-                ))}
-              </select>
+              <SearchableSelect
+                options={supplierOptions}
+                required
+                disabled={disabled}
+                placeholder="ابحث عن المورد..."
+                value={form.supplier_id}
+                onChange={(value) => setField("supplier_id", value)}
+              />
             </label>
             <label className="label">
               نوع / وصف البضاعة
               <input
-                className="input"
+                className={fieldClass}
                 placeholder="مثال: خردوات — كشاف"
                 required
+                readOnly={readOnly}
+                disabled={disabled}
                 value={form.shipment_type}
                 onChange={(event) => setField("shipment_type", event.target.value)}
               />
@@ -456,6 +516,7 @@ export function ShipmentForm({
               <SearchableSelect
                 options={PORT_SELECT_OPTIONS}
                 required
+                disabled={readOnly}
                 value={form.shipping_port}
                 onChange={(value) => setField("shipping_port", value)}
                 placeholder="اختر ميناء الشحن"
@@ -466,6 +527,7 @@ export function ShipmentForm({
               <SearchableSelect
                 options={PORT_SELECT_OPTIONS}
                 required
+                disabled={readOnly}
                 value={form.arrival_port}
                 onChange={(value) => setField("arrival_port", value)}
                 placeholder="اختر ميناء الوصول"
@@ -530,33 +592,39 @@ export function ShipmentForm({
         <section className="space-y-3 border-t border-[var(--border)] pt-5">
           <div className="flex items-center justify-between gap-3">
             <h2 className="font-bold">الحاويات</h2>
-            <button className="btn btn-secondary text-sm" onClick={() => setContainers((current) => [...current, { ...emptyContainer }])} type="button">
-              <Plus className="h-4 w-4" />
-              حاوية
-            </button>
+            {!readOnly ? (
+              <button className="btn btn-secondary text-sm" onClick={() => setContainers((current) => [...current, { ...emptyContainer }])} type="button">
+                <Plus className="h-4 w-4" />
+                حاوية
+              </button>
+            ) : null}
           </div>
           <div className="space-y-3">
             {containers.map((container, index) => (
               <div className="grid gap-3 rounded-md border border-[var(--border)] p-3 lg:grid-cols-[1fr_120px_120px_1fr_auto_auto]" key={index}>
-                <input className="input" placeholder="رقم الحاوية" value={container.container_number} onChange={(event) => updateContainer(index, { ...container, container_number: event.target.value })} />
-                <input className="input" min={0} placeholder="الوزن" type="number" value={container.weight_kg} onChange={(event) => updateContainer(index, { ...container, weight_kg: event.target.value })} />
-                <input className="input" min={0} placeholder="الكرتين" type="number" value={container.cartons_count} onChange={(event) => updateContainer(index, { ...container, cartons_count: event.target.value })} />
-                <input className="input" placeholder="ملاحظات" value={container.notes} onChange={(event) => updateContainer(index, { ...container, notes: event.target.value })} />
-                <label className="btn btn-secondary cursor-pointer text-xs">
-                  <FileUp className="h-4 w-4" />
-                  {container.excel_file?.name ?? "Excel"}
-                  <input
-                    accept=".xlsx,.xls,.csv"
-                    className="hidden"
-                    type="file"
-                    onChange={(event) =>
-                      updateContainer(index, { ...container, excel_file: event.target.files?.[0] ?? null })
-                    }
-                  />
-                </label>
-                <button className="btn btn-secondary px-2" onClick={() => setContainers((current) => current.length === 1 ? [{ ...emptyContainer }] : current.filter((_, rowIndex) => rowIndex !== index))} type="button">
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                <input className={fieldClass} disabled={disabled} placeholder="رقم الحاوية" readOnly={readOnly} value={container.container_number} onChange={(event) => updateContainer(index, { ...container, container_number: event.target.value })} />
+                <input className={fieldClass} disabled={disabled} min={0} placeholder="الوزن" readOnly={readOnly} type="number" value={container.weight_kg} onChange={(event) => updateContainer(index, { ...container, weight_kg: event.target.value })} />
+                <input className={fieldClass} disabled={disabled} min={0} placeholder="الكرتين" readOnly={readOnly} type="number" value={container.cartons_count} onChange={(event) => updateContainer(index, { ...container, cartons_count: event.target.value })} />
+                <input className={fieldClass} disabled={disabled} placeholder="ملاحظات" readOnly={readOnly} value={container.notes} onChange={(event) => updateContainer(index, { ...container, notes: event.target.value })} />
+                {!readOnly ? (
+                  <>
+                    <label className="btn btn-secondary cursor-pointer text-xs">
+                      <FileUp className="h-4 w-4" />
+                      {container.excel_file?.name ?? "Excel"}
+                      <input
+                        accept=".xlsx,.xls,.csv"
+                        className="hidden"
+                        type="file"
+                        onChange={(event) =>
+                          updateContainer(index, { ...container, excel_file: event.target.files?.[0] ?? null })
+                        }
+                      />
+                    </label>
+                    <button className="btn btn-secondary px-2" onClick={() => setContainers((current) => current.length === 1 ? [{ ...emptyContainer }] : current.filter((_, rowIndex) => rowIndex !== index))} type="button">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </>
+                ) : null}
               </div>
             ))}
           </div>
@@ -565,16 +633,18 @@ export function ShipmentForm({
         <section className="space-y-3 border-t border-[var(--border)] pt-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-bold">منتجات الشحنة</h2>
-            <div className="flex flex-wrap gap-2">
-              <button className="btn btn-secondary text-sm" onClick={() => setShowProductModal(true)} type="button">
-                <Plus className="h-4 w-4" />
-                منتج جديد
-              </button>
-              <button className="btn btn-secondary text-sm" onClick={() => setShipmentProducts((current) => [...current, { ...emptyProduct }])} type="button">
-                <Plus className="h-4 w-4" />
-                سطر منتج
-              </button>
-            </div>
+            {!readOnly ? (
+              <div className="flex flex-wrap gap-2">
+                <button className="btn btn-secondary text-sm" onClick={() => setShowProductModal(true)} type="button">
+                  <Plus className="h-4 w-4" />
+                  منتج جديد
+                </button>
+                <button className="btn btn-secondary text-sm" onClick={() => setShipmentProducts((current) => [...current, { ...emptyProduct }])} type="button">
+                  <Plus className="h-4 w-4" />
+                  سطر منتج
+                </button>
+              </div>
+            ) : null}
           </div>
           <div className="space-y-3">
             {shipmentProducts.map((row, index) => {
@@ -583,6 +653,7 @@ export function ShipmentForm({
                 <div className="grid gap-3 rounded-md border border-[var(--border)] p-3 md:grid-cols-[1fr_130px_130px_150px_auto]" key={index}>
                   <SearchableSelect
                     options={productOptions}
+                    disabled={readOnly}
                     value={row.product_id}
                     onChange={(value) => updateShipmentProduct(index, { ...row, product_id: value })}
                     placeholder="ابحث عن المنتج (SKU أو الاسم)"
@@ -593,7 +664,7 @@ export function ShipmentForm({
                     <input checked={row.is_new_incoming_product} onChange={(event) => updateShipmentProduct(index, { ...row, is_new_incoming_product: event.target.checked })} type="checkbox" />
                     منتج وارد جديد
                   </label>
-                  <button className="btn btn-secondary px-2" onClick={() => setShipmentProducts((current) => current.length === 1 ? [{ ...emptyProduct }] : current.filter((_, rowIndex) => rowIndex !== index))} type="button">
+                  <button className="btn btn-secondary px-2" disabled={readOnly} onClick={() => setShipmentProducts((current) => current.length === 1 ? [{ ...emptyProduct }] : current.filter((_, rowIndex) => rowIndex !== index))} type="button">
                     <Trash2 className="h-4 w-4" />
                   </button>
                   {selected ? <input className="input md:col-span-5" placeholder="ملاحظات المنتج" value={row.notes} onChange={(event) => updateShipmentProduct(index, { ...row, notes: event.target.value })} /> : null}
@@ -603,10 +674,12 @@ export function ShipmentForm({
           </div>
         </section>
 
-        <button className="btn" disabled={loading} type="submit">
-          <Save className="h-4 w-4" />
-          {loading ? "جاري الحفظ..." : shipment ? "حفظ الشحنة" : "حفظ الشحنة"}
-        </button>
+        {!readOnly ? (
+          <button className="btn" disabled={loading} type="submit">
+            <Save className="h-4 w-4" />
+            {loading ? "جاري الحفظ..." : shipment ? "حفظ الشحنة" : "حفظ الشحنة"}
+          </button>
+        ) : null}
       </form>
 
       {showProductModal ? (
@@ -636,7 +709,8 @@ function QuickProductModal({
   onClose: () => void;
   onCreated: (product: Product) => void;
 }) {
-  const [form, setForm] = useState({ name_ar: "", category_id: "", unit: "piece" });
+  const categoryOptions = useMemo(() => buildCategorySelectOptions(categories), [categories]);
+  const [form, setForm] = useState({ name_ar: "", category_id: "", barcode: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -652,15 +726,16 @@ function QuickProductModal({
         name_ar: form.name_ar.trim(),
         category: category?.name_ar ?? null,
         category_id: form.category_id || null,
-        unit: form.unit.trim() || "piece",
+        barcode: form.barcode.trim() || null,
+        unit: "piece",
       })
-      .select("id,sku,name_ar,name_en,category,category_id,unit,is_active")
+      .select("id,sku,name_ar,name_en,category,category_id,barcode,unit,is_active")
       .single();
 
     setLoading(false);
 
     if (result.error) {
-      setError(result.error.message);
+      setError(result.error.message.includes("products_barcode_unique_idx") ? "الباركود مستخدم لمنتج آخر." : result.error.message);
       return;
     }
 
@@ -682,24 +757,20 @@ function QuickProductModal({
           اسم المنتج
           <input className="input" required value={form.name_ar} onChange={(event) => setForm({ ...form, name_ar: event.target.value })} />
         </label>
-        <div className="grid gap-3 md:grid-cols-2">
-          <label className="label">
-            الفئة
-            <select className="input" value={form.category_id} onChange={(event) => setForm({ ...form, category_id: event.target.value })}>
-              <option value="">اختر الفئة</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.code ? `${category.code} — ` : ""}
-                  {category.name_ar}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="label">
-            الوحدة
-            <input className="input" value={form.unit} onChange={(event) => setForm({ ...form, unit: event.target.value })} />
-          </label>
-        </div>
+        <label className="label">
+          الفئة
+          <SearchableSelect
+            options={categoryOptions}
+            placeholder="ابحث عن الفئة..."
+            required
+            value={form.category_id}
+            onChange={(value) => setForm({ ...form, category_id: value })}
+          />
+        </label>
+        <label className="label">
+          الباركود (اختياري)
+          <input className="input" inputMode="numeric" value={form.barcode} onChange={(event) => setForm({ ...form, barcode: event.target.value })} />
+        </label>
         <button className="btn" disabled={loading} type="submit">
           {loading ? "جاري الحفظ..." : "حفظ المنتج"}
         </button>

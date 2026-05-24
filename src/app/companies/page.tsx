@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Edit2, Plus, Save } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Edit2, Plus, Save, Search } from "lucide-react";
 import { ErrorMessage, PageHeader } from "@/components/ui";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import type { Company } from "@/lib/types";
@@ -24,6 +24,7 @@ const emptyForm: CompanyForm = {
 export default function CompaniesPage() {
   const [rows, setRows] = useState<Company[]>([]);
   const [form, setForm] = useState<CompanyForm>(emptyForm);
+  const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -54,6 +55,14 @@ export default function CompaniesPage() {
   useEffect(() => {
     void Promise.resolve().then(load);
   }, []);
+
+  const filtered = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return rows;
+    return rows.filter((row) =>
+      [row.name_ar, row.name_en, row.code].some((value) => value?.toLowerCase().includes(term))
+    );
+  }, [query, rows]);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -106,6 +115,18 @@ export default function CompaniesPage() {
         </div>
       </form>
 
+      <div className="card p-4">
+        <label className="relative block">
+          <Search className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-[var(--muted)]" />
+          <input
+            className="input pr-9"
+            placeholder="بحث بالاسم أو الكود"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+      </div>
+
       <div className="card overflow-auto">
         <table className="min-w-full text-sm">
           <thead className="table-head">
@@ -124,7 +145,7 @@ export default function CompaniesPage() {
                 </td>
               </tr>
             ) : (
-              rows.map((row) => (
+              filtered.map((row) => (
                 <tr className="border-t border-[var(--border)]" key={row.id}>
                   <td className="p-3 font-semibold">{row.name_ar}</td>
                   <td className="p-3">{row.code ?? "-"}</td>

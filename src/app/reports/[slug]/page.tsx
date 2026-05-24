@@ -3,14 +3,16 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowRight, FileSpreadsheet, Printer, RefreshCw } from "lucide-react";
+import { ArrowRight, Download, FileSpreadsheet, Printer, RefreshCw } from "lucide-react";
 import * as XLSX from "xlsx";
 import { ErrorMessage, PageHeader } from "@/components/ui";
 import { SHIPMENT_STATUS_LABELS, type ShipmentStatus } from "@/lib/constants";
 import { getReport } from "@/lib/report-definitions";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
-type ReportRow = Record<string, string | number | null>;
+type ReportRow = Record<string, string | number | null> & { _downloadPath?: string };
+
+const bucket = "container-files";
 
 type ShipmentReportRow = {
   shipment_number: string;
@@ -42,6 +44,7 @@ type ContainerJoin = {
 
 type ContainerFileJoin = {
   file_name: string;
+  storage_path: string;
   size_bytes: number | null;
   uploaded_at: string;
   shipment_containers: {
@@ -68,10 +71,17 @@ function todayIso() {
 }
 
 function inRange(date: string | null | undefined, from: string, to: string) {
+  if (!from && !to) return true;
   if (!date) return false;
   if (from && date < from) return false;
   if (to && date > to) return false;
   return true;
+}
+
+function filterShipmentByDate(row: ShipmentReportRow, from: string, to: string, mode: "eta" | "closed" | "none") {
+  if (mode === "none") return true;
+  if (mode === "closed") return inRange(row.closed_at, from, to);
+  return inRange(row.eta, from, to);
 }
 
 function normalizeShipment(row: Record<string, unknown>): ShipmentReportRow {
@@ -150,10 +160,26 @@ export default function ReportDetailPage() {
     );
   }, [query, rows]);
 
-  const columns = filteredRows[0] ? Object.keys(filteredRows[0]) : [];
+  const columns = filteredRows[0]
+    ? Object.keys(filteredRows[0]).filter((key) => !key.startsWith("_"))
+    : [];
+
+  async function downloadFile(path: string) {
+    const result = await createClient().storage.from(bucket).createSignedUrl(path, 120);
+    if (result.error) {
+      setError(result.error.message);
+      return;
+    }
+    window.open(result.data.signedUrl, "_blank", "noopener,noreferrer");
+  }
 
   function exportExcel() {
-    const worksheet = XLSX.utils.json_to_sheet(filteredRows);
+    const exportRows = filteredRows.map((row) => {
+      const copy = { ...row };
+      delete copy._downloadPath;
+      return copy;
+    });
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Report");
     XLSX.writeFile(workbook, `${params.slug}-${todayIso()}.xlsx`);
@@ -168,38 +194,47 @@ export default function ReportDetailPage() {
       <div className="report-print-title hidden">
         {report.title} — {report.description}
       </div>
-      <PageHeader
-        title={report.title}
-        description={report.description}
-        actions={
-          <div className="flex flex-wrap items-center gap-2 print:hidden">
-            <Link className="btn btn-secondary" href="/reports">
-              <ArrowRight className="h-4 w-4" />
-              رجوع
-            </Link>
-            <button className="btn btn-secondary" onClick={load} type="button">
-              <RefreshCw className="h-4 w-4" />
-              تحديث
-            </button>
-            <button className="btn btn-secondary" onClick={exportExcel} type="button">
-              <FileSpreadsheet className="h-4 w-4" />
-              Excel
-            </button>
-            <button className="btn" onClick={() => window.print()} type="button">
-              <Printer className="h-4 w-4" />
-              طباعة PDF
-            </button>
-          </div>
-        }
-      />
+      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--card)] p-3 print:hidden">
+        <Link className="btn btn-secondary" href="/reports">
+          <ArrowRight className="h-4 w-4" />
+          رجوع للتقارير
+        </Link>
+        <button className="btn btn-secondary" onClick={load} type="button">
+          <RefreshCw className="h-4 w-4" />
+          تحديث
+        </button>
+        <button className="btn btn-secondary" onClick={exportExcel} type="button">
+          <FileSpreadsheet className="h-4 w-4" />
+          Excel
+        </button>
+        <button className="btn" onClick={() => window.print()} type="button">
+          <Printer className="h-4 w-4" />
+          طباعة PDF
+        </button>
+      </div>
+
+      <PageHeader title={report.title} description={report.description} />
 
       <ErrorMessage message={error} />
 
-      <div className="card grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[160px_160px_minmax(0,1fr)_auto] print:hidden">
-        <input className="input" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
-        <input className="input" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
-        <input className="input" placeholder="بحث داخل التقرير" value={query} onChange={(event) => setQuery(event.target.value)} />
-        <button className="btn" onClick={load} type="button">تطبيق</button>
+      <div className="card space-y-3 p-4 print:hidden">
+        {report.dateFilter !== "none" ? (
+          <p className="text-xs text-[var(--muted)]">
+            {report.dateHint ?? (report.dateFilter === "closed" ? "فلترة حسب تاريخ الإغلاق" : "فلترة حسب ETA")}
+          </p>
+        ) : null}
+        <div className={`grid gap-3 ${report.dateFilter !== "none" ? "sm:grid-cols-2 lg:grid-cols-[160px_160px_minmax(0,1fr)_auto]" : "sm:grid-cols-[minmax(0,1fr)_auto]"}`}>
+          {report.dateFilter !== "none" ? (
+            <>
+              <input className="input" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
+              <input className="input" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
+            </>
+          ) : null}
+          <input className="input" placeholder="بحث داخل التقرير" value={query} onChange={(event) => setQuery(event.target.value)} />
+          {report.dateFilter !== "none" ? (
+            <button className="btn" onClick={load} type="button">تطبيق</button>
+          ) : null}
+        </div>
       </div>
 
       <div className="card overflow-auto print:overflow-visible">
@@ -209,19 +244,30 @@ export default function ReportDetailPage() {
               {columns.map((column) => (
                 <th className="p-3 text-right" key={column}>{column}</th>
               ))}
+              {params.slug === "container-files" ? <th className="p-3 text-right">تحميل</th> : null}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td className="p-4 text-[var(--muted)]" colSpan={Math.max(columns.length, 1)}>جاري التحميل...</td></tr>
+              <tr><td className="p-4 text-[var(--muted)]" colSpan={Math.max(columns.length, 1) + (params.slug === "container-files" ? 1 : 0)}>جاري التحميل...</td></tr>
             ) : filteredRows.length ? filteredRows.map((row, index) => (
               <tr className="border-t border-[var(--border)]" key={index}>
                 {columns.map((column) => (
                   <td className="p-3" key={column}>{row[column] ?? "-"}</td>
                 ))}
+                {params.slug === "container-files" && row._downloadPath ? (
+                  <td className="p-3">
+                    <button className="btn btn-secondary px-2 py-1 text-xs" onClick={() => downloadFile(String(row._downloadPath))} type="button">
+                      <Download className="h-4 w-4" />
+                      Excel
+                    </button>
+                  </td>
+                ) : params.slug === "container-files" ? (
+                  <td className="p-3 text-[var(--muted)]">-</td>
+                ) : null}
               </tr>
             )) : (
-              <tr><td className="p-4 text-[var(--muted)]" colSpan={Math.max(columns.length, 1)}>لا توجد بيانات.</td></tr>
+              <tr><td className="p-4 text-[var(--muted)]" colSpan={Math.max(columns.length, 1) + (params.slug === "container-files" ? 1 : 0)}>لا توجد بيانات.</td></tr>
             )}
           </tbody>
         </table>
@@ -249,7 +295,7 @@ async function buildReport(slug: string, from: string, to: string): Promise<{ ro
   next30.setDate(next30.getDate() + 30);
   const next30Iso = next30.toISOString().slice(0, 10);
 
-  let filtered = shipments.filter((row) => inRange(row.eta, from, to));
+  let filtered = shipments.filter((row) => filterShipmentByDate(row, from, to, slug === "closed" ? "closed" : "eta"));
   if (slug === "in-sea") filtered = filtered.filter((row) => row.status === "in_sea");
   if (slug === "customs" || slug === "ready-to-close") filtered = filtered.filter((row) => row.status === "customs");
   if (slug === "closed") filtered = filtered.filter((row) => row.status === "closed");
@@ -258,13 +304,13 @@ async function buildReport(slug: string, from: string, to: string): Promise<{ ro
 
   if (slug === "suppliers") {
     const grouped = new Map<string, number>();
-    filtered.forEach((row) => grouped.set(row.supplier, (grouped.get(row.supplier) ?? 0) + 1));
+    shipments.forEach((row) => grouped.set(row.supplier, (grouped.get(row.supplier) ?? 0) + 1));
     return { rows: Array.from(grouped.entries()).map(([supplier, count]) => ({ المورد: supplier, "عدد الشحنات": count })) };
   }
 
   if (slug === "companies") {
     const grouped = new Map<string, number>();
-    filtered.forEach((row) => grouped.set(row.company, (grouped.get(row.company) ?? 0) + 1));
+    shipments.forEach((row) => grouped.set(row.company, (grouped.get(row.company) ?? 0) + 1));
     return { rows: Array.from(grouped.entries()).map(([company, count]) => ({ الشركة: company, "عدد الشحنات": count })) };
   }
 
@@ -279,7 +325,7 @@ async function productsReport(slug: string, from: string, to: string): Promise<{
   if (result.error) return { error: result.error.message };
 
   let rows = ((result.data ?? []) as unknown as ShipmentProductJoin[])
-    .filter((row) => row.shipments && inRange(row.shipments.eta, from, to));
+    .filter((row) => row.shipments && filterShipmentByDate(row.shipments, from, to, "eta"));
 
   if (slug === "new-products") rows = rows.filter((row) => row.is_new_incoming_product);
 
@@ -334,7 +380,7 @@ async function containersReport(from: string, to: string): Promise<{ rows: Repor
     .from("shipment_containers")
     .select(`container_number,weight_kg,cartons_count,shipments(${shipmentSelect})`);
   if (result.error) return { error: result.error.message };
-  const rows = ((result.data ?? []) as unknown as ContainerJoin[]).filter((row) => row.shipments && inRange(row.shipments.eta, from, to));
+  const rows = ((result.data ?? []) as unknown as ContainerJoin[]).filter((row) => row.shipments && filterShipmentByDate(row.shipments, from, to, "eta"));
   return {
     rows: rows.map((row) => ({
       "رقم الحاوية": row.container_number,
@@ -349,20 +395,22 @@ async function containersReport(from: string, to: string): Promise<{ rows: Repor
   };
 }
 
-async function containerFilesReport(from: string, to: string): Promise<{ rows: ReportRow[] } | { error: string }> {
+async function containerFilesReport(_from: string, _to: string): Promise<{ rows: ReportRow[] } | { error: string }> {
   const result = await createClient()
     .from("container_files")
-    .select(`file_name,size_bytes,uploaded_at,shipment_containers(container_number,shipments(${shipmentSelect}))`);
+    .select(`file_name,storage_path,size_bytes,uploaded_at,shipment_containers(container_number,shipments(${shipmentSelect}))`)
+    .order("uploaded_at", { ascending: false });
   if (result.error) return { error: result.error.message };
-  const rows = ((result.data ?? []) as unknown as ContainerFileJoin[]).filter((row) => row.shipment_containers?.shipments && inRange(row.shipment_containers.shipments.eta, from, to));
+  const rows = ((result.data ?? []) as unknown as ContainerFileJoin[]);
   return {
     rows: rows.map((row) => ({
-      الملف: row.file_name,
-      الحجم: row.size_bytes,
-      "تاريخ الرفع": row.uploaded_at.slice(0, 10),
-      الحاوية: row.shipment_containers?.container_number ?? "-",
       "رقم الشحنة": row.shipment_containers?.shipments?.shipment_number ?? "-",
+      ACID: row.shipment_containers?.shipments?.acid ?? "-",
+      الحاوية: row.shipment_containers?.container_number ?? "-",
+      الملف: row.file_name,
+      "تاريخ الرفع": row.uploaded_at.slice(0, 10),
       ETA: row.shipment_containers?.shipments?.eta ?? "-",
+      _downloadPath: row.storage_path,
     })),
   };
 }
@@ -372,7 +420,7 @@ async function costsReport(from: string, to: string): Promise<{ rows: ReportRow[
     .from("shipment_costs")
     .select(`customs_cost,shipping_cost,clearance_cost,local_transport_cost,other_expenses,total_cost,closing_notes,shipments(${shipmentSelect})`);
   if (result.error) return { error: result.error.message };
-  const rows = ((result.data ?? []) as unknown as CostJoin[]).filter((row) => row.shipments && inRange(row.shipments.eta, from, to));
+  const rows = ((result.data ?? []) as unknown as CostJoin[]).filter((row) => row.shipments && filterShipmentByDate(row.shipments, from, to, "closed"));
   return {
     rows: rows.map((row) => ({
       "رقم الشحنة": row.shipments?.shipment_number ?? "-",

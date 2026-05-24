@@ -2,14 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { ArrowRight, Coins, RefreshCw, X } from "lucide-react";
+import { useParams, useSearchParams } from "next/navigation";
+import { ArrowRight, Coins, Download, Pencil, RefreshCw, X } from "lucide-react";
 import { ShipmentFiles } from "@/components/shipment-files";
 import { ShipmentForm } from "@/components/shipment-form";
 import { ErrorMessage, PageHeader } from "@/components/ui";
 import { getNextStatusAction, NEXT_ACTION_LABELS, SHIPMENT_STATUS_LABELS } from "@/lib/constants";
+import { useProfile } from "@/context/profile-context";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
-import type { Shipment, ShipmentContainer, ShipmentCost, ShipmentProduct, TimelineEvent } from "@/lib/types";
+import type { Shipment, ShipmentContainer, ShipmentCost, ShipmentDocument, ShipmentProduct, TimelineEvent } from "@/lib/types";
+
+const bucket = "container-files";
 
 type Tab = "summary" | "containers" | "products" | "files" | "timeline" | "costs";
 
@@ -24,13 +27,17 @@ const tabs: Array<{ id: Tab; label: string }> = [
 
 export default function ShipmentDetailsPage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const { canWrite } = useProfile();
   const [shipment, setShipment] = useState<Shipment | null>(null);
   const [containers, setContainers] = useState<ShipmentContainer[]>([]);
   const [products, setProducts] = useState<ShipmentProduct[]>([]);
   const [cost, setCost] = useState<ShipmentCost | null>(null);
+  const [documents, setDocuments] = useState<ShipmentDocument[]>([]);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>("summary");
   const [showCosts, setShowCosts] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -45,12 +52,13 @@ export default function ShipmentDetailsPage() {
     setLoading(true);
     setError("");
     const supabase = createClient();
-    const [shipmentResult, containersResult, productsResult, costResult, timelineResult] = await Promise.all([
+    const [shipmentResult, containersResult, productsResult, costResult, timelineResult, documentsResult] = await Promise.all([
       supabase.from("shipments").select("*,companies(name_ar),suppliers(name_ar)").eq("id", params.id).single(),
       supabase.from("shipment_containers").select("*").eq("shipment_id", params.id).order("created_at"),
       supabase.from("shipment_products").select("*,products(sku,name_ar,unit)").eq("shipment_id", params.id).order("created_at"),
       supabase.from("shipment_costs").select("*").eq("shipment_id", params.id).maybeSingle(),
       supabase.from("shipment_timeline_events").select("id,shipment_id,event_type,title_ar,description_ar,created_at").eq("shipment_id", params.id).order("created_at", { ascending: false }),
+      supabase.from("shipment_documents").select("*").eq("shipment_id", params.id).order("uploaded_at", { ascending: false }),
     ]);
     setLoading(false);
 
@@ -63,9 +71,10 @@ export default function ShipmentDetailsPage() {
     setContainers((containersResult.data ?? []) as ShipmentContainer[]);
     setProducts((productsResult.data ?? []) as ShipmentProduct[]);
     setCost((costResult.data as ShipmentCost | null) ?? null);
+    setDocuments((documentsResult.data ?? []) as ShipmentDocument[]);
     setTimeline((timelineResult.data ?? []) as TimelineEvent[]);
 
-    const firstRelatedError = containersResult.error || productsResult.error || costResult.error || timelineResult.error;
+    const firstRelatedError = containersResult.error || productsResult.error || costResult.error || timelineResult.error || documentsResult.error;
     if (firstRelatedError) setError(firstRelatedError.message);
   }
 
@@ -73,6 +82,21 @@ export default function ShipmentDetailsPage() {
     void Promise.resolve().then(load);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id]);
+
+  useEffect(() => {
+    if (searchParams.get("edit") === "1" && canWrite) {
+      setEditing(true);
+    }
+  }, [searchParams, canWrite]);
+
+  async function downloadDocument(path: string) {
+    const result = await createClient().storage.from(bucket).createSignedUrl(path, 120);
+    if (result.error) {
+      setError(result.error.message);
+      return;
+    }
+    window.open(result.data.signedUrl, "_blank", "noopener,noreferrer");
+  }
 
   async function nextAction() {
     if (!shipment) return;
@@ -107,6 +131,8 @@ export default function ShipmentDetailsPage() {
   }
 
   const action = getNextStatusAction(shipment.status);
+  const readOnly = shipment.status === "closed" && !editing;
+  const invDoc = documents.find((doc) => doc.doc_type.toUpperCase() === "INV");
 
   return (
     <div className="space-y-5">
@@ -119,6 +145,20 @@ export default function ShipmentDetailsPage() {
               <ArrowRight className="h-4 w-4" />
               رجوع
             </Link>
+            <Link className="btn btn-secondary" href={`/shipments/${shipment.id}/report`}>
+              تقرير / PDF
+            </Link>
+            {readOnly && canWrite ? (
+              <button className="btn btn-secondary" onClick={() => setEditing(true)} type="button">
+                <Pencil className="h-4 w-4" />
+                تعديل
+              </button>
+            ) : null}
+            {editing && shipment.status === "closed" ? (
+              <button className="btn btn-secondary" onClick={() => setEditing(false)} type="button">
+                إلغاء التعديل
+              </button>
+            ) : null}
             <button className="btn btn-secondary" onClick={load} type="button">
               <RefreshCw className="h-4 w-4" />
               تحديث
@@ -141,6 +181,19 @@ export default function ShipmentDetailsPage() {
         <InfoCard label="عدد الحاويات" value={containers.length.toString()} />
       </section>
 
+      {invDoc ? (
+        <section className="card flex flex-wrap items-center justify-between gap-3 p-4">
+          <div>
+            <div className="font-bold">ملف INV</div>
+            <p className="text-sm text-[var(--muted)]">{invDoc.file_name}</p>
+          </div>
+          <button className="btn btn-secondary" onClick={() => downloadDocument(invDoc.storage_path)} type="button">
+            <Download className="h-4 w-4" />
+            تحميل INV
+          </button>
+        </section>
+      ) : null}
+
       <div className="flex gap-2 overflow-auto border-b border-[var(--border)]">
         {tabs.map((tab) => (
           <button
@@ -155,7 +208,16 @@ export default function ShipmentDetailsPage() {
       </div>
 
       {activeTab === "summary" ? (
-        <ShipmentForm shipment={shipment} initialContainers={containers} initialProducts={products} />
+        <ShipmentForm
+          shipment={shipment}
+          initialContainers={containers}
+          initialProducts={products}
+          readOnly={readOnly || !canWrite}
+          onSaved={() => {
+            setEditing(false);
+            void load();
+          }}
+        />
       ) : null}
       {activeTab === "containers" ? <ContainersTable rows={containers} /> : null}
       {activeTab === "products" ? <ProductsTable rows={products} /> : null}
@@ -167,9 +229,11 @@ export default function ShipmentDetailsPage() {
         <CostsDialog
           cost={cost}
           shipmentId={shipment.id}
+          isClosed={shipment.status === "closed"}
           onClose={() => setShowCosts(false)}
           onSaved={async () => {
             setShowCosts(false);
+            setEditing(false);
             await load();
           }}
         />
@@ -310,11 +374,13 @@ function CostsPanel({ cost, onEdit }: { cost: ShipmentCost | null; onEdit: () =>
 function CostsDialog({
   shipmentId,
   cost,
+  isClosed,
   onClose,
   onSaved,
 }: {
   shipmentId: string;
   cost: ShipmentCost | null;
+  isClosed: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -374,7 +440,7 @@ function CostsDialog({
           <textarea className="input min-h-24" value={form.closing_notes} onChange={(event) => setForm({ ...form, closing_notes: event.target.value })} />
         </label>
         <button className="btn" disabled={loading} type="submit">
-          {loading ? "جاري الحفظ..." : "حفظ وإغلاق"}
+          {loading ? "جاري الحفظ..." : isClosed ? "حفظ المصاريف" : "حفظ وإغلاق"}
         </button>
       </form>
     </div>

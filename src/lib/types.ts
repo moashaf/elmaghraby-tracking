@@ -24,6 +24,7 @@ export type Product = {
   name_en: string | null;
   category: string | null;
   category_id: string | null;
+  barcode: string | null;
   unit: string;
   is_active: boolean;
 };

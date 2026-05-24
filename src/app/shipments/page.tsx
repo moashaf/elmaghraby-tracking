@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Eye, Plus, RefreshCw } from "lucide-react";
+import { Eye, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { ErrorMessage, PageHeader } from "@/components/ui";
 import {
   getNextStatusAction,
@@ -18,7 +18,7 @@ import type { Shipment } from "@/lib/types";
 
 export default function ShipmentsPage() {
   const router = useRouter();
-  const { canWrite } = useProfile();
+  const { canWrite, isAdmin } = useProfile();
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [status, setStatus] = useState<ShipmentStatus | "">(() => {
     if (typeof window === "undefined") return "";
@@ -28,6 +28,7 @@ export default function ShipmentsPage() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   async function load() {
@@ -88,6 +89,21 @@ export default function ShipmentsPage() {
       target_status: "customs",
     });
     setActionLoading(null);
+
+    if (result.error) {
+      setError(result.error.message);
+      return;
+    }
+
+    await load();
+  }
+
+  async function removeShipment(shipment: Shipment) {
+    if (!window.confirm(`حذف الشحنة ${shipment.shipment_number} نهائيا؟`)) return;
+
+    setDeleteLoading(shipment.id);
+    const result = await createClient().rpc("delete_shipment", { p_shipment_id: shipment.id });
+    setDeleteLoading(null);
 
     if (result.error) {
       setError(result.error.message);
@@ -180,10 +196,25 @@ export default function ShipmentsPage() {
                       </td>
                       <td className="p-3">
                         <div className="flex flex-wrap gap-2">
-                          <Link className="btn btn-secondary px-2 py-1 text-xs" href={`/shipments/${shipment.id}`}>
+                          <Link className="btn btn-secondary px-2 py-1 text-xs" href={`/shipments/${shipment.id}/report`} title="تقرير للطباعة">
                             <Eye className="h-4 w-4" />
-                            عرض
                           </Link>
+                          {isAdmin ? (
+                            <>
+                              <Link className="btn btn-secondary px-2 py-1 text-xs" href={`/shipments/${shipment.id}?edit=1`} title="تعديل">
+                                <Pencil className="h-4 w-4" />
+                              </Link>
+                              <button
+                                className="btn btn-secondary px-2 py-1 text-xs text-red-700"
+                                disabled={deleteLoading === shipment.id}
+                                onClick={() => removeShipment(shipment)}
+                                title="حذف"
+                                type="button"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </>
+                          ) : null}
                           {action && canWrite ? (
                             <button className="btn px-2 py-1 text-xs" disabled={actionLoading === shipment.id} onClick={() => transition(shipment)} type="button">
                               {actionLoading === shipment.id ? "..." : NEXT_ACTION_LABELS[action]}
