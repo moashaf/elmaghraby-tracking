@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Edit2, Plus, Save, Search } from "lucide-react";
+import { Edit2, Plus, Save, Search, Trash2 } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage, PageHeader } from "@/components/ui";
+import { useProfile } from "@/context/profile-context";
 import { buildCategorySelectOptions } from "@/lib/category-options";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { fetchAllFromTable } from "@/lib/supabase/fetch-all";
@@ -28,13 +29,22 @@ const emptyForm: ProductForm = {
   is_active: true,
 };
 
+function productDeleteError(message: string) {
+  if (message.includes("shipment_products") || message.includes("23503")) {
+    return "لا يمكن حذف المنتج لأنه مرتبط بشحنة. احذفه من الشحنة أولا أو أوقفه (غير نشط).";
+  }
+  return message;
+}
+
 export default function ProductsPage() {
+  const { canWrite } = useProfile();
   const [rows, setRows] = useState<Product[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [form, setForm] = useState<ProductForm>(emptyForm);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState("");
   const [error, setError] = useState("");
 
   async function load() {
@@ -107,6 +117,23 @@ export default function ProductsPage() {
     }
 
     setForm(emptyForm);
+    await load();
+  }
+
+  async function removeProduct(row: Product) {
+    if (!window.confirm(`حذف المنتج «${row.name_ar}» (${row.sku}) نهائيا؟`)) return;
+
+    setError("");
+    setDeletingId(row.id);
+    const result = await createClient().from("products").delete().eq("id", row.id);
+    setDeletingId("");
+
+    if (result.error) {
+      setError(productDeleteError(result.error.message));
+      return;
+    }
+
+    if (form.id === row.id) setForm(emptyForm);
     await load();
   }
 
@@ -188,7 +215,7 @@ export default function ProductsPage() {
                   <td className="p-3">{row.barcode ?? "-"}</td>
                   <td className="p-3">{row.category ?? "-"}</td>
                   <td className="p-3">{row.is_active ? "نشط" : "متوقف"}</td>
-                  <td className="p-3">
+                  <td className="flex flex-wrap gap-2 p-3">
                     <button
                       className="btn btn-secondary px-2 py-1 text-xs"
                       onClick={() =>
@@ -207,6 +234,17 @@ export default function ProductsPage() {
                       <Edit2 className="h-4 w-4" />
                       تعديل
                     </button>
+                    {canWrite ? (
+                      <button
+                        className="btn btn-danger px-2 py-1 text-xs"
+                        disabled={deletingId === row.id}
+                        onClick={() => void removeProduct(row)}
+                        type="button"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        حذف
+                      </button>
+                    ) : null}
                   </td>
                 </tr>
               ))
