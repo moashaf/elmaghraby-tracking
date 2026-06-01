@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, Anchor, Boxes, CheckCircle2, Package, Plus, ShipWheel } from "lucide-react";
-import { PageHeader } from "@/components/ui";
+import { ErrorMessage, PageHeader } from "@/components/ui";
 import { SHIPMENT_STATUS_LABELS } from "@/lib/constants";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
 import type { Shipment } from "@/lib/types";
 
 type ContainerRow = {
@@ -15,14 +16,20 @@ type ContainerRow = {
 
 type IncomingProductRow = {
   is_new_incoming_product: boolean;
-  shipments: Pick<Shipment, "status"> | null;
+  shipments: Pick<Shipment, "status"> | Array<Pick<Shipment, "status">> | null;
 };
+
+function relatedShipmentStatus(row: IncomingProductRow) {
+  const shipment = Array.isArray(row.shipments) ? row.shipments[0] : row.shipments;
+  return shipment?.status;
+}
 
 export default function DashboardPage() {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [containers, setContainers] = useState<ContainerRow[]>([]);
   const [incomingProducts, setIncomingProducts] = useState<IncomingProductRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -31,24 +38,35 @@ export default function DashboardPage() {
         return;
       }
 
-      const supabase = createClient();
-      await supabase.rpc("auto_move_shipments_to_customs");
-      const [shipmentsResult, containersResult, productsResult] = await Promise.all([
-        supabase
-          .from("shipments")
-          .select("*,companies(name_ar),suppliers(name_ar)")
-          .order("created_at", { ascending: false }),
-        supabase.from("shipment_containers").select("id,shipment_id"),
-        supabase
-          .from("shipment_products")
-          .select("is_new_incoming_product,shipments(status)")
-          .eq("is_new_incoming_product", true),
-      ]);
+      try {
+        const supabase = createClient();
+        await supabase.rpc("auto_move_shipments_to_customs");
+        const [shipmentsResult, containersResult, productsResult] = await Promise.all([
+          supabase
+            .from("shipments")
+            .select("*,companies(name_ar),suppliers(name_ar)")
+            .order("created_at", { ascending: false }),
+          supabase.from("shipment_containers").select("id,shipment_id"),
+          supabase
+            .from("shipment_products")
+            .select("is_new_incoming_product,shipments(status)")
+            .eq("is_new_incoming_product", true),
+        ]);
 
-      setShipments((shipmentsResult.data as Shipment[] | null) ?? []);
-      setContainers((containersResult.data as ContainerRow[] | null) ?? []);
-      setIncomingProducts((productsResult.data as IncomingProductRow[] | null) ?? []);
-      setLoading(false);
+        const firstError = shipmentsResult.error || containersResult.error || productsResult.error;
+        if (firstError) {
+          setError(getSupabaseErrorMessage(firstError));
+          return;
+        }
+
+        setShipments((shipmentsResult.data as Shipment[] | null) ?? []);
+        setContainers((containersResult.data as ContainerRow[] | null) ?? []);
+        setIncomingProducts((productsResult.data as unknown as IncomingProductRow[] | null) ?? []);
+      } catch (loadError) {
+        setError(getSupabaseErrorMessage(loadError));
+      } finally {
+        setLoading(false);
+      }
     }
 
     load();
@@ -70,7 +88,7 @@ export default function DashboardPage() {
     const closed = shipments.filter((shipment) => shipment.status === "closed");
     const overdue = shipments.filter((shipment) => shipment.status !== "closed" && shipment.eta < today);
     const openContainerCount = containers.filter((container) => openShipmentIds.has(container.shipment_id)).length;
-    const newIncomingProducts = incomingProducts.filter((row) => row.shipments?.status !== "closed").length;
+    const newIncomingProducts = incomingProducts.filter((row) => relatedShipmentStatus(row) !== "closed").length;
 
     return {
       recentShipments: shipments.slice(0, 8),
@@ -134,6 +152,8 @@ export default function DashboardPage() {
           </Link>
         }
       />
+
+      <ErrorMessage message={error} />
 
       <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-4">
         {stats.map((item) => {

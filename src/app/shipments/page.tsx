@@ -14,6 +14,7 @@ import {
 } from "@/lib/constants";
 import { useProfile } from "@/context/profile-context";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
 import type { Shipment } from "@/lib/types";
 
 export default function ShipmentsPage() {
@@ -40,25 +41,30 @@ export default function ShipmentsPage() {
     }
 
     setLoading(true);
-    const supabase = createClient();
-    await supabase.rpc("auto_move_shipments_to_customs");
-    let request = supabase
-      .from("shipments")
-      .select("*,companies(name_ar),suppliers(name_ar)")
-      .order("created_at", { ascending: false });
+    try {
+      const supabase = createClient();
+      await supabase.rpc("auto_move_shipments_to_customs");
+      let request = supabase
+        .from("shipments")
+        .select("*,companies(name_ar),suppliers(name_ar)")
+        .order("created_at", { ascending: false });
 
-    if (status) request = request.eq("status", status);
-    if (query.trim()) request = request.or(`shipment_number.ilike.%${query.trim()}%,acid.ilike.%${query.trim()}%`);
+      if (status) request = request.eq("status", status);
+      if (query.trim()) request = request.or(`shipment_number.ilike.%${query.trim()}%,acid.ilike.%${query.trim()}%`);
 
-    const result = await request;
-    setLoading(false);
+      const result = await request;
 
-    if (result.error) {
-      setError(result.error.message);
-      return;
+      if (result.error) {
+        setError(getSupabaseErrorMessage(result.error));
+        return;
+      }
+
+      setShipments((result.data as Shipment[] | null) ?? []);
+    } catch (loadError) {
+      setError(getSupabaseErrorMessage(loadError));
+    } finally {
+      setLoading(false);
     }
-
-    setShipments((result.data as Shipment[] | null) ?? []);
   }
 
   useEffect(() => {

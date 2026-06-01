@@ -85,7 +85,7 @@ export default function ShipmentDetailsPage() {
 
   useEffect(() => {
     if (searchParams.get("edit") === "1" && canWrite) {
-      setEditing(true);
+      queueMicrotask(() => setEditing(true));
     }
   }, [searchParams, canWrite]);
 

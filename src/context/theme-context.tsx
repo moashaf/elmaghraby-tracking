@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { applyTheme, DEFAULT_THEME, loadTheme, saveTheme, type ThemeSettings } from "@/lib/theme";
+import { applyTheme, loadTheme, saveTheme, type ThemeSettings } from "@/lib/theme";
 
 type ThemeContextValue = {
   theme: ThemeSettings;
@@ -12,21 +12,12 @@ type ThemeContextValue = {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeSettings>(DEFAULT_THEME);
-  const [ready, setReady] = useState(false);
+  const [theme, setThemeState] = useState<ThemeSettings>(() => loadTheme());
 
   useEffect(() => {
-    const stored = loadTheme();
-    setThemeState(stored);
-    applyTheme(stored);
-    setReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (!ready) return;
     applyTheme(theme);
     saveTheme(theme);
-  }, [theme, ready]);
+  }, [theme]);
 
   const value = useMemo(
     () => ({

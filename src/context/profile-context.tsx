@@ -12,6 +12,7 @@ import { usePathname, useRouter } from "next/navigation";
 import type { Session, User } from "@supabase/supabase-js";
 import { canWrite, isAdmin, type UserRole } from "@/lib/permissions";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
 
 type ProfileState = {
   id: string;
@@ -119,10 +120,15 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     }
 
     void (async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      await applySession(session);
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        await applySession(session);
+      } catch (sessionError) {
+        console.warn("[profile] session failed:", getSupabaseErrorMessage(sessionError));
+        await applySession(null);
+      }
     })();
 
     const {
@@ -160,9 +166,13 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
     setLoading(true);
     const supabase = createClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    let session: Session | null = null;
+    try {
+      const result = await supabase.auth.getSession();
+      session = result.data.session;
+    } catch (sessionError) {
+      console.warn("[profile] refresh failed:", getSupabaseErrorMessage(sessionError));
+    }
 
     if (!session?.user) {
       setUser(null);

@@ -65,7 +65,7 @@ export default function ProductSmartSearchPage() {
       .map((item) => (item.shipments as { id?: string } | null)?.id)
       .filter(Boolean) as string[];
 
-    let containerCounts = new Map<string, number>();
+    const containerCounts = new Map<string, number>();
     if (shipmentIds.length) {
       const containersResult = await createClient().from("shipment_containers").select("shipment_id").in("shipment_id", shipmentIds);
       if (containersResult.error) {

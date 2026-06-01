@@ -187,8 +187,6 @@ export function ShipmentForm({
     [suppliers]
   );
 
-  const categoryOptions = useMemo(() => buildCategorySelectOptions(categories), [categories]);
-
   const productById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
 
   useEffect(() => {
@@ -236,17 +234,21 @@ export function ShipmentForm({
     const duration = findRouteDuration(routes, form.shipping_port, form.arrival_port);
     if (!duration || !form.shipped_at) return;
 
-    setForm((current) => ({
-      ...current,
-      shipping_duration_days: String(duration),
-      eta: addDaysToIsoDate(form.shipped_at, duration),
-    }));
+    queueMicrotask(() => {
+      setForm((current) => ({
+        ...current,
+        shipping_duration_days: String(duration),
+        eta: addDaysToIsoDate(form.shipped_at, duration),
+      }));
+    });
   }, [form.shipping_port, form.arrival_port, form.shipped_at, routes]);
 
   useEffect(() => {
     const count = Number(form.containers_count);
     if (!Number.isFinite(count) || count < 1) return;
-    setContainers((current) => resizeContainers(Math.min(Math.floor(count), 50), current));
+    queueMicrotask(() => {
+      setContainers((current) => resizeContainers(Math.min(Math.floor(count), 50), current));
+    });
   }, [form.containers_count]);
 
   function setField<K extends keyof ShipmentFormValues>(key: K, value: ShipmentFormValues[K]) {

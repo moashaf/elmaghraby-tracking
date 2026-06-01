@@ -10,12 +10,13 @@
 
 1. ارفعي المشروع على **GitHub** (لو لسه مش مرفوع).
 2. ادخلي [vercel.com](https://vercel.com) → **Add New Project** → اختاري الريبو.
-3. في **Environment Variables** حطي نفس قيم `.env.local` (بدون `SUPABASE_SERVICE_ROLE_KEY` وبدون `SUPABASE_DB_PASSWORD`):
+3. في **Environment Variables** حطي نفس قيم `.env.local` المطلوبة للأونلاين. لا تضيفي `SUPABASE_DB_PASSWORD` على Vercel.
 
 | الاسم | القيمة |
 |--------|--------|
 | `NEXT_PUBLIC_SUPABASE_URL` | من Supabase → Settings → API |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | نفس الـ anon / publishable key |
+| `SUPABASE_SERVICE_ROLE_KEY` | من Supabase → Settings → API → service_role secret. مهم لصفحات المستخدمين وإعدادات النظام، ولا تكتبيه أبدا باسم يبدأ بـ `NEXT_PUBLIC_` |
 | `NEXT_PUBLIC_APP_URL` | هتحطيها بعد ما Vercel يديكي الرابط (خطوة ب) |
 
 4. اضغطي **Deploy** واستني لحد ما يخلص.
@@ -27,7 +28,7 @@
 NEXT_PUBLIC_APP_URL=https://elmaghraby-tracing.vercel.app
 ```
 
-6. في Vercel → **Settings → Environment Variables** حدّثي `NEXT_PUBLIC_APP_URL` واعملي **Redeploy**.
+6. في Vercel → **Settings → Environment Variables** حدّثي `NEXT_PUBLIC_APP_URL` واعملي **Redeploy**. أي تعديل في متغيرات البيئة يحتاج Redeploy.
 
 ### الخطوة ب — Supabase (مهم عشان تسجيل الدخول يشتغل)
 
@@ -39,6 +40,15 @@ NEXT_PUBLIC_APP_URL=https://elmaghraby-tracing.vercel.app
 | **Redirect URLs** | `https://YOUR-APP.vercel.app/**` |
 
 احفظي. بعدها أي حد يفتح الرابط يقدر يسجل دخول عادي.
+
+### استكشاف أخطاء «Failed to fetch» أو «تعذر الاتصال»
+
+1. في [Supabase Dashboard](https://supabase.com/dashboard) تأكدي أن المشروع **Active** (مش Paused ولا محذوف).
+2. من **Project Settings → API** انسخي من جديد:
+   - **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
+   - **anon / publishable key** → `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+3. في **Vercel → Settings → Environment Variables** حدّثي القيم ثم **Redeploy** (أي تغيير في env يحتاج إعادة نشر).
+4. لو المشروع اتمسح: أنشئي مشروع Supabase جديد، شغّلي migrations من مجلد `supabase/migrations`، ثم أعدي استيراد البيانات.
 
 ### الخطوة ج — شاركي الرابط
 

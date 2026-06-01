@@ -8,14 +8,30 @@ const settingsSchema = z.object({
 });
 
 export async function GET(request: Request) {
-  const requestClient = createRequestClient(request);
+  let requestClient: ReturnType<typeof createRequestClient>;
+  try {
+    requestClient = createRequestClient(request);
+  } catch {
+    return jsonError("إعدادات Supabase ناقصة في Vercel: تأكد من NEXT_PUBLIC_SUPABASE_URL والمفتاح العام ثم أعد النشر.", 500);
+  }
+
   const {
     data: { user },
     error,
-  } = await requestClient.auth.getUser();
+  } = await requestClient.auth.getUser().catch((authError) => ({
+    data: { user: null },
+    error: authError instanceof Error ? authError : new Error("تعذر التحقق من الجلسة."),
+  }));
   if (error || !user) return jsonError("غير مصرح بالدخول", 401);
 
-  const { data, error: settingsError } = await createAdminClient()
+  let adminClient: ReturnType<typeof createAdminClient>;
+  try {
+    adminClient = createAdminClient();
+  } catch {
+    return jsonError("إعدادات السيرفر ناقصة: أضف SUPABASE_SERVICE_ROLE_KEY في Vercel Environment Variables ثم أعد النشر.", 500);
+  }
+
+  const { data, error: settingsError } = await adminClient
     .from("app_settings")
     .select("key, value")
     .eq("key", "system")

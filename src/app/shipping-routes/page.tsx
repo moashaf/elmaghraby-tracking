@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Route, Save, Search, Trash2 } from "lucide-react";
+import { Plus, Route, Search, Trash2 } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage, PageHeader, StatusPill } from "@/components/ui";
 import { PORT_SELECT_OPTIONS } from "@/lib/port-options";

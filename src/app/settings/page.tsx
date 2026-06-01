@@ -8,6 +8,7 @@ import { useTheme } from "@/context/theme-context";
 import { DEFAULT_THEME } from "@/lib/theme";
 import { ROLE_LABELS, type UserRole } from "@/lib/permissions";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
 
 type Role = UserRole;
 
@@ -48,7 +49,7 @@ export default function SettingsPage() {
   const authHeaders = useCallback(async (): Promise<Record<string, string>> => {
     const {
       data: { session },
-    } = await createClient().auth.getSession();
+    } = await createClient().auth.getSession().catch(() => ({ data: { session: null } }));
     return session ? { Authorization: `Bearer ${session.access_token}` } : {};
   }, []);
 
@@ -64,7 +65,10 @@ export default function SettingsPage() {
     const {
       data: { user },
       error: userError,
-    } = await supabase.auth.getUser();
+    } = await supabase.auth.getUser().catch((loadError) => ({
+      data: { user: null },
+      error: loadError instanceof Error ? loadError : new Error("تعذر التحقق من الجلسة."),
+    }));
 
     if (userError || !user) {
       setLoading(false);
@@ -85,10 +89,18 @@ export default function SettingsPage() {
       return;
     }
 
-    const response = await fetch("/api/settings", {
-      headers: await authHeaders(),
-    });
-    const payload = await response.json();
+    let response: Response;
+    let payload: { settings?: SystemSettings; error?: string };
+    try {
+      response = await fetch("/api/settings", {
+        headers: await authHeaders(),
+      });
+      payload = await response.json();
+    } catch (settingsError) {
+      setLoading(false);
+      setError(getSupabaseErrorMessage(settingsError));
+      return;
+    }
 
     setProfile(profileRow as Profile);
     setFullName(profileRow.full_name ?? "");
@@ -130,15 +142,23 @@ export default function SettingsPage() {
     setError("");
     setSavingSettings(true);
 
-    const response = await fetch("/api/settings", {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        ...(await authHeaders()),
-      },
-      body: JSON.stringify(settings),
-    });
-    const payload = await response.json();
+    let response: Response;
+    let payload: { settings?: SystemSettings; error?: string };
+    try {
+      response = await fetch("/api/settings", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(await authHeaders()),
+        },
+        body: JSON.stringify(settings),
+      });
+      payload = await response.json();
+    } catch (settingsError) {
+      setSavingSettings(false);
+      setError(getSupabaseErrorMessage(settingsError));
+      return;
+    }
     setSavingSettings(false);
 
     if (!response.ok) {
@@ -146,7 +166,7 @@ export default function SettingsPage() {
       return;
     }
 
-    setSettings(payload.settings);
+    setSettings(payload.settings ?? settings);
     setMessage("تم حفظ إعدادات النظام.");
   }
 

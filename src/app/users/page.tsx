@@ -7,6 +7,7 @@ import { AdminGuard } from "@/components/admin-guard";
 import { ErrorMessage, PageHeader, StatusPill } from "@/components/ui";
 import { ROLE_LABELS, type UserRole } from "@/lib/permissions";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
 
 type Role = UserRole;
 
@@ -48,7 +49,7 @@ export default function UsersPage() {
   const authHeaders = useCallback(async (): Promise<Record<string, string>> => {
     const {
       data: { session },
-    } = await createClient().auth.getSession();
+    } = await createClient().auth.getSession().catch(() => ({ data: { session: null } }));
     return session ? { Authorization: `Bearer ${session.access_token}` } : {};
   }, []);
 
@@ -61,10 +62,18 @@ export default function UsersPage() {
     }
 
     setLoading(true);
-    const response = await fetch("/api/users", {
-      headers: await authHeaders(),
-    });
-    const payload = await response.json();
+    let response: Response;
+    let payload: { users?: UserRow[]; error?: string };
+    try {
+      response = await fetch("/api/users", {
+        headers: await authHeaders(),
+      });
+      payload = await response.json();
+    } catch (loadError) {
+      setLoading(false);
+      setError(getSupabaseErrorMessage(loadError));
+      return;
+    }
     setLoading(false);
 
     if (!response.ok) {
@@ -93,20 +102,28 @@ export default function UsersPage() {
     setSaving(true);
 
     const isEdit = Boolean(form.id);
-    const response = await fetch(isEdit ? `/api/users/${form.id}` : "/api/users", {
-      method: isEdit ? "PATCH" : "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(await authHeaders()),
-      },
-      body: JSON.stringify({
-        full_name: form.full_name.trim(),
-        email: form.email.trim(),
-        password: form.password,
-        role: form.role,
-      }),
-    });
-    const payload = await response.json();
+    let response: Response;
+    let payload: { error?: string };
+    try {
+      response = await fetch(isEdit ? `/api/users/${form.id}` : "/api/users", {
+        method: isEdit ? "PATCH" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(await authHeaders()),
+        },
+        body: JSON.stringify({
+          full_name: form.full_name.trim(),
+          email: form.email.trim(),
+          password: form.password,
+          role: form.role,
+        }),
+      });
+      payload = await response.json();
+    } catch (saveError) {
+      setSaving(false);
+      setError(getSupabaseErrorMessage(saveError));
+      return;
+    }
     setSaving(false);
 
     if (!response.ok) {
@@ -121,11 +138,19 @@ export default function UsersPage() {
   async function removeUser(id: string) {
     setError("");
     setDeletingId(id);
-    const response = await fetch(`/api/users/${id}`, {
-      method: "DELETE",
-      headers: await authHeaders(),
-    });
-    const payload = await response.json();
+    let response: Response;
+    let payload: { error?: string };
+    try {
+      response = await fetch(`/api/users/${id}`, {
+        method: "DELETE",
+        headers: await authHeaders(),
+      });
+      payload = await response.json();
+    } catch (deleteError) {
+      setDeletingId("");
+      setError(getSupabaseErrorMessage(deleteError));
+      return;
+    }
     setDeletingId("");
 
     if (!response.ok) {

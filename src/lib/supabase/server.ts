@@ -18,6 +18,17 @@ export function createAdminClient() {
   });
 }
 
+function serverConfigError(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  if (message.includes("SUPABASE_SERVICE_ROLE_KEY")) {
+    return "إعدادات السيرفر ناقصة: أضف SUPABASE_SERVICE_ROLE_KEY في Vercel Environment Variables ثم أعد النشر.";
+  }
+  if (message.includes("NEXT_PUBLIC_SUPABASE_URL") || message.includes("public Supabase key")) {
+    return "إعدادات Supabase ناقصة في Vercel: تأكد من NEXT_PUBLIC_SUPABASE_URL والمفتاح العام ثم أعد النشر.";
+  }
+  return message || "تعذر تجهيز اتصال Supabase على السيرفر.";
+}
+
 export function createRequestClient(request: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key =
@@ -42,12 +53,22 @@ export function createRequestClient(request: Request) {
 }
 
 export async function requireAdmin(request: Request) {
-  const requestClient = createRequestClient(request);
-  const adminClient = createAdminClient();
+  let requestClient: ReturnType<typeof createRequestClient>;
+  let adminClient: ReturnType<typeof createAdminClient>;
+  try {
+    requestClient = createRequestClient(request);
+    adminClient = createAdminClient();
+  } catch (configError) {
+    return { ok: false as const, error: serverConfigError(configError), status: 500 as const };
+  }
+
   const {
     data: { user },
     error,
-  } = await requestClient.auth.getUser();
+  } = await requestClient.auth.getUser().catch((authError) => ({
+    data: { user: null },
+    error: authError instanceof Error ? authError : new Error("تعذر التحقق من الجلسة."),
+  }));
 
   if (error || !user) {
     return { ok: false as const, error: "غير مصرح بالدخول", status: 401 as const };

@@ -1,18 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogIn, ShipWheel } from "lucide-react";
 import { ErrorMessage } from "@/components/ui";
 import { APP_CREDIT_NAME } from "@/lib/constants";
+import { readSupabaseConfig } from "@/lib/supabase/config";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { checkSupabaseReachable, getSupabaseErrorMessage } from "@/lib/supabase/errors";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    void (async () => {
+      const config = readSupabaseConfig();
+      if (!config.ok) {
+        setError(config.message);
+        setChecking(false);
+        return;
+      }
+
+      const health = await checkSupabaseReachable(config.url, config.key);
+      if (!health.ok) setError(health.message);
+      setChecking(false);
+    })();
+  }, []);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -35,14 +53,19 @@ export default function LoginPage() {
       return;
     }
 
-    const { data, error: signInError } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
+    const { data, error: signInError } = await supabase.auth
+      .signInWithPassword({
+        email: email.trim(),
+        password,
+      })
+      .catch((signInCatchError) => ({
+        data: { session: null },
+        error: new Error(getSupabaseErrorMessage(signInCatchError)),
+      }));
 
     if (signInError) {
       setLoading(false);
-      setError(signInError.message);
+      setError(getSupabaseErrorMessage(signInError));
       return;
     }
 
@@ -78,9 +101,9 @@ export default function LoginPage() {
           كلمة المرور
           <input className="input" required type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
         </label>
-        <button className="btn w-full" disabled={loading} type="submit">
+        <button className="btn w-full" disabled={loading || checking || Boolean(error)} type="submit">
           <LogIn className="h-4 w-4" />
-          {loading ? "جاري الدخول..." : "دخول"}
+          {checking ? "جاري التحقق..." : loading ? "جاري الدخول..." : "دخول"}
         </button>
       </form>
       <p className="text-center text-xs text-[var(--muted)]">Powered by {APP_CREDIT_NAME}</p>

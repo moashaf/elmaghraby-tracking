@@ -281,7 +281,7 @@ async function buildReport(slug: string, from: string, to: string): Promise<{ ro
 
   if (["containers", "container-files", "incoming-products", "new-products", "duplicate-products", "date-range-products", "product-history", "costs"].includes(slug)) {
     if (slug === "containers") return containersReport(from, to);
-    if (slug === "container-files") return containerFilesReport(from, to);
+    if (slug === "container-files") return containerFilesReport();
     if (slug === "costs") return costsReport(from, to);
     return productsReport(slug, from, to);
   }
@@ -395,7 +395,7 @@ async function containersReport(from: string, to: string): Promise<{ rows: Repor
   };
 }
 
-async function containerFilesReport(_from: string, _to: string): Promise<{ rows: ReportRow[] } | { error: string }> {
+async function containerFilesReport(): Promise<{ rows: ReportRow[] } | { error: string }> {
   const result = await createClient()
     .from("container_files")
     .select(`file_name,storage_path,size_bytes,uploaded_at,shipment_containers(container_number,shipments(${shipmentSelect}))`)
