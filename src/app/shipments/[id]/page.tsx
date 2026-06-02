@@ -10,9 +10,11 @@ import { ErrorMessage, PageHeader } from "@/components/ui";
 import { getNextStatusAction, NEXT_ACTION_LABELS, SHIPMENT_STATUS_LABELS } from "@/lib/constants";
 import { useProfile } from "@/context/profile-context";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { addDaysToIsoDate } from "@/lib/eta";
 import type { Shipment, ShipmentContainer, ShipmentCost, ShipmentDocument, ShipmentProduct, TimelineEvent } from "@/lib/types";
 
 const bucket = "container-files";
+const CUSTOMS_CLEARANCE_DAYS = 15;
 
 type Tab = "summary" | "containers" | "products" | "files" | "timeline" | "costs";
 
@@ -28,7 +30,7 @@ const tabs: Array<{ id: Tab; label: string }> = [
 export default function ShipmentDetailsPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
-  const { canWrite } = useProfile();
+  const { canWrite, isAdmin } = useProfile();
   const [shipment, setShipment] = useState<Shipment | null>(null);
   const [containers, setContainers] = useState<ShipmentContainer[]>([]);
   const [products, setProducts] = useState<ShipmentProduct[]>([]);
@@ -107,6 +109,12 @@ export default function ShipmentDetailsPage() {
     }
     if (action !== "to_customs") return;
 
+    const todayIso = new Date().toISOString().slice(0, 10);
+    if (shipment.eta && todayIso < shipment.eta) {
+      setError("لا يمكن تحويل الشحنة إلى «في الجمرك» قبل تاريخ الوصول المتوقع (ETA).");
+      return;
+    }
+
     setSaving(true);
     const result = await createClient().rpc("transition_shipment_status", {
       shipment_id: shipment.id,
@@ -122,6 +130,19 @@ export default function ShipmentDetailsPage() {
     await load();
   }
 
+  async function revertToInSea() {
+    if (!shipment) return;
+    if (!window.confirm("إرجاع الشحنة إلى «في البحر»؟")) return;
+    setSaving(true);
+    const result = await createClient().rpc("revert_shipment_to_in_sea", { p_shipment_id: shipment.id });
+    setSaving(false);
+    if (result.error) {
+      setError(result.error.message);
+      return;
+    }
+    await load();
+  }
+
   if (loading) {
     return <div className="card p-5 text-sm text-[var(--muted)]">جاري تحميل الشحنة...</div>;
   }
@@ -133,6 +154,8 @@ export default function ShipmentDetailsPage() {
   const action = getNextStatusAction(shipment.status);
   const readOnly = shipment.status === "closed" && !editing;
   const invDoc = documents.find((doc) => doc.doc_type.toUpperCase() === "INV");
+  const customsExit = addDaysToIsoDate(shipment.eta, CUSTOMS_CLEARANCE_DAYS);
+  const canRevert = isAdmin && shipment.status === "customs" && new Date().toISOString().slice(0, 10) < shipment.eta;
 
   return (
     <div className="space-y-5">
@@ -178,8 +201,21 @@ export default function ShipmentDetailsPage() {
         <InfoCard label="الحالة" value={SHIPMENT_STATUS_LABELS[shipment.status]} badge={`status-${shipment.status}`} />
         <InfoCard label="تاريخ الشحن" value={shipment.shipped_at} />
         <InfoCard label="الوصول المتوقع" value={shipment.eta} />
+        <InfoCard label="خروج جمرك (+15 يوم)" value={customsExit} />
         <InfoCard label="عدد الحاويات" value={containers.length.toString()} />
       </section>
+
+      {canRevert ? (
+        <div className="card flex flex-wrap items-center justify-between gap-3 border-amber-200 bg-amber-50 p-4 text-sm">
+          <div>
+            <div className="font-semibold">تنبيه</div>
+            <div className="text-[var(--muted)]">الشحنة في «الجمرك» قبل الـ ETA. يمكنك إرجاعها إلى «في البحر».</div>
+          </div>
+          <button className="btn btn-secondary" disabled={saving} onClick={revertToInSea} type="button">
+            إرجاع لفي البحر
+          </button>
+        </div>
+      ) : null}
 
       {invDoc ? (
         <section className="card flex flex-wrap items-center justify-between gap-3 p-4">

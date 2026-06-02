@@ -89,6 +89,12 @@ export default function ShipmentsPage() {
       return;
     }
 
+    const todayIso = new Date().toISOString().slice(0, 10);
+    if (shipment.eta && todayIso < shipment.eta) {
+      setError("لا يمكن تحويل الشحنة إلى «في الجمرك» قبل تاريخ الوصول المتوقع (ETA).");
+      return;
+    }
+
     setActionLoading(shipment.id);
     const result = await createClient().rpc("transition_shipment_status", {
       shipment_id: shipment.id,
