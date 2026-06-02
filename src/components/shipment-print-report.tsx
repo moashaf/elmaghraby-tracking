@@ -213,7 +213,7 @@ export function ShipmentPrintReport({ shipmentId }: { shipmentId: string }) {
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-[var(--border)] p-3">
+    <div className="rounded-md border border-[var(--border)] p-3 print-avoid">
       <div className="text-xs text-[var(--muted)]">{label}</div>
       <div className="mt-1 font-semibold">{value}</div>
     </div>
