@@ -233,12 +233,17 @@ export function ShipmentForm({
     const duration = findRouteDuration(routes, form.shipping_port, form.arrival_port);
     if (!duration || !form.shipped_at) return;
 
+    const nextEta = addDaysToIsoDate(form.shipped_at, duration);
     queueMicrotask(() => {
-      setForm((current) => ({
-        ...current,
-        shipping_duration_days: String(duration),
-        eta: addDaysToIsoDate(form.shipped_at, duration),
-      }));
+      setForm((current) => {
+        // Keep ETA always aligned with sea-duration to avoid status/date drift.
+        if (current.shipping_duration_days === String(duration) && current.eta === nextEta) return current;
+        return {
+          ...current,
+          shipping_duration_days: String(duration),
+          eta: nextEta,
+        };
+      });
     });
   }, [form.shipping_port, form.arrival_port, form.shipped_at, routes]);
 
@@ -322,6 +327,10 @@ export function ShipmentForm({
     }
 
     const user = await supabase.auth.getUser();
+    const routeDuration = findRouteDuration(routes, form.shipping_port, form.arrival_port);
+    const etaValue =
+      routeDuration && form.shipped_at ? addDaysToIsoDate(form.shipped_at, routeDuration) : form.eta;
+
     const shipmentPayload = {
       acid: form.acid.trim(),
       company_id: form.company_id,
@@ -329,8 +338,8 @@ export function ShipmentForm({
       shipping_port: form.shipping_port.trim(),
       arrival_port: form.arrival_port.trim(),
       shipped_at: form.shipped_at,
-      eta: form.eta,
-      shipping_duration_days: form.shipping_duration_days ? Number(form.shipping_duration_days) : null,
+      eta: etaValue,
+      shipping_duration_days: routeDuration ?? (form.shipping_duration_days ? Number(form.shipping_duration_days) : null),
       shipment_type: form.shipment_type.trim() || "—",
       total_weight_kg: toNullableNumber(form.total_weight_kg),
       total_cartons: toNullableNumber(form.total_cartons),
@@ -532,7 +541,7 @@ export function ShipmentForm({
             </label>
             <label className="label">
               تاريخ الوصول المتوقع
-              <input className="input" required type="date" value={form.eta} onChange={(event) => setField("eta", event.target.value)} />
+              <input className="input bg-slate-50" required readOnly type="date" value={form.eta} />
             </label>
             <label className="label">
               خروج جمرك (بعد 15 يوم)
