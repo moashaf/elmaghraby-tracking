@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Edit2, Plus, Save, Search, Trash2, Users } from "lucide-react";
 import { AdminGuard } from "@/components/admin-guard";
 import { ErrorMessage, PageHeader, StatusPill } from "@/components/ui";
+import { useLanguage } from "@/context/language-context";
 import { ROLE_LABELS, type UserRole } from "@/lib/permissions";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
@@ -38,6 +39,7 @@ const emptyForm: UserForm = {
 };
 
 export default function UsersPage() {
+  const { tr } = useLanguage();
   const [rows, setRows] = useState<UserRow[]>([]);
   const [form, setForm] = useState<UserForm>(emptyForm);
   const [query, setQuery] = useState("");
@@ -165,8 +167,11 @@ export default function UsersPage() {
     <AdminGuard>
     <div className="space-y-5">
       <PageHeader
-        title="المستخدمون"
-        description="إنشاء حسابات Supabase Auth وتحديد صلاحيات العمل داخل النظام."
+        title={tr("المستخدمون", "Users")}
+        description={tr(
+          "إنشاء حسابات Supabase Auth وتحديد صلاحيات العمل داخل النظام.",
+          "Manage users and roles in Supabase Auth."
+        )}
         actions={
           <div className="flex flex-wrap gap-2">
             <StatusPill className="bg-emerald-50 text-emerald-700">
@@ -174,7 +179,7 @@ export default function UsersPage() {
             </StatusPill>
             <Link className="btn text-sm" href="/users/new">
               <Plus className="h-4 w-4" />
-              مستخدم جديد
+              {tr("مستخدم جديد", "New user")}
             </Link>
           </div>
         }

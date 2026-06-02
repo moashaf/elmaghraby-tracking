@@ -9,10 +9,12 @@ import {
   getNextStatusAction,
   NEXT_ACTION_LABELS,
   SHIPMENT_STATUS_LABELS,
+  SHIPMENT_STATUS_LABELS_EN,
   SHIPMENT_STATUSES,
   type ShipmentStatus,
 } from "@/lib/constants";
 import { useProfile } from "@/context/profile-context";
+import { useLanguage } from "@/context/language-context";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
 import type { Shipment } from "@/lib/types";
@@ -20,6 +22,7 @@ import type { Shipment } from "@/lib/types";
 export default function ShipmentsPage() {
   const router = useRouter();
   const { canWrite, isAdmin } = useProfile();
+  const { tr, lang } = useLanguage();
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [status, setStatus] = useState<ShipmentStatus | "">(() => {
     if (typeof window === "undefined") return "";
@@ -81,6 +84,8 @@ export default function ShipmentsPage() {
     [shipments]
   );
 
+  const statusLabels = lang === "ar" ? SHIPMENT_STATUS_LABELS : SHIPMENT_STATUS_LABELS_EN;
+
   async function transition(shipment: Shipment) {
     const action = getNextStatusAction(shipment.status);
     if (!action) return;
@@ -128,13 +133,16 @@ export default function ShipmentsPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="الشحنات"
-        description="قائمة الشحنات مع فلترة الحالة وزر التالي بجانب كل حالة."
+        title={tr("الشحنات", "Shipments")}
+        description={tr(
+          "قائمة الشحنات مع فلترة الحالة وزر التالي بجانب كل حالة.",
+          "Shipments list with status filters and next-action shortcuts."
+        )}
         actions={
           canWrite ? (
             <Link className="btn" href="/shipments/new">
               <Plus className="h-4 w-4" />
-              شحنة جديدة
+              {tr("شحنة جديدة", "New shipment")}
             </Link>
           ) : null
         }
@@ -150,7 +158,7 @@ export default function ShipmentsPage() {
             onClick={() => setStatus(status === item.status ? "" : item.status)}
             type="button"
           >
-            <span className={`status-badge status-${item.status}`}>{SHIPMENT_STATUS_LABELS[item.status]}</span>
+            <span className={`status-badge status-${item.status}`}>{statusLabels[item.status]}</span>
             <div className="mt-3 text-3xl font-bold">{item.count}</div>
           </button>
         ))}
@@ -162,7 +170,7 @@ export default function ShipmentsPage() {
           <option value="">كل الحالات</option>
           {SHIPMENT_STATUSES.map((item) => (
             <option key={item} value={item}>
-              {SHIPMENT_STATUS_LABELS[item]}
+              {statusLabels[item]}
             </option>
           ))}
         </select>
@@ -204,7 +212,7 @@ export default function ShipmentsPage() {
                       <td className="p-3">{shipment.shipping_port}</td>
                       <td className="p-3">{shipment.eta}</td>
                       <td className="p-3">
-                        <span className={`status-badge status-${shipment.status}`}>{SHIPMENT_STATUS_LABELS[shipment.status]}</span>
+                        <span className={`status-badge status-${shipment.status}`}>{statusLabels[shipment.status]}</span>
                       </td>
                       <td className="p-3">
                         <div className="flex flex-wrap gap-2">

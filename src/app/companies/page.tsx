@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Edit2, Plus, Save, Search } from "lucide-react";
 import { ErrorMessage, PageHeader } from "@/components/ui";
+import { useLanguage } from "@/context/language-context";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import type { Company } from "@/lib/types";
 
@@ -22,6 +23,7 @@ const emptyForm: CompanyForm = {
 };
 
 export default function CompaniesPage() {
+  const { tr } = useLanguage();
   const [rows, setRows] = useState<Company[]>([]);
   const [form, setForm] = useState<CompanyForm>(emptyForm);
   const [query, setQuery] = useState("");
@@ -92,7 +94,10 @@ export default function CompaniesPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="شركات الاستيراد" description="الشركات المرجعية المستخدمة داخل الشحنات." />
+      <PageHeader
+        title={tr("شركات الاستيراد", "Import companies")}
+        description={tr("الشركات المرجعية المستخدمة داخل الشحنات.", "Reference companies used in shipments.")}
+      />
       <ErrorMessage message={error} />
 
       <form className="card grid gap-3 p-4 md:grid-cols-[1fr_1fr_120px_120px]" onSubmit={submit}>

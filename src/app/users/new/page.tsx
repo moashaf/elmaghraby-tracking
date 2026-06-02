@@ -6,6 +6,7 @@ import { ArrowRight, Save, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { AdminGuard } from "@/components/admin-guard";
 import { ErrorMessage, PageHeader, StatusPill } from "@/components/ui";
+import { useLanguage } from "@/context/language-context";
 import { ROLE_LABELS, type UserRole } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/client";
 import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
@@ -14,6 +15,7 @@ type Role = UserRole;
 
 export default function NewUserPage() {
   const router = useRouter();
+  const { tr } = useLanguage();
   const [form, setForm] = useState({
     full_name: "",
     email: "",
@@ -72,8 +74,8 @@ export default function NewUserPage() {
     <AdminGuard>
     <div className="space-y-5">
       <PageHeader
-        title="إنشاء مستخدم"
-        description="حساب جديد بصلاحيات واضحة داخل النظام."
+        title={tr("إنشاء مستخدم", "Create user")}
+        description={tr("حساب جديد بصلاحيات واضحة داخل النظام.", "Create a new user with clear permissions.")}
         actions={
           <div className="flex flex-wrap gap-2">
             <StatusPill className="bg-emerald-50 text-emerald-700">
@@ -81,7 +83,7 @@ export default function NewUserPage() {
             </StatusPill>
             <Link className="btn btn-secondary text-sm" href="/users">
               <ArrowRight className="h-4 w-4" />
-              رجوع
+              {tr("رجوع", "Back")}
             </Link>
           </div>
         }

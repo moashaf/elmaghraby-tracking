@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Plus, Route, Search, Trash2 } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage, PageHeader, StatusPill } from "@/components/ui";
+import { useLanguage } from "@/context/language-context";
 import { PORT_SELECT_OPTIONS } from "@/lib/port-options";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import type { ShippingRoute } from "@/lib/types";
@@ -21,6 +22,7 @@ const emptyForm: RouteForm = {
 };
 
 export default function ShippingRoutesPage() {
+  const { tr } = useLanguage();
   const [rows, setRows] = useState<ShippingRoute[]>([]);
   const [form, setForm] = useState<RouteForm>(emptyForm);
   const [query, setQuery] = useState("");
@@ -105,8 +107,11 @@ export default function ShippingRoutesPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="مسارات الشحن"
-        description="حدد مدة الشحن بين الميناءين — تُستخدم تلقائيا عند إنشاء شحنة جديدة."
+        title={tr("مسارات الشحن", "Shipping routes")}
+        description={tr(
+          "حدد مدة الشحن بين الميناءين — تُستخدم تلقائيا عند إنشاء شحنة جديدة.",
+          "Define shipping duration between ports (used automatically when creating shipments)."
+        )}
         actions={
           <StatusPill className="bg-emerald-50 text-emerald-700">
             <Route className="inline h-3.5 w-3.5" /> {rows.length} مسار

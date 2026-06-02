@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Edit2, FolderTree, Plus, Save, Search, Trash2, X } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage, PageHeader, StatusPill } from "@/components/ui";
+import { useLanguage } from "@/context/language-context";
 import {
   buildCategorySelectOptions,
   filterCategoryRows,
@@ -36,6 +37,7 @@ const LIST_FILTERS: Array<{ id: CategoryListFilter; label: string }> = [
 ];
 
 export default function CategoriesPage() {
+  const { tr } = useLanguage();
   const [rows, setRows] = useState<ProductCategory[]>([]);
   const [form, setForm] = useState<CategoryForm>(emptyForm);
   const [query, setQuery] = useState("");
@@ -159,8 +161,11 @@ export default function CategoriesPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="الفئات"
-        description="فئات المنتجات الرئيسية والفرعية. لإضافة فئة تحت «كشاف»: اختر كشاف في «تحت فئة»."
+        title={tr("الفئات", "Categories")}
+        description={tr(
+          "فئات المنتجات الرئيسية والفرعية. لإضافة فئة تحت «كشاف»: اختر كشاف في «تحت فئة».",
+          "Main and sub product categories."
+        )}
         actions={
           <StatusPill className="bg-emerald-50 text-emerald-700">
             <FolderTree className="inline h-3.5 w-3.5" /> {rows.length} فئة — {activeCount} نشطة

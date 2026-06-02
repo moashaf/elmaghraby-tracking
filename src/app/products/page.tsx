@@ -5,6 +5,7 @@ import { Edit2, Plus, Save, Search, Trash2 } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage, PageHeader } from "@/components/ui";
 import { useProfile } from "@/context/profile-context";
+import { useLanguage } from "@/context/language-context";
 import { buildCategorySelectOptions } from "@/lib/category-options";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { fetchAllFromTable } from "@/lib/supabase/fetch-all";
@@ -38,6 +39,7 @@ function productDeleteError(message: string) {
 
 export default function ProductsPage() {
   const { canWrite } = useProfile();
+  const { tr } = useLanguage();
   const [rows, setRows] = useState<Product[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [form, setForm] = useState<ProductForm>(emptyForm);
@@ -139,19 +141,27 @@ export default function ProductsPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="المنتجات" />
+      <PageHeader title={tr("المنتجات", "Products")} />
       <ErrorMessage message={error} />
 
       <form className="card grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-6" onSubmit={submit}>
-        {form.id ? (
-          <input className="input bg-slate-50" disabled value={form.sku} title="الكود يُولَّد تلقائيا ولا يُعدَّل" />
-        ) : (
-          <input className="input bg-slate-50 text-[var(--muted)]" disabled placeholder="SKU تلقائي" value="" readOnly />
-        )}
-        <input className="input" placeholder="اسم المنتج" required value={form.name_ar} onChange={(event) => setForm({ ...form, name_ar: event.target.value })} />
+        <input
+          className="input"
+          placeholder={tr("SKU (اختياري)", "SKU (optional)")}
+          value={form.sku}
+          onChange={(event) => setForm({ ...form, sku: event.target.value })}
+          title={tr("اتركه فارغا لتوليد SKU تلقائيا", "Leave empty to auto-generate SKU")}
+        />
+        <input
+          className="input"
+          placeholder={tr("اسم المنتج", "Product name")}
+          required
+          value={form.name_ar}
+          onChange={(event) => setForm({ ...form, name_ar: event.target.value })}
+        />
         <SearchableSelect
           options={categoryOptions}
-          placeholder="ابحث عن الفئة..."
+          placeholder={tr("ابحث عن الفئة...", "Search category...")}
           required
           value={form.category_id}
           onChange={(value) => setForm({ ...form, category_id: value })}
@@ -163,7 +173,7 @@ export default function ProductsPage() {
           value={form.barcode}
           onChange={(event) => setForm({ ...form, barcode: event.target.value })}
         />
-        <input className="input bg-slate-50" disabled readOnly value="piece" title="الوحدة الافتراضية" />
+        <input className="input bg-slate-50" disabled readOnly value="piece" title={tr("الوحدة الافتراضية", "Default unit")} />
         <div className="flex items-center gap-2">
           <label className="flex items-center gap-2 text-sm text-[var(--muted)]">
             <input checked={form.is_active} onChange={(event) => setForm({ ...form, is_active: event.target.checked })} type="checkbox" />

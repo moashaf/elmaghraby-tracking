@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Edit2, Plus, Save, Search } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage, PageHeader } from "@/components/ui";
+import { useLanguage } from "@/context/language-context";
 import { ALL_COUNTRIES } from "@/lib/data/countries";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import type { Supplier } from "@/lib/types";
@@ -28,6 +29,7 @@ const emptyForm: SupplierForm = {
 const countryOptions = ALL_COUNTRIES.map((country) => ({ value: country, label: country }));
 
 export default function SuppliersPage() {
+  const { tr } = useLanguage();
   const [rows, setRows] = useState<Supplier[]>([]);
   const [form, setForm] = useState<SupplierForm>(emptyForm);
   const [query, setQuery] = useState("");
@@ -106,7 +108,10 @@ export default function SuppliersPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="الموردين" description="المورد يتم ربطه بالشحنة فقط وليس بالمنتج." />
+      <PageHeader
+        title={tr("الموردين", "Suppliers")}
+        description={tr("المورد يتم ربطه بالشحنة فقط وليس بالمنتج.", "Suppliers are linked to shipments (not products).")}
+      />
       <ErrorMessage message={error} />
 
       <form className="card grid gap-3 p-4 md:grid-cols-[1fr_1fr_1fr_120px_120px]" onSubmit={submit}>

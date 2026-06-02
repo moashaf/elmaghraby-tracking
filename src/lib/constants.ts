@@ -9,6 +9,12 @@ export const SHIPMENT_STATUS_LABELS: Record<ShipmentStatus, string> = {
   closed: "مغلقة",
 };
 
+export const SHIPMENT_STATUS_LABELS_EN: Record<ShipmentStatus, string> = {
+  in_sea: "At sea",
+  customs: "Customs",
+  closed: "Closed",
+};
+
 export const SHIPMENT_TYPES = ["FCL", "LCL"] as const;
 
 export function getNextStatusAction(

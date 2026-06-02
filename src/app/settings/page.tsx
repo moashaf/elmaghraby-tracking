@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Info, Save, Settings, ShieldCheck, UserRound } from "lucide-react";
 import { ErrorMessage, PageHeader, StatusPill } from "@/components/ui";
 import { useProfile } from "@/context/profile-context";
+import { useLanguage } from "@/context/language-context";
 import { useTheme } from "@/context/theme-context";
 import { DEFAULT_THEME } from "@/lib/theme";
 import { ROLE_LABELS, type UserRole } from "@/lib/permissions";
@@ -33,6 +34,7 @@ const defaultSettings: SystemSettings = {
 
 export default function SettingsPage() {
   const { isAdmin: userIsAdmin } = useProfile();
+  const { tr } = useLanguage();
   const { theme, patchTheme, setTheme } = useTheme();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [email, setEmail] = useState("");
@@ -172,7 +174,10 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="الإعدادات" description="إدارة الملف الشخصي وإعدادات التشغيل العامة." />
+      <PageHeader
+        title={tr("الإعدادات", "Settings")}
+        description={tr("إدارة الملف الشخصي وإعدادات التشغيل العامة.", "Manage your profile and system settings.")}
+      />
       <ErrorMessage message={error} />
       {message ? <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{message}</div> : null}
 

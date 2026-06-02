@@ -7,6 +7,7 @@ import {
   BarChart3,
   Boxes,
   Building2,
+  Globe,
   FileText,
   Home,
   LogOut,
@@ -23,23 +24,24 @@ import {
   X,
 } from "lucide-react";
 import { useProfile } from "@/context/profile-context";
+import { useLanguage } from "@/context/language-context";
 import { APP_CREDIT_NAME } from "@/lib/constants";
 import { ROLE_LABELS } from "@/lib/permissions";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
 const navItems = [
-  { href: "/", label: "لوحة التحكم", icon: Home },
-  { href: "/shipments", label: "الشحنات", icon: Boxes },
-  { href: "/shipments/new", label: "شحنة جديدة", icon: Plus, writeOnly: true },
-  { href: "/categories", label: "الفئات", icon: Tags, writeOnly: true },
-  { href: "/products", label: "المنتجات", icon: Package },
-  { href: "/products/search", label: "بحث المنتجات", icon: Search },
-  { href: "/suppliers", label: "الموردين", icon: Users, writeOnly: true },
-  { href: "/companies", label: "الشركات", icon: Building2, writeOnly: true },
-  { href: "/shipping-routes", label: "مسارات الشحن", icon: Route, writeOnly: true },
-  { href: "/reports", label: "التقارير", icon: FileText },
-  { href: "/users", label: "المستخدمون", icon: UserCog, adminOnly: true },
-  { href: "/settings", label: "الإعدادات", icon: Settings },
+  { href: "/", labelKey: "nav.dashboard", icon: Home },
+  { href: "/shipments", labelKey: "nav.shipments", icon: Boxes },
+  { href: "/shipments/new", labelKey: "nav.newShipment", icon: Plus, writeOnly: true },
+  { href: "/categories", labelKey: "nav.categories", icon: Tags, writeOnly: true },
+  { href: "/products", labelKey: "nav.products", icon: Package },
+  { href: "/products/search", labelKey: "nav.productsSearch", icon: Search },
+  { href: "/suppliers", labelKey: "nav.suppliers", icon: Users, writeOnly: true },
+  { href: "/companies", labelKey: "nav.companies", icon: Building2, writeOnly: true },
+  { href: "/shipping-routes", labelKey: "nav.routes", icon: Route, writeOnly: true },
+  { href: "/reports", labelKey: "nav.reports", icon: FileText },
+  { href: "/users", labelKey: "nav.users", icon: UserCog, adminOnly: true },
+  { href: "/settings", labelKey: "nav.settings", icon: Settings },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -47,6 +49,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const isLogin = pathname === "/login";
   const { role, canWrite, loading } = useProfile();
+  const { t, toggleLanguage, lang } = useLanguage();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const visibleNavItems = useMemo(
@@ -88,7 +91,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             onClick={() => setMobileMenuOpen(false)}
           >
             <Icon className="h-4 w-4" />
-            {item.label}
+            {t(item.labelKey)}
           </Link>
         );
       })}
@@ -103,8 +106,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <ShipWheel className="h-5 w-5" />
           </div>
           <div>
-            <div className="font-bold">Elmaghraby Tracing</div>
-            <div className="text-xs text-white/70">تتبع الشحنات والاستيراد</div>
+            <div className="font-bold">{t("app.name")}</div>
+            <div className="text-xs text-white/70">{t("app.tagline")}</div>
           </div>
         </div>
         <nav className="space-y-1 p-4 pb-24">{navList}</nav>
@@ -125,27 +128,34 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               className="btn btn-secondary shrink-0 px-2 lg:hidden"
               onClick={() => setMobileMenuOpen(true)}
               type="button"
-              aria-label="فتح القائمة"
+              aria-label={lang === "ar" ? "فتح القائمة" : "Open menu"}
             >
               <Menu className="h-5 w-5" />
             </button>
             <div className="hidden items-center gap-2 text-sm font-semibold text-[var(--muted)] sm:flex">
               <BarChart3 className="h-4 w-4 shrink-0" />
-              <span className="truncate">نظام عربي RTL</span>
+              <span className="truncate">{t("app.rtlBadge")}</span>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {role && !canWrite ? (
               <span className="hidden rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600 sm:inline">
-                مشاهدة فقط
+                {t("role.viewer")}
               </span>
             ) : null}
-            <Link className="btn btn-secondary text-sm lg:hidden" href="/shipments">
-              الشحنات
-            </Link>
+            <button
+              className="btn btn-secondary flex items-center gap-2 text-sm"
+              onClick={toggleLanguage}
+              type="button"
+              aria-label={lang === "ar" ? "تغيير اللغة" : "Change language"}
+              title={lang === "ar" ? "English" : "عربي"}
+            >
+              <Globe className="h-4 w-4" />
+              <span className="hidden sm:inline">{t("lang.toggle")}</span>
+            </button>
             <button className="btn btn-secondary flex items-center gap-2 text-sm" onClick={signOut} type="button">
               <LogOut className="h-4 w-4" />
-              <span className="hidden sm:inline">خروج</span>
+              <span className="hidden sm:inline">{t("auth.signOut")}</span>
             </button>
           </div>
         </header>
@@ -162,12 +172,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
-              <div className="font-bold">Elmaghraby Tracing</div>
+              <div className="font-bold">{t("app.name")}</div>
               <button
                 className="btn btn-secondary px-2"
                 onClick={() => setMobileMenuOpen(false)}
                 type="button"
-                aria-label="إغلاق القائمة"
+                aria-label={lang === "ar" ? "إغلاق القائمة" : "Close menu"}
               >
                 <X className="h-5 w-5" />
               </button>
@@ -191,7 +201,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 key={item.href}
               >
                 <Icon className="h-4 w-4 shrink-0" />
-                <span className="max-w-full truncate text-center">{item.label}</span>
+                <span className="max-w-full truncate text-center">{t(item.labelKey)}</span>
               </Link>
             );
           })}

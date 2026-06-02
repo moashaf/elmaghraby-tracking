@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Printer, Search } from "lucide-react";
 import { ErrorMessage, PageHeader } from "@/components/ui";
+import { useLanguage } from "@/context/language-context";
 import { SHIPMENT_STATUS_LABELS, type ShipmentStatus } from "@/lib/constants";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
@@ -34,6 +35,7 @@ function escapeIlike(term: string) {
 }
 
 export default function ProductSmartSearchPage() {
+  const { tr } = useLanguage();
   const [query, setQuery] = useState("");
   const [matches, setMatches] = useState<ProductDetail[]>([]);
   const [product, setProduct] = useState<ProductDetail | null>(null);
@@ -155,7 +157,10 @@ export default function ProductSmartSearchPage() {
     <div className="report-print-root space-y-5">
       <div className="report-print-title hidden">{printTitle}</div>
 
-      <PageHeader title="بحث المنتجات الذكي" description="ابحث عن أي منتج — داخل شحنة أو غير مرتبط بشحنة." />
+      <PageHeader
+        title={tr("بحث المنتجات الذكي", "Smart product search")}
+        description={tr("ابحث عن أي منتج — داخل شحنة أو غير مرتبط بشحنة.", "Search any product (in shipments or standalone).")}
+      />
 
       <ErrorMessage message={error} />
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogIn, ShipWheel } from "lucide-react";
 import { ErrorMessage } from "@/components/ui";
+import { useLanguage } from "@/context/language-context";
 import { APP_CREDIT_NAME } from "@/lib/constants";
 import { readSupabaseConfig } from "@/lib/supabase/config";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
@@ -11,6 +12,7 @@ import { checkSupabaseReachable, getSupabaseErrorMessage } from "@/lib/supabase/
 
 export default function LoginPage() {
   const router = useRouter();
+  const { tr } = useLanguage();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -88,22 +90,26 @@ export default function LoginPage() {
             <ShipWheel className="h-6 w-6" />
           </div>
           <div>
-            <h1 className="text-xl font-bold">تسجيل الدخول</h1>
+            <h1 className="text-xl font-bold">{tr("تسجيل الدخول", "Sign in")}</h1>
             <p className="text-sm text-[var(--muted)]">Elmaghraby Tracing</p>
           </div>
         </div>
         <ErrorMessage message={error} />
         <label className="label">
-          البريد الإلكتروني
+          {tr("البريد الإلكتروني", "Email")}
           <input className="input" required type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
         </label>
         <label className="label">
-          كلمة المرور
+          {tr("كلمة المرور", "Password")}
           <input className="input" required type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
         </label>
         <button className="btn w-full" disabled={loading || checking || Boolean(error)} type="submit">
           <LogIn className="h-4 w-4" />
-          {checking ? "جاري التحقق..." : loading ? "جاري الدخول..." : "دخول"}
+          {checking
+            ? tr("جاري التحقق...", "Checking...")
+            : loading
+              ? tr("جاري الدخول...", "Signing in...")
+              : tr("دخول", "Sign in")}
         </button>
       </form>
       <p className="text-center text-xs text-[var(--muted)]">Powered by {APP_CREDIT_NAME}</p>
