@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileUp, Plus, Save, Trash2, X } from "lucide-react";
+import { Plus, Save, Trash2, X } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage } from "@/components/ui";
 import { toEntityOptions } from "@/lib/entity-options";
@@ -11,7 +11,7 @@ import { buildCategorySelectOptions } from "@/lib/category-options";
 import { addDaysToIsoDate, findRouteDuration } from "@/lib/eta";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { fetchAllFromTable } from "@/lib/supabase/fetch-all";
-import { shipmentContainerFilePath, shipmentInvPath } from "@/lib/storage-path";
+import { shipmentInvPath } from "@/lib/storage-path";
 import type {
   Company,
   ContainerDraft,
@@ -28,6 +28,7 @@ import type {
 
 const bucket = "container-files";
 const today = new Date().toISOString().slice(0, 10);
+const CUSTOMS_CLEARANCE_DAYS = 15;
 
 const emptyForm: ShipmentFormValues = {
   acid: "",
@@ -51,7 +52,6 @@ const emptyContainer: ContainerDraft = {
   weight_kg: "",
   cartons_count: "",
   notes: "",
-  excel_file: null,
 };
 
 const emptyProduct: ShipmentProductDraft = {
@@ -91,7 +91,6 @@ function containerDrafts(rows?: ShipmentContainer[]): ContainerDraft[] {
     weight_kg: row.weight_kg?.toString() ?? "",
     cartons_count: row.cartons_count?.toString() ?? "",
     notes: row.notes ?? "",
-    excel_file: null,
   }));
 }
 
@@ -407,31 +406,6 @@ export function ShipmentForm({
       }
     }
 
-    for (let index = 0; index < validContainers.length; index += 1) {
-      const draft = validContainers[index];
-      const file = draft.excel_file;
-      const containerRow = insertedContainers[index];
-      if (!file || !containerRow?.id) continue;
-
-      try {
-        const path = shipmentContainerFilePath(shipmentId, containerRow.id, file.name);
-        await uploadStorage(path, file);
-        const fileRow = await supabase.from("container_files").insert({
-          container_id: containerRow.id,
-          file_name: file.name,
-          storage_path: path,
-          mime_type: file.type || null,
-          size_bytes: file.size,
-          uploaded_by: user.data.user?.id ?? null,
-        });
-        if (fileRow.error) throw new Error(fileRow.error.message);
-      } catch (uploadError) {
-        setLoading(false);
-        setError(uploadError instanceof Error ? uploadError.message : "تعذر رفع ملف الحاوية.");
-        return;
-      }
-    }
-
     const productsInsert = await supabase.from("shipment_products").insert(
       validProducts.map((row) => ({
         shipment_id: shipmentId,
@@ -473,6 +447,11 @@ export function ShipmentForm({
       target: Number.isFinite(target) && target > 0 ? target : null,
     };
   }, [form.total_cartons, shipmentProducts]);
+
+  const customsExitDate = useMemo(() => {
+    if (!form.eta) return "";
+    return addDaysToIsoDate(form.eta, CUSTOMS_CLEARANCE_DAYS);
+  }, [form.eta]);
 
   return (
     <>
@@ -556,6 +535,10 @@ export function ShipmentForm({
               <input className="input" required type="date" value={form.eta} onChange={(event) => setField("eta", event.target.value)} />
             </label>
             <label className="label">
+              خروج جمرك (بعد 15 يوم)
+              <input className="input bg-slate-50" readOnly value={customsExitDate} />
+            </label>
+            <label className="label">
               مدة الشحن بالأيام
               <input className="input" min={0} readOnly type="number" value={form.shipping_duration_days} />
             </label>
@@ -615,29 +598,15 @@ export function ShipmentForm({
           </div>
           <div className="space-y-3">
             {containers.map((container, index) => (
-              <div className="grid gap-3 rounded-md border border-[var(--border)] p-3 lg:grid-cols-[1fr_120px_120px_1fr_auto_auto]" key={index}>
+              <div className="grid gap-3 rounded-md border border-[var(--border)] p-3 lg:grid-cols-[1fr_120px_120px_1fr_auto]" key={index}>
                 <input className={fieldClass} disabled={disabled} placeholder="رقم الحاوية" readOnly={readOnly} value={container.container_number} onChange={(event) => updateContainer(index, { ...container, container_number: event.target.value })} />
                 <input className={fieldClass} disabled={disabled} min={0} placeholder="الوزن" readOnly={readOnly} type="number" value={container.weight_kg} onChange={(event) => updateContainer(index, { ...container, weight_kg: event.target.value })} />
                 <input className={fieldClass} disabled={disabled} min={0} placeholder="الكرتين" readOnly={readOnly} type="number" value={container.cartons_count} onChange={(event) => updateContainer(index, { ...container, cartons_count: event.target.value })} />
                 <input className={fieldClass} disabled={disabled} placeholder="ملاحظات" readOnly={readOnly} value={container.notes} onChange={(event) => updateContainer(index, { ...container, notes: event.target.value })} />
                 {!readOnly ? (
-                  <>
-                    <label className="btn btn-secondary cursor-pointer text-xs">
-                      <FileUp className="h-4 w-4" />
-                      {container.excel_file?.name ?? "Excel"}
-                      <input
-                        accept=".xlsx,.xls,.csv"
-                        className="hidden"
-                        type="file"
-                        onChange={(event) =>
-                          updateContainer(index, { ...container, excel_file: event.target.files?.[0] ?? null })
-                        }
-                      />
-                    </label>
                     <button className="btn btn-secondary px-2" onClick={() => setContainers((current) => current.length === 1 ? [{ ...emptyContainer }] : current.filter((_, rowIndex) => rowIndex !== index))} type="button">
                       <Trash2 className="h-4 w-4" />
                     </button>
-                  </>
                 ) : null}
               </div>
             ))}

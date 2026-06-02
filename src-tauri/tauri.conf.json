@@ -4,10 +4,10 @@
   "version": "0.1.0",
   "identifier": "com.elmaghraby.tracing",
   "build": {
-    "frontendDist": "http://localhost:3000",
-    "devUrl": "http://localhost:3000",
+    "frontendDist": "https://elmaghraby-tracking.vercel.app",
+    "devUrl": "https://elmaghraby-tracking.vercel.app",
     "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build"
+    "beforeBuildCommand": ""
   },
   "app": {
     "windows": [
@@ -27,7 +27,9 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

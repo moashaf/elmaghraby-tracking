@@ -159,7 +159,6 @@ export type ContainerDraft = {
   weight_kg: string;
   cartons_count: string;
   notes: string;
-  excel_file: File | null;
 };
 
 export type ShipmentProductDraft = {
