@@ -161,7 +161,7 @@ export function ShipmentPrintReport({ shipmentId }: { shipmentId: string }) {
         </table>
       </section>
 
-      <section className="card overflow-auto p-0">
+      <section className="card overflow-auto p-0 print:hidden">
         <h2 className="border-b border-[var(--border)] p-4 font-bold">المنتجات ({products.length})</h2>
         <table className="min-w-full text-sm">
           <thead className="table-head">
