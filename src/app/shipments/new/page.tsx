@@ -1,3 +1,5 @@
+"use client";
+
 import { ShipmentForm } from "@/components/shipment-form";
 import { PageHeader } from "@/components/ui";
 import { useLanguage } from "@/context/language-context";
