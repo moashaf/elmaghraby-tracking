@@ -98,6 +98,7 @@ export default function ProductsPage() {
 
     const category = categories.find((row) => row.id === form.category_id);
     const barcode = form.barcode.trim() || null;
+    const sku = form.sku.trim();
     const payload = {
       name_ar: form.name_ar.trim(),
       category: category?.name_ar ?? null,
@@ -105,6 +106,7 @@ export default function ProductsPage() {
       barcode,
       unit: "piece",
       is_active: form.is_active,
+      ...(sku ? { sku } : {}),
     };
 
     const result = form.id
@@ -114,7 +116,13 @@ export default function ProductsPage() {
     setSaving(false);
 
     if (result.error) {
-      setError(result.error.message.includes("products_barcode_unique_idx") ? "الباركود مستخدم لمنتج آخر." : result.error.message);
+      if (result.error.message.includes("products_barcode_unique_idx")) {
+        setError("الباركود مستخدم لمنتج آخر.");
+      } else if (result.error.message.includes("products_sku_key")) {
+        setError("كود SKU مستخدم لمنتج آخر.");
+      } else {
+        setError(result.error.message);
+      }
       return;
     }
 
