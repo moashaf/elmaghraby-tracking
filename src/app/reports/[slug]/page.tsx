@@ -398,6 +398,7 @@ async function productsReport(slug: string, from: string, to: string): Promise<{
       الكرتين: row.cartons_count,
       "منتج جديد": row.is_new_incoming_product ? "نعم" : "لا",
       "رقم الشحنة": row.shipments?.shipment_number ?? "-",
+      ACID: row.shipments?.acid ?? "-",
       المورد: row.shipments?.supplier ?? "-",
       ETA: row.shipments?.eta ?? "-",
       الحالة: row.shipments ? SHIPMENT_STATUS_LABELS[row.shipments.status] : "-",
