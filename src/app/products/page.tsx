@@ -30,6 +30,13 @@ const emptyForm: ProductForm = {
   is_active: true,
 };
 
+const SEARCH_LIMIT = 80;
+const SEARCH_DEBOUNCE_MS = 300;
+
+function escapeIlike(term: string) {
+  return term.replace(/[%_\\]/g, "\\$&");
+}
+
 function productDeleteError(message: string) {
   if (message.includes("shipment_products") || message.includes("23503")) {
     return "لا يمكن حذف المنتج لأنه مرتبط بشحنة. احذفه من الشحنة أولا أو أوقفه (غير نشط).";
@@ -44,52 +51,93 @@ export default function ProductsPage() {
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [form, setForm] = useState<ProductForm>(emptyForm);
   const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState("");
   const [error, setError] = useState("");
 
-  async function load() {
+  async function loadCategories() {
     setError("");
     if (!isSupabaseConfigured()) {
-      setLoading(false);
+      setCategoriesLoading(false);
       setError("اضبط ملف .env.local أولا بقيم Supabase.");
       return;
     }
 
-    setLoading(true);
-    const supabase = createClient();
-    const [result, categoriesResult] = await Promise.all([
-      fetchAllFromTable(supabase, "products", "id,sku,name_ar,name_en,category,category_id,barcode,unit,is_active", {
-        column: "created_at",
-        ascending: false,
-      }),
-      fetchAllFromTable(supabase, "product_categories", "id,name_ar,code,parent_id,is_active", { column: "name_ar" }),
-    ]);
-    setLoading(false);
+    setCategoriesLoading(true);
+    const categoriesResult = await fetchAllFromTable(
+      createClient(),
+      "product_categories",
+      "id,name_ar,code,parent_id,is_active",
+      { column: "name_ar" }
+    );
+    setCategoriesLoading(false);
 
-    if (result.error || categoriesResult.error) {
-      setError(result.error || categoriesResult.error || "تعذر تحميل بيانات المنتجات.");
+    if (categoriesResult.error) {
+      setError(categoriesResult.error || "تعذر تحميل الفئات.");
       return;
     }
 
-    setRows(result.data as Product[]);
     setCategories((categoriesResult.data ?? []) as ProductCategory[]);
   }
 
+  async function searchProducts(term: string) {
+    const trimmed = term.trim();
+    if (!trimmed) {
+      setRows([]);
+      setSearching(false);
+      return;
+    }
+
+    if (!isSupabaseConfigured()) return;
+
+    setSearching(true);
+    setError("");
+
+    const escaped = escapeIlike(trimmed);
+    const filter = `sku.ilike.%${escaped}%,name_ar.ilike.%${escaped}%,category.ilike.%${escaped}%,barcode.ilike.%${escaped}%`;
+
+    const result = await createClient()
+      .from("products")
+      .select("id,sku,name_ar,name_en,category,category_id,barcode,unit,is_active")
+      .or(filter)
+      .order("name_ar")
+      .limit(SEARCH_LIMIT);
+
+    setSearching(false);
+
+    if (result.error) {
+      setError(result.error.message);
+      setRows([]);
+      return;
+    }
+
+    setRows((result.data as Product[] | null) ?? []);
+  }
+
   useEffect(() => {
-    void Promise.resolve().then(load);
+    void Promise.resolve().then(loadCategories);
   }, []);
 
-  const categoryOptions = useMemo(() => buildCategorySelectOptions(categories), [categories]);
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      setRows([]);
+      setSearching(false);
+      return;
+    }
 
-  const filtered = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    if (!term) return rows;
-    return rows.filter((row) =>
-      [row.sku, row.name_ar, row.category, row.barcode].some((value) => value?.toLowerCase().includes(term))
-    );
-  }, [query, rows]);
+    setSearching(true);
+    const timer = window.setTimeout(() => {
+      void searchProducts(trimmed);
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  const categoryOptions = useMemo(() => buildCategorySelectOptions(categories), [categories]);
+  const hasQuery = query.trim().length > 0;
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -127,7 +175,7 @@ export default function ProductsPage() {
     }
 
     setForm(emptyForm);
-    await load();
+    if (hasQuery) await searchProducts(query.trim());
   }
 
   async function removeProduct(row: Product) {
@@ -144,7 +192,7 @@ export default function ProductsPage() {
     }
 
     if (form.id === row.id) setForm(emptyForm);
-    await load();
+    if (hasQuery) await searchProducts(query.trim());
   }
 
   return (
@@ -152,124 +200,165 @@ export default function ProductsPage() {
       <PageHeader title={tr("المنتجات", "Products")} />
       <ErrorMessage message={error} />
 
-      <form className="card grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-6" onSubmit={submit}>
-        <input
-          className="input"
-          placeholder={tr("SKU (اختياري)", "SKU (optional)")}
-          value={form.sku}
-          onChange={(event) => setForm({ ...form, sku: event.target.value })}
-          title={tr("اتركه فارغا لتوليد SKU تلقائيا", "Leave empty to auto-generate SKU")}
-        />
-        <input
-          className="input"
-          placeholder={tr("اسم المنتج", "Product name")}
-          required
-          value={form.name_ar}
-          onChange={(event) => setForm({ ...form, name_ar: event.target.value })}
-        />
-        <SearchableSelect
-          options={categoryOptions}
-          placeholder={tr("ابحث عن الفئة...", "Search category...")}
-          required
-          value={form.category_id}
-          onChange={(value) => setForm({ ...form, category_id: value })}
-        />
-        <input
-          className="input"
-          inputMode="numeric"
-          placeholder="الباركود (اختياري)"
-          value={form.barcode}
-          onChange={(event) => setForm({ ...form, barcode: event.target.value })}
-        />
-        <input className="input bg-slate-50" disabled readOnly value="piece" title={tr("الوحدة الافتراضية", "Default unit")} />
-        <div className="flex items-center gap-2">
-          <label className="flex items-center gap-2 text-sm text-[var(--muted)]">
-            <input checked={form.is_active} onChange={(event) => setForm({ ...form, is_active: event.target.checked })} type="checkbox" />
-            نشط
-          </label>
-          <button className="btn ms-auto" disabled={saving} type="submit">
-            {form.id ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            {saving ? "..." : form.id ? "حفظ" : "إضافة"}
-          </button>
-        </div>
-      </form>
+      {canWrite ? (
+        <form className="card grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-6" onSubmit={submit}>
+          <input
+            className="input"
+            placeholder={tr("SKU (اختياري)", "SKU (optional)")}
+            value={form.sku}
+            onChange={(event) => setForm({ ...form, sku: event.target.value })}
+            title={tr("اتركه فارغا لتوليد SKU تلقائيا", "Leave empty to auto-generate SKU")}
+          />
+          <input
+            className="input"
+            placeholder={tr("اسم المنتج", "Product name")}
+            required
+            value={form.name_ar}
+            onChange={(event) => setForm({ ...form, name_ar: event.target.value })}
+          />
+          <SearchableSelect
+            options={categoryOptions}
+            placeholder={tr("ابحث عن الفئة...", "Search category...")}
+            required
+            value={form.category_id}
+            onChange={(value) => setForm({ ...form, category_id: value })}
+            disabled={categoriesLoading}
+          />
+          <input
+            className="input"
+            inputMode="numeric"
+            placeholder="الباركود (اختياري)"
+            value={form.barcode}
+            onChange={(event) => setForm({ ...form, barcode: event.target.value })}
+          />
+          <input
+            className="input bg-slate-50"
+            disabled
+            readOnly
+            value="piece"
+            title={tr("الوحدة الافتراضية", "Default unit")}
+          />
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-2 text-sm text-[var(--muted)]">
+              <input
+                checked={form.is_active}
+                onChange={(event) => setForm({ ...form, is_active: event.target.checked })}
+                type="checkbox"
+              />
+              نشط
+            </label>
+            <button className="btn ms-auto" disabled={saving || categoriesLoading} type="submit">
+              {form.id ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {saving ? "..." : form.id ? "حفظ" : "إضافة"}
+            </button>
+          </div>
+        </form>
+      ) : null}
 
       <div className="card p-4">
         <label className="relative block">
           <Search className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-[var(--muted)]" />
           <input
+            autoComplete="off"
             className="input pr-9"
-            placeholder="بحث بالاسم أو SKU أو الباركود أو التصنيف"
+            placeholder={tr(
+              "ابحث بالاسم أو SKU أو الباركود — النتائج تظهر أثناء الكتابة",
+              "Search by name, SKU, or barcode — results appear as you type"
+            )}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
+        {hasQuery && !searching ? (
+          <p className="mt-2 text-xs text-[var(--muted)]">
+            {rows.length >= SEARCH_LIMIT
+              ? tr(`أول ${SEARCH_LIMIT} نتيجة — حدّد البحث أكثر`, `First ${SEARCH_LIMIT} results — refine your search`)
+              : tr(`${rows.length} نتيجة`, `${rows.length} result(s)`)}
+          </p>
+        ) : null}
       </div>
 
-      <div className="card overflow-auto">
-        <table className="min-w-full text-sm">
-          <thead className="table-head">
-            <tr>
-              <th className="p-3 text-right">SKU</th>
-              <th className="p-3 text-right">الاسم</th>
-              <th className="p-3 text-right">الباركود</th>
-              <th className="p-3 text-right">التصنيف</th>
-              <th className="p-3 text-right">الحالة</th>
-              <th className="p-3 text-right">إجراء</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
+      {!hasQuery ? (
+        <div className="card p-8 text-center text-sm text-[var(--muted)]">
+          {tr(
+            "ابدأ بالبحث لعرض المنتجات — لا يتم تحميل كل الأصناف مرة واحدة.",
+            "Start typing to search products — the full catalog is not loaded at once."
+          )}
+        </div>
+      ) : (
+        <div className="card overflow-auto">
+          <table className="min-w-full text-sm">
+            <thead className="table-head">
               <tr>
-                <td className="p-4 text-[var(--muted)]" colSpan={6}>
-                  جاري التحميل...
-                </td>
+                <th className="p-3 text-right">SKU</th>
+                <th className="p-3 text-right">الاسم</th>
+                <th className="p-3 text-right">الباركود</th>
+                <th className="p-3 text-right">التصنيف</th>
+                <th className="p-3 text-right">الحالة</th>
+                <th className="p-3 text-right">إجراء</th>
               </tr>
-            ) : (
-              filtered.map((row) => (
-                <tr className="border-t border-[var(--border)]" key={row.id}>
-                  <td className="p-3 font-semibold">{row.sku}</td>
-                  <td className="p-3">{row.name_ar}</td>
-                  <td className="p-3">{row.barcode ?? "-"}</td>
-                  <td className="p-3">{row.category ?? "-"}</td>
-                  <td className="p-3">{row.is_active ? "نشط" : "متوقف"}</td>
-                  <td className="flex flex-wrap gap-2 p-3">
-                    <button
-                      className="btn btn-secondary px-2 py-1 text-xs"
-                      onClick={() =>
-                        setForm({
-                          id: row.id,
-                          sku: row.sku,
-                          name_ar: row.name_ar,
-                          category_id: row.category_id ?? "",
-                          barcode: row.barcode ?? "",
-                          unit: row.unit,
-                          is_active: row.is_active,
-                        })
-                      }
-                      type="button"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                      تعديل
-                    </button>
-                    {canWrite ? (
-                      <button
-                        className="btn btn-danger px-2 py-1 text-xs"
-                        disabled={deletingId === row.id}
-                        onClick={() => void removeProduct(row)}
-                        type="button"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        حذف
-                      </button>
-                    ) : null}
+            </thead>
+            <tbody>
+              {searching ? (
+                <tr>
+                  <td className="p-4 text-[var(--muted)]" colSpan={6}>
+                    {tr("جاري البحث...", "Searching...")}
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              ) : rows.length ? (
+                rows.map((row) => (
+                  <tr className="border-t border-[var(--border)]" key={row.id}>
+                    <td className="p-3 font-semibold">{row.sku}</td>
+                    <td className="p-3">{row.name_ar}</td>
+                    <td className="p-3">{row.barcode ?? "-"}</td>
+                    <td className="p-3">{row.category ?? "-"}</td>
+                    <td className="p-3">{row.is_active ? "نشط" : "متوقف"}</td>
+                    <td className="flex flex-wrap gap-2 p-3">
+                      {canWrite ? (
+                        <button
+                          className="btn btn-secondary px-2 py-1 text-xs"
+                          onClick={() =>
+                            setForm({
+                              id: row.id,
+                              sku: row.sku,
+                              name_ar: row.name_ar,
+                              category_id: row.category_id ?? "",
+                              barcode: row.barcode ?? "",
+                              unit: row.unit,
+                              is_active: row.is_active,
+                            })
+                          }
+                          type="button"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                          تعديل
+                        </button>
+                      ) : null}
+                      {canWrite ? (
+                        <button
+                          className="btn btn-danger px-2 py-1 text-xs"
+                          disabled={deletingId === row.id}
+                          onClick={() => void removeProduct(row)}
+                          type="button"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          حذف
+                        </button>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td className="p-4 text-[var(--muted)]" colSpan={6}>
+                    {tr("لا توجد نتائج.", "No results.")}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { ErrorMessage, PageHeader } from "@/components/ui";
 import { SHIPMENT_STATUS_LABELS, type ShipmentStatus } from "@/lib/constants";
 import { getReport } from "@/lib/report-definitions";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { fetchAllFromTable } from "@/lib/supabase/fetch-all";
 
 type ReportRow = Record<string, string | number | null> & { _downloadPath?: string };
 
@@ -279,6 +280,8 @@ export default function ReportDetailPage() {
 async function buildReport(slug: string, from: string, to: string): Promise<{ rows: ReportRow[] } | { error: string }> {
   const supabase = createClient();
 
+  if (slug === "all-products") return allProductsReport();
+
   if (["containers", "container-files", "incoming-products", "new-products", "duplicate-products", "date-range-products", "product-history", "costs"].includes(slug)) {
     if (slug === "containers") return containersReport(from, to);
     if (slug === "container-files") return containerFilesReport();
@@ -315,6 +318,33 @@ async function buildReport(slug: string, from: string, to: string): Promise<{ ro
   }
 
   return { rows: filtered.map(shipmentToReportRow) };
+}
+
+async function allProductsReport(): Promise<{ rows: ReportRow[] } | { error: string }> {
+  const result = await fetchAllFromTable(
+    createClient(),
+    "products",
+    "sku,name_ar,barcode,category,is_active",
+    { column: "name_ar", ascending: true }
+  );
+
+  if (result.error) return { error: result.error };
+
+  return {
+    rows: (result.data as Array<{
+      sku: string;
+      name_ar: string;
+      barcode: string | null;
+      category: string | null;
+      is_active: boolean;
+    }>).map((row) => ({
+      الكود: row.sku,
+      "اسم الصنف": row.name_ar,
+      الباركود: row.barcode ?? "",
+      التصنيف: row.category ?? "",
+      الحالة: row.is_active ? "نشط" : "متوقف",
+    })),
+  };
 }
 
 async function productsReport(slug: string, from: string, to: string): Promise<{ rows: ReportRow[] } | { error: string }> {

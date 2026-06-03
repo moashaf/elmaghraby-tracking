@@ -15,7 +15,8 @@ export type ReportSlug =
   | "date-range-products"
   | "product-history"
   | "suppliers"
-  | "companies";
+  | "companies"
+  | "all-products";
 
 export type ReportDateFilter = "none" | "eta" | "closed";
 
@@ -43,6 +44,12 @@ export const REPORTS: Array<{
   { slug: "product-history", title: "تاريخ منتج", description: "تاريخ استيراد المنتجات من الشحنات.", dateFilter: "eta", dateHint: "فلترة حسب ETA للشحنة" },
   { slug: "suppliers", title: "الموردين", description: "ملخص الموردين وعدد الشحنات.", dateFilter: "none" },
   { slug: "companies", title: "شركات الاستيراد", description: "ملخص الشركات وعدد الشحنات.", dateFilter: "none" },
+  {
+    slug: "all-products",
+    title: "الأصناف",
+    description: "كل المنتجات على النظام: الاسم، الكود (SKU)، والباركود — مع تصدير Excel.",
+    dateFilter: "none",
+  },
 ];
 
 export function getReport(slug: string) {
