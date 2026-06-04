@@ -92,7 +92,7 @@ export default function SettingsPage() {
     }
 
     let response: Response;
-    let payload: { settings?: SystemSettings; error?: string };
+    let payload: { settings?: SystemSettings; error?: string; warning?: string };
     try {
       response = await fetch("/api/settings", {
         headers: await authHeaders(),
@@ -109,7 +109,11 @@ export default function SettingsPage() {
     setSettings(payload.settings ?? defaultSettings);
     setLoading(false);
 
-    if (!response.ok) setError(payload.error ?? "تعذر تحميل إعدادات النظام.");
+    if (payload.warning) {
+      setMessage(payload.warning);
+    } else if (!response.ok) {
+      setError(payload.error ?? "تعذر تحميل إعدادات النظام.");
+    }
   }, [authHeaders]);
 
   useEffect(() => {

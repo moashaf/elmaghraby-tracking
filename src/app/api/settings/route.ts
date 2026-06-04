@@ -37,14 +37,27 @@ export async function GET(request: Request) {
     .eq("key", "system")
     .maybeSingle();
 
-  if (settingsError) return jsonError(settingsError.message);
+  const defaultSettings = {
+    require_costs_before_close: true,
+    require_customs_document: false,
+    delayed_after_eta_days: 0,
+  };
+
+  if (settingsError) {
+    const missingTable =
+      settingsError.message.includes("app_settings") || settingsError.message.includes("schema cache");
+    if (missingTable) {
+      return Response.json({
+        settings: defaultSettings,
+        warning:
+          "جدول إعدادات النظام غير موجود. شغّل supabase/patch-missing-tables.sql من SQL Editor ثم حدّث الصفحة.",
+      });
+    }
+    return jsonError(settingsError.message);
+  }
 
   return Response.json({
-    settings: data?.value ?? {
-      require_costs_before_close: true,
-      require_customs_document: false,
-      delayed_after_eta_days: 0,
-    },
+    settings: data?.value ?? defaultSettings,
   });
 }
 
@@ -61,6 +74,15 @@ export async function PUT(request: Request) {
     updated_by: admin.user.id,
   });
 
-  if (error) return jsonError(error.message);
+  if (error) {
+    const missingTable = error.message.includes("app_settings") || error.message.includes("schema cache");
+    if (missingTable) {
+      return jsonError(
+        "جدول إعدادات النظام غير موجود. شغّل supabase/patch-missing-tables.sql من Supabase SQL Editor.",
+        503
+      );
+    }
+    return jsonError(error.message);
+  }
   return Response.json({ settings: parsed.data });
 }

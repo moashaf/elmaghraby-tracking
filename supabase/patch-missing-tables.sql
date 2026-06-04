@@ -40,6 +40,9 @@ with check (public.current_user_role() = 'admin');
 grant all on table public.app_settings to authenticated;
 grant all on table public.app_settings to service_role;
 
+-- === profiles.user_code (migration 09) ===
+alter table public.profiles add column if not exists user_code text unique;
+
 -- === 07: product_categories ===
 create table if not exists public.product_categories (
   id uuid primary key default gen_random_uuid(),

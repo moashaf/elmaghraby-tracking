@@ -8,12 +8,37 @@ const createUserSchema = z.object({
   role: z.enum(["admin", "manager", "viewer"]),
 });
 
+async function loadProfiles(adminClient: ReturnType<typeof import("@/lib/supabase/server").createAdminClient>) {
+  const withCode = await adminClient
+    .from("profiles")
+    .select("id, full_name, role, locale, user_code, created_at")
+    .order("created_at", { ascending: false });
+
+  if (!withCode.error) return withCode;
+
+  const missingColumn =
+    withCode.error.message.includes("user_code") || withCode.error.message.includes("schema cache");
+  if (!missingColumn) return withCode;
+
+  const fallback = await adminClient
+    .from("profiles")
+    .select("id, full_name, role, locale, created_at")
+    .order("created_at", { ascending: false });
+
+  if (fallback.error) return fallback;
+
+  return {
+    data: (fallback.data ?? []).map((row) => ({ ...row, user_code: null })),
+    error: null,
+  };
+}
+
 export async function GET(request: Request) {
   const admin = await requireAdmin(request);
   if (!admin.ok) return jsonError(admin.error, admin.status);
 
   const [{ data: profiles, error: profilesError }, { data: authUsers, error: authError }] = await Promise.all([
-    admin.adminClient.from("profiles").select("id, full_name, role, locale, user_code, created_at").order("created_at", { ascending: false }),
+    loadProfiles(admin.adminClient),
     admin.adminClient.auth.admin.listUsers({ page: 1, perPage: 1000 }),
   ]);
 
