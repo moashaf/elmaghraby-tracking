@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Package,
   Plus,
+  Layers3,
   ShipWheel,
   TrendingUp,
 } from "lucide-react";
@@ -24,12 +25,11 @@ type ContainerRow = {
   shipment_id: string;
 };
 
-type IncomingProductRow = {
-  is_new_incoming_product: boolean;
+type FlaggedProductRow = {
   shipments: Pick<Shipment, "status"> | Array<Pick<Shipment, "status">> | null;
 };
 
-function relatedShipmentStatus(row: IncomingProductRow) {
+function relatedShipmentStatus(row: FlaggedProductRow) {
   const shipment = Array.isArray(row.shipments) ? row.shipments[0] : row.shipments;
   return shipment?.status;
 }
@@ -90,7 +90,8 @@ function VisualBars({
 export default function DashboardPage() {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [containers, setContainers] = useState<ContainerRow[]>([]);
-  const [incomingProducts, setIncomingProducts] = useState<IncomingProductRow[]>([]);
+  const [incomingProducts, setIncomingProducts] = useState<FlaggedProductRow[]>([]);
+  const [disassembledProducts, setDisassembledProducts] = useState<FlaggedProductRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const { t, lang } = useLanguage();
@@ -105,7 +106,7 @@ export default function DashboardPage() {
       try {
         const supabase = createClient();
         await supabase.rpc("auto_move_shipments_to_customs");
-        const [shipmentsResult, containersResult, productsResult] = await Promise.all([
+        const [shipmentsResult, containersResult, newProductsResult, disassembledResult] = await Promise.all([
           supabase
             .from("shipments")
             .select("*,companies(name_ar),suppliers(name_ar)")
@@ -113,11 +114,16 @@ export default function DashboardPage() {
           supabase.from("shipment_containers").select("id,shipment_id"),
           supabase
             .from("shipment_products")
-            .select("is_new_incoming_product,shipments(status)")
+            .select("shipments(status)")
             .eq("is_new_incoming_product", true),
+          supabase
+            .from("shipment_products")
+            .select("shipments(status)")
+            .eq("is_disassembled", true),
         ]);
 
-        const firstError = shipmentsResult.error || containersResult.error || productsResult.error;
+        const firstError =
+          shipmentsResult.error || containersResult.error || newProductsResult.error || disassembledResult.error;
         if (firstError) {
           setError(getSupabaseErrorMessage(firstError));
           return;
@@ -125,7 +131,8 @@ export default function DashboardPage() {
 
         setShipments((shipmentsResult.data as Shipment[] | null) ?? []);
         setContainers((containersResult.data as ContainerRow[] | null) ?? []);
-        setIncomingProducts((productsResult.data as unknown as IncomingProductRow[] | null) ?? []);
+        setIncomingProducts((newProductsResult.data as unknown as FlaggedProductRow[] | null) ?? []);
+        setDisassembledProducts((disassembledResult.data as unknown as FlaggedProductRow[] | null) ?? []);
       } catch (loadError) {
         setError(getSupabaseErrorMessage(loadError));
       } finally {
@@ -160,6 +167,7 @@ export default function DashboardPage() {
     );
     const openContainerCount = containers.filter((container) => openShipmentIds.has(container.shipment_id)).length;
     const newIncomingProducts = incomingProducts.filter((row) => relatedShipmentStatus(row) !== "closed").length;
+    const disassembledCount = disassembledProducts.filter((row) => relatedShipmentStatus(row) !== "closed").length;
 
     return {
       recentShipments: shipments.slice(0, 8),
@@ -214,6 +222,14 @@ export default function DashboardPage() {
           icon: Package,
           tone: "bg-teal-50 text-teal-800 border-teal-200",
         },
+        {
+          label: "alerts.disassembledProducts",
+          value: disassembledCount,
+          helper: "معلمة كمنتج مفكك",
+          href: "/reports/disassembled-products",
+          icon: Layers3,
+          tone: "bg-violet-50 text-violet-800 border-violet-200",
+        },
       ],
       chartData: {
         shipmentsByStatus: [
@@ -224,10 +240,11 @@ export default function DashboardPage() {
         incoming: [
           { label: t("alerts.incomingContainers"), value: openContainerCount, color: "#059669" },
           { label: t("alerts.newProducts"), value: newIncomingProducts, color: "#0f766e" },
+          { label: t("alerts.disassembledProducts"), value: disassembledCount, color: "#7c3aed" },
         ],
       },
     };
-  }, [containers, incomingProducts, shipments, lang, t]);
+  }, [containers, disassembledProducts, incomingProducts, shipments, lang, t]);
 
   return (
     <div className="space-y-6">
@@ -244,7 +261,7 @@ export default function DashboardPage() {
 
       <ErrorMessage message={error} />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
         {stats.map((item) => {
           const Icon = item.icon;
           return (
@@ -402,7 +419,7 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div className="rounded-lg border border-[var(--border)] bg-white/60 p-3">
                   <div className="text-xs font-semibold text-[var(--muted)]">{t("alerts.incomingContainers")}</div>
                   <div className="mt-2 text-2xl font-bold">{stats.find((s) => s.label === "alerts.incomingContainers")?.value ?? 0}</div>
@@ -412,6 +429,13 @@ export default function DashboardPage() {
                   <div className="text-xs font-semibold text-[var(--muted)]">{t("alerts.newProducts")}</div>
                   <div className="mt-2 text-2xl font-bold">{stats.find((s) => s.label === "alerts.newProducts")?.value ?? 0}</div>
                   <div className="mt-1 text-xs text-[var(--muted)]">{lang === "ar" ? "منتجات واردة جديدة" : "Flagged as new incoming"}</div>
+                </div>
+                <div className="rounded-lg border border-[var(--border)] bg-white/60 p-3">
+                  <div className="text-xs font-semibold text-[var(--muted)]">{t("alerts.disassembledProducts")}</div>
+                  <div className="mt-2 text-2xl font-bold">
+                    {stats.find((s) => s.label === "alerts.disassembledProducts")?.value ?? 0}
+                  </div>
+                  <div className="mt-1 text-xs text-[var(--muted)]">{lang === "ar" ? "منتجات مفككة" : "Flagged as disassembled"}</div>
                 </div>
               </div>
             </div>

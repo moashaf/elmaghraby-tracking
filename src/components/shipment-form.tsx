@@ -60,6 +60,7 @@ const emptyProduct: ShipmentProductDraft = {
   cartons_count: "",
   notes: "",
   is_new_incoming_product: false,
+  is_disassembled: false,
 };
 
 function formFromShipment(shipment?: Shipment): ShipmentFormValues {
@@ -103,6 +104,7 @@ function productDrafts(rows?: ShipmentProduct[]): ShipmentProductDraft[] {
     cartons_count: row.cartons_count?.toString() ?? "",
     notes: row.notes ?? "",
     is_new_incoming_product: row.is_new_incoming_product,
+    is_disassembled: row.is_disassembled ?? false,
   }));
 }
 
@@ -423,6 +425,7 @@ export function ShipmentForm({
         cartons_count: toNullableNumber(row.cartons_count),
         notes: row.notes.trim() || null,
         is_new_incoming_product: row.is_new_incoming_product,
+        is_disassembled: row.is_disassembled,
       }))
     );
 
@@ -663,7 +666,7 @@ export function ShipmentForm({
             {shipmentProducts.map((row, index) => {
               const selected = productById.get(row.product_id);
               return (
-                <div className="grid gap-3 rounded-md border border-[var(--border)] p-3 md:grid-cols-[1fr_130px_130px_150px_auto]" key={index}>
+                <div className="grid gap-3 rounded-md border border-[var(--border)] p-3 md:grid-cols-[1fr_130px_130px_220px_auto]" key={index}>
                   <SearchableSelect
                     options={productOptions}
                     disabled={readOnly}
@@ -673,10 +676,28 @@ export function ShipmentForm({
                   />
                   <input className="input" min={0} placeholder="الكمية" type="number" value={row.quantity} onChange={(event) => updateShipmentProduct(index, { ...row, quantity: event.target.value })} />
                   <input className="input" min={0} placeholder="الكرتين" type="number" value={row.cartons_count} onChange={(event) => updateShipmentProduct(index, { ...row, cartons_count: event.target.value })} />
-                  <label className="flex items-center gap-2 text-sm text-[var(--muted)]">
-                    <input checked={row.is_new_incoming_product} onChange={(event) => updateShipmentProduct(index, { ...row, is_new_incoming_product: event.target.checked })} type="checkbox" />
-                    منتج وارد جديد
-                  </label>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[var(--muted)]">
+                    <label className="flex items-center gap-2">
+                      <input
+                        checked={row.is_new_incoming_product}
+                        disabled={readOnly}
+                        onChange={(event) =>
+                          updateShipmentProduct(index, { ...row, is_new_incoming_product: event.target.checked })
+                        }
+                        type="checkbox"
+                      />
+                      منتج وارد جديد
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        checked={row.is_disassembled}
+                        disabled={readOnly}
+                        onChange={(event) => updateShipmentProduct(index, { ...row, is_disassembled: event.target.checked })}
+                        type="checkbox"
+                      />
+                      مفكك
+                    </label>
+                  </div>
                   <button className="btn btn-secondary px-2" disabled={readOnly} onClick={() => setShipmentProducts((current) => current.length === 1 ? [{ ...emptyProduct }] : current.filter((_, rowIndex) => rowIndex !== index))} type="button">
                     <Trash2 className="h-4 w-4" />
                   </button>

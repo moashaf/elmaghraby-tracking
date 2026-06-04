@@ -54,6 +54,7 @@ export const DICT: Dictionary = {
   "alerts.eta7": { ar: "ETA خلال 7 أيام", en: "ETA within 7 days" },
   "alerts.incomingContainers": { ar: "حاويات واردة", en: "Incoming containers" },
   "alerts.newProducts": { ar: "منتجات جديدة", en: "New products" },
+  "alerts.disassembledProducts": { ar: "منتجات مفككة", en: "Disassembled products" },
 
   "lang.ar": { ar: "عربي", en: "Arabic" },
   "lang.en": { ar: "English", en: "English" },

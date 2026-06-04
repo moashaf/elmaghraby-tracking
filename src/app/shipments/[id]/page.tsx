@@ -329,6 +329,7 @@ function ProductsTable({ rows }: { rows: ShipmentProduct[] }) {
             <th className="p-3 text-right">الكمية</th>
             <th className="p-3 text-right">الكرتين</th>
             <th className="p-3 text-right">جديد</th>
+            <th className="p-3 text-right">مفكك</th>
           </tr>
         </thead>
         <tbody>
@@ -339,9 +340,10 @@ function ProductsTable({ rows }: { rows: ShipmentProduct[] }) {
               <td className="p-3">{row.quantity}</td>
               <td className="p-3">{row.cartons_count ?? "-"}</td>
               <td className="p-3">{row.is_new_incoming_product ? "نعم" : "لا"}</td>
+              <td className="p-3">{row.is_disassembled ? "نعم" : "لا"}</td>
             </tr>
           )) : (
-            <tr><td className="p-4 text-[var(--muted)]" colSpan={5}>لا توجد منتجات.</td></tr>
+            <tr><td className="p-4 text-[var(--muted)]" colSpan={6}>لا توجد منتجات.</td></tr>
           )}
         </tbody>
       </table>

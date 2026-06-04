@@ -11,6 +11,7 @@ export type ReportSlug =
   | "containers"
   | "container-files"
   | "new-products"
+  | "disassembled-products"
   | "duplicate-products"
   | "date-range-products"
   | "product-history"
@@ -39,6 +40,13 @@ export const REPORTS: Array<{
   { slug: "containers", title: "الحاويات", description: "كل الحاويات وأوزانها وكرتينها.", dateFilter: "eta", dateHint: "فلترة حسب ETA للشحنة" },
   { slug: "container-files", title: "ملفات الحاويات", description: "كل ملفات Excel/CSV المرفوعة مع إمكانية التحميل.", dateFilter: "none" },
   { slug: "new-products", title: "منتجات جديدة", description: "منتجات واردة معلمة كجديدة.", dateFilter: "eta", dateHint: "فلترة حسب ETA للشحنة" },
+  {
+    slug: "disassembled-products",
+    title: "منتجات مفككة",
+    description: "منتجات واردة معلمة كمفككة.",
+    dateFilter: "eta",
+    dateHint: "فلترة حسب ETA للشحنة",
+  },
   { slug: "duplicate-products", title: "منتجات مكررة", description: "منتجات موجودة في أكثر من شحنة مفتوحة.", dateFilter: "none" },
   { slug: "date-range-products", title: "منتجات بفترة", description: "منتجات الشحنات داخل فترة ETA محددة.", dateFilter: "eta", dateHint: "فلترة حسب ETA للشحنة" },
   { slug: "product-history", title: "تاريخ منتج", description: "تاريخ استيراد المنتجات من الشحنات.", dateFilter: "eta", dateHint: "فلترة حسب ETA للشحنة" },

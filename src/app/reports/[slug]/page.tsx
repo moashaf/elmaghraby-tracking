@@ -32,6 +32,7 @@ type ShipmentProductJoin = {
   quantity: number;
   cartons_count: number | null;
   is_new_incoming_product: boolean;
+  is_disassembled: boolean;
   products: { sku: string; name_ar: string } | null;
   shipments: ShipmentReportRow | null;
 };
@@ -282,7 +283,7 @@ async function buildReport(slug: string, from: string, to: string): Promise<{ ro
 
   if (slug === "all-products") return allProductsReport();
 
-  if (["containers", "container-files", "incoming-products", "new-products", "duplicate-products", "date-range-products", "product-history", "costs"].includes(slug)) {
+  if (["containers", "container-files", "incoming-products", "new-products", "disassembled-products", "duplicate-products", "date-range-products", "product-history", "costs"].includes(slug)) {
     if (slug === "containers") return containersReport(from, to);
     if (slug === "container-files") return containerFilesReport();
     if (slug === "costs") return costsReport(from, to);
@@ -350,7 +351,7 @@ async function allProductsReport(): Promise<{ rows: ReportRow[] } | { error: str
 async function productsReport(slug: string, from: string, to: string): Promise<{ rows: ReportRow[] } | { error: string }> {
   const result = await createClient()
     .from("shipment_products")
-    .select(`quantity,cartons_count,is_new_incoming_product,products(sku,name_ar),shipments(${shipmentSelect})`);
+    .select(`quantity,cartons_count,is_new_incoming_product,is_disassembled,products(sku,name_ar),shipments(${shipmentSelect})`);
 
   if (result.error) return { error: result.error.message };
 
@@ -358,6 +359,7 @@ async function productsReport(slug: string, from: string, to: string): Promise<{
     .filter((row) => row.shipments && filterShipmentByDate(row.shipments, from, to, "eta"));
 
   if (slug === "new-products") rows = rows.filter((row) => row.is_new_incoming_product);
+  if (slug === "disassembled-products") rows = rows.filter((row) => row.is_disassembled);
 
   if (slug === "duplicate-products") {
     const openCounts = new Map<string, number>();
@@ -397,6 +399,7 @@ async function productsReport(slug: string, from: string, to: string): Promise<{
       الكمية: row.quantity,
       الكرتين: row.cartons_count,
       "منتج جديد": row.is_new_incoming_product ? "نعم" : "لا",
+      مفكك: row.is_disassembled ? "نعم" : "لا",
       "رقم الشحنة": row.shipments?.shipment_number ?? "-",
       ACID: row.shipments?.acid ?? "-",
       المورد: row.shipments?.supplier ?? "-",

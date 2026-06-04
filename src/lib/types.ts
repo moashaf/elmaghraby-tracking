@@ -88,6 +88,7 @@ export type ShipmentProduct = {
   cartons_count: number | null;
   notes: string | null;
   is_new_incoming_product: boolean;
+  is_disassembled: boolean;
   products?: Pick<Product, "sku" | "name_ar" | "unit"> | null;
 };
 
@@ -167,4 +168,5 @@ export type ShipmentProductDraft = {
   cartons_count: string;
   notes: string;
   is_new_incoming_product: boolean;
+  is_disassembled: boolean;
 };
