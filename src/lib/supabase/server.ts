@@ -9,6 +9,23 @@ function getAccessToken(request: Request) {
   return match?.[1]?.trim() ?? "";
 }
 
+function sanitizeEnvKey(value: string | undefined) {
+  if (!value) return null;
+  let cleaned = value.trim().replace(/[\r\n]+/g, "");
+  if (
+    (cleaned.startsWith('"') && cleaned.endsWith('"')) ||
+    (cleaned.startsWith("'") && cleaned.endsWith("'"))
+  ) {
+    cleaned = cleaned.slice(1, -1).trim();
+  }
+  return cleaned || null;
+}
+
+/** Legacy JWT keys (eyJ…) only — not sb_secret_ / sb_publishable_. */
+function isJwtKey(key: string) {
+  return key.startsWith("eyJ") && key.split(".").length === 3;
+}
+
 /** Server-only Supabase secret (sb_secret_… or legacy JWT service_role). */
 export function getServiceRoleKey() {
   const candidates = [
@@ -17,10 +34,22 @@ export function getServiceRoleKey() {
     process.env.SUPABASE_SERVICE_KEY,
   ];
   for (const value of candidates) {
-    const trimmed = value?.trim();
-    if (trimmed) return trimmed;
+    const cleaned = sanitizeEnvKey(value);
+    if (cleaned) return cleaned;
   }
   return null;
+}
+
+/** sb_secret keys must use apikey only — not Authorization: Bearer (invalid in fetch). */
+function createServiceRoleFetch(serviceRoleKey: string): typeof fetch {
+  return async (input, init) => {
+    const headers = new Headers(init?.headers);
+    headers.set("apikey", serviceRoleKey);
+    if (isJwtKey(serviceRoleKey)) {
+      headers.set("Authorization", `Bearer ${serviceRoleKey}`);
+    }
+    return fetch(input, { ...init, headers });
+  };
 }
 
 export function createAdminClient() {
@@ -35,6 +64,9 @@ export function createAdminClient() {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
+    },
+    global: {
+      fetch: createServiceRoleFetch(serviceRoleKey),
     },
   });
 }
@@ -52,20 +84,22 @@ function serverConfigError(error: unknown) {
 
 export function createRequestClient(request: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key =
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  const key = sanitizeEnvKey(
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+  );
 
   if (!url || !key) {
     throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or public Supabase key.");
   }
 
+  const accessToken = getAccessToken(request);
+  const globalHeaders: Record<string, string> = {};
+  if (accessToken && isJwtKey(accessToken)) {
+    globalHeaders.Authorization = `Bearer ${accessToken}`;
+  }
+
   return createSupabaseClient(url, key, {
-    global: {
-      headers: {
-        Authorization: request.headers.get("authorization") ?? "",
-      },
-    },
+    global: { headers: globalHeaders },
     auth: {
       autoRefreshToken: false,
       persistSession: false,
@@ -107,9 +141,12 @@ export async function requireAdmin(request: Request) {
     .maybeSingle();
 
   if (profileError) {
+    const hint = profileError.message.includes("invalid header")
+      ? " تأكد أن SUPABASE_SERVICE_ROLE_KEY في Vercel هو Secret key كامل بدون مسافات أو علامات اقتباس زائدة."
+      : "";
     return {
       ok: false as const,
-      error: `تعذر التحقق من الصلاحيات: ${profileError.message}`,
+      error: `تعذر التحقق من الصلاحيات: ${profileError.message}${hint}`,
       status: 500 as const,
     };
   }
