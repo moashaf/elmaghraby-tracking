@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Edit2, FolderTree, Plus, Save, Search, Trash2, X } from "lucide-react";
+import { ChevronLeft, Edit2, FolderTree, Plus, Save, Search, Trash2, X } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage, PageHeader, StatusPill } from "@/components/ui";
 import { useLanguage } from "@/context/language-context";
 import {
+  buildCategoryBreadcrumb,
   buildCategorySelectOptions,
-  filterCategoryRows,
-  type CategoryListFilter,
+  categoryHasChildren,
+  countDirectChildren,
+  getDirectChildren,
+  getRootCategories,
 } from "@/lib/category-options";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { fetchAllFromTable } from "@/lib/supabase/fetch-all";
@@ -29,19 +32,14 @@ const emptyForm: CategoryForm = {
   is_active: true,
 };
 
-const LIST_FILTERS: Array<{ id: CategoryListFilter; label: string }> = [
-  { id: "commercial", label: "التشغيل (بدون مفكك)" },
-  { id: "roots", label: "رئيسية فقط" },
-  { id: "mfkk", label: "مفكك فقط" },
-  { id: "all", label: "الكل" },
-];
+type ListScope = { type: "all" } | { type: "under"; parentId: string };
 
 export default function CategoriesPage() {
   const { tr } = useLanguage();
   const [rows, setRows] = useState<ProductCategory[]>([]);
   const [form, setForm] = useState<CategoryForm>(emptyForm);
   const [query, setQuery] = useState("");
-  const [listFilter, setListFilter] = useState<CategoryListFilter>("commercial");
+  const [listScope, setListScope] = useState<ListScope>({ type: "all" });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState("");
@@ -91,12 +89,17 @@ export default function CategoriesPage() {
     void Promise.resolve().then(load);
   }, []);
 
+  const rootCategories = useMemo(() => getRootCategories(rows), [rows]);
+
   const parentOptions = useMemo(() => {
     const candidates = rows.filter((row) => row.id !== form.id);
     return buildCategorySelectOptions(candidates);
   }, [form.id, rows]);
 
-  const scopedRows = useMemo(() => filterCategoryRows(rows, listFilter), [listFilter, rows]);
+  const scopedRows = useMemo(() => {
+    if (listScope.type === "all") return rows;
+    return getDirectChildren(rows, listScope.parentId);
+  }, [listScope, rows]);
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -106,7 +109,25 @@ export default function CategoriesPage() {
     );
   }, [query, scopedRows]);
 
+  const breadcrumb = useMemo(() => {
+    if (listScope.type !== "under") return [];
+    return buildCategoryBreadcrumb(rows, listScope.parentId);
+  }, [listScope, rows]);
+
+  const browseParent = listScope.type === "under" ? rows.find((row) => row.id === listScope.parentId) : null;
+
   const activeCount = rows.filter((row) => row.is_active).length;
+
+  function openUnder(parentId: string) {
+    setListScope({ type: "under", parentId });
+    if (!form.id) {
+      setForm((current) => ({ ...current, parent_id: parentId }));
+    }
+  }
+
+  function showAll() {
+    setListScope({ type: "all" });
+  }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -150,7 +171,7 @@ export default function CategoriesPage() {
   }
 
   function parentPath(row: ProductCategory) {
-    if (!row.parent_id) return "رئيسية";
+    if (!row.parent_id) return tr("رئيسية", "Root");
     const parent = rows.find((item) => item.id === row.parent_id);
     if (!parent) return row.parent?.name_ar ?? "-";
     if (!parent.parent_id) return parent.name_ar;
@@ -158,13 +179,21 @@ export default function CategoriesPage() {
     return grand ? `${grand.name_ar} / ${parent.name_ar}` : parent.name_ar;
   }
 
+  const listHint =
+    listScope.type === "all"
+      ? tr("كل الفئات في النظام", "All categories")
+      : tr(
+          `الفئات الفرعية تحت «${browseParent?.name_ar ?? ""}» (${scopedRows.length})`,
+          `Subcategories under “${browseParent?.name_ar ?? ""}” (${scopedRows.length})`
+        );
+
   return (
     <div className="space-y-5">
       <PageHeader
         title={tr("الفئات", "Categories")}
         description={tr(
-          "فئات المنتجات الرئيسية والفرعية. لإضافة فئة تحت «كشاف»: اختر كشاف في «تحت فئة».",
-          "Main and sub product categories."
+          "اختر «الكل» أو فئة رئيسية، ثم ادخل للفروع. اضغط «عرض الفروع» لفتح مستوى أعمق.",
+          "Pick All or a main category, then drill into subcategories."
         )}
         actions={
           <StatusPill className="bg-emerald-50 text-emerald-700">
@@ -215,24 +244,69 @@ export default function CategoriesPage() {
         </button>
       ) : null}
 
-      <div className="card space-y-3 p-4">
-        <div className="flex flex-wrap gap-2">
-          {LIST_FILTERS.map((item) => (
+      <div className="card space-y-4 p-4">
+        <div>
+          <div className="mb-2 text-sm font-semibold text-[var(--muted)]">{tr("الفئات الرئيسية", "Main categories")}</div>
+          <div className="flex flex-wrap gap-2">
             <button
-              className={`btn text-xs ${listFilter === item.id ? "" : "btn-secondary"}`}
-              key={item.id}
-              onClick={() => setListFilter(item.id)}
+              className={`btn text-sm ${listScope.type === "all" ? "" : "btn-secondary"}`}
+              onClick={showAll}
               type="button"
             >
-              {item.label}
+              {tr("الكل", "All")}
             </button>
-          ))}
+            {rootCategories.map((root) => {
+              const childCount = countDirectChildren(rows, root.id);
+              const active =
+                listScope.type === "under" && listScope.parentId === root.id;
+              return (
+                <button
+                  className={`btn text-sm ${active ? "" : "btn-secondary"}`}
+                  key={root.id}
+                  onClick={() => openUnder(root.id)}
+                  type="button"
+                >
+                  {root.name_ar}
+                  {childCount > 0 ? (
+                    <span className="mr-1 opacity-70">({childCount})</span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
         </div>
+
+        {listScope.type === "under" ? (
+          <nav aria-label="مسار التصفح" className="flex flex-wrap items-center gap-2 text-sm">
+            <button className="font-semibold text-[#0f766e] hover:underline" onClick={showAll} type="button">
+              {tr("الكل", "All")}
+            </button>
+            {breadcrumb.map((item, index) => (
+              <span className="flex items-center gap-2" key={item.id}>
+                <ChevronLeft className="h-4 w-4 text-[var(--muted)]" />
+                {index === breadcrumb.length - 1 ? (
+                  <span className="font-bold">{item.name_ar}</span>
+                ) : (
+                  <button
+                    className="font-semibold text-[#0f766e] hover:underline"
+                    onClick={() => openUnder(item.id)}
+                    type="button"
+                  >
+                    {item.name_ar}
+                  </button>
+                )}
+              </span>
+            ))}
+          </nav>
+        ) : null}
+
+        <div className="text-sm text-[var(--muted)]">{listHint}</div>
+
         <label className="relative block">
           <Search className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-[var(--muted)]" />
           <input
             className="input pr-9"
-            placeholder="بحث بالاسم أو الكود أو الفئة الأب"
+            placeholder={tr("بحث بالاسم أو الكود", "Search by name or code")}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -258,46 +332,62 @@ export default function CategoriesPage() {
                 </td>
               </tr>
             ) : (
-              filtered.map((row) => (
-                <tr className="border-t border-[var(--border)]" key={row.id}>
-                  <td className="p-3 font-semibold">{row.name_ar}</td>
-                  <td className="p-3">{row.code ?? "-"}</td>
-                  <td className="p-3">{parentPath(row)}</td>
-                  <td className="p-3">{row.is_active ? "نشطة" : "متوقفة"}</td>
-                  <td className="flex flex-wrap gap-2 p-3">
-                    <button
-                      className="btn btn-secondary px-2 py-1 text-xs"
-                      onClick={() =>
-                        setForm({
-                          id: row.id,
-                          name_ar: row.name_ar,
-                          code: row.code ?? "",
-                          parent_id: row.parent_id ?? "",
-                          is_active: row.is_active,
-                        })
-                      }
-                      type="button"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                      تعديل
-                    </button>
-                    <button
-                      className="btn btn-danger px-2 py-1 text-xs"
-                      disabled={deletingId === row.id}
-                      onClick={() => void removeCategory(row)}
-                      type="button"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      حذف
-                    </button>
-                  </td>
-                </tr>
-              ))
+              filtered.map((row) => {
+                const hasChildren = categoryHasChildren(rows, row.id);
+                const childCount = countDirectChildren(rows, row.id);
+                return (
+                  <tr className="border-t border-[var(--border)]" key={row.id}>
+                    <td className="p-3 font-semibold">{row.name_ar}</td>
+                    <td className="p-3">{row.code ?? "-"}</td>
+                    <td className="p-3">{parentPath(row)}</td>
+                    <td className="p-3">{row.is_active ? "نشطة" : "متوقفة"}</td>
+                    <td className="flex flex-wrap gap-2 p-3">
+                      {hasChildren ? (
+                        <button
+                          className="btn btn-secondary px-2 py-1 text-xs"
+                          onClick={() => openUnder(row.id)}
+                          type="button"
+                        >
+                          <FolderTree className="h-4 w-4" />
+                          {tr("عرض الفروع", "Subcategories")} ({childCount})
+                        </button>
+                      ) : null}
+                      <button
+                        className="btn btn-secondary px-2 py-1 text-xs"
+                        onClick={() =>
+                          setForm({
+                            id: row.id,
+                            name_ar: row.name_ar,
+                            code: row.code ?? "",
+                            parent_id: row.parent_id ?? "",
+                            is_active: row.is_active,
+                          })
+                        }
+                        type="button"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                        تعديل
+                      </button>
+                      <button
+                        className="btn btn-danger px-2 py-1 text-xs"
+                        disabled={deletingId === row.id}
+                        onClick={() => void removeCategory(row)}
+                        type="button"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        حذف
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
             )}
             {!loading && !filtered.length ? (
               <tr>
                 <td className="p-4 text-[var(--muted)]" colSpan={5}>
-                  لا توجد فئات.
+                  {listScope.type === "under"
+                    ? tr("لا توجد فئات فرعية هنا.", "No subcategories here.")
+                    : tr("لا توجد فئات.", "No categories.")}
                 </td>
               </tr>
             ) : null}

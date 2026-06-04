@@ -27,15 +27,35 @@ export function buildCategorySelectOptions(categories: ProductCategory[]) {
     .sort((a, b) => a.label.localeCompare(b.label, "ar"));
 }
 
-export function isMfkkCategory(category: Pick<ProductCategory, "code" | "name_ar">) {
-  return category.code?.startsWith("MFKK") === true || category.name_ar === "مفكك";
+export function getRootCategories(rows: ProductCategory[]) {
+  return rows
+    .filter((row) => !row.parent_id)
+    .sort((a, b) => a.name_ar.localeCompare(b.name_ar, "ar"));
 }
 
-export type CategoryListFilter = "all" | "commercial" | "roots" | "mfkk";
+export function getDirectChildren(rows: ProductCategory[], parentId: string) {
+  return rows
+    .filter((row) => row.parent_id === parentId)
+    .sort((a, b) => a.name_ar.localeCompare(b.name_ar, "ar"));
+}
 
-export function filterCategoryRows(rows: ProductCategory[], mode: CategoryListFilter) {
-  if (mode === "all") return rows;
-  if (mode === "roots") return rows.filter((row) => !row.parent_id);
-  if (mode === "mfkk") return rows.filter((row) => row.code?.startsWith("MFKK") || row.name_ar === "مفكك");
-  return rows.filter((row) => !row.code?.startsWith("MFKK") && row.name_ar !== "مفكك");
+export function countDirectChildren(rows: ProductCategory[], parentId: string) {
+  return rows.filter((row) => row.parent_id === parentId).length;
+}
+
+export function categoryHasChildren(rows: ProductCategory[], categoryId: string) {
+  return rows.some((row) => row.parent_id === categoryId);
+}
+
+export function buildCategoryBreadcrumb(rows: ProductCategory[], categoryId: string) {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const path: ProductCategory[] = [];
+  let current = byId.get(categoryId);
+
+  while (current) {
+    path.unshift(current);
+    current = current.parent_id ? byId.get(current.parent_id) : undefined;
+  }
+
+  return path;
 }

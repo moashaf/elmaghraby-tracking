@@ -2,9 +2,23 @@ import { createClient as createSupabaseClient, type SupabaseClient } from "@supa
 
 export type AdminRole = "admin" | "manager" | "viewer";
 
+/** Server-only Supabase secret (sb_secret_… or legacy JWT service_role). */
+export function getServiceRoleKey() {
+  const candidates = [
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    process.env.SUPABASE_SECRET_KEY,
+    process.env.SUPABASE_SERVICE_KEY,
+  ];
+  for (const value of candidates) {
+    const trimmed = value?.trim();
+    if (trimmed) return trimmed;
+  }
+  return null;
+}
+
 export function createAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const serviceRoleKey = getServiceRoleKey();
 
   if (!url || !serviceRoleKey) {
     throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.");
@@ -21,7 +35,7 @@ export function createAdminClient() {
 function serverConfigError(error: unknown) {
   const message = error instanceof Error ? error.message : "";
   if (message.includes("SUPABASE_SERVICE_ROLE_KEY")) {
-    return "إعدادات السيرفر ناقصة: أضف SUPABASE_SERVICE_ROLE_KEY في Vercel Environment Variables ثم أعد النشر.";
+    return "إعدادات السيرفر ناقصة: أضف SUPABASE_SERVICE_ROLE_KEY (مفتاح Secret من Supabase) في Vercel → Environment Variables، فعّل Production + Preview، ثم Redeploy (بدون Redeploy المتغير لا يشتغل).";
   }
   if (message.includes("NEXT_PUBLIC_SUPABASE_URL") || message.includes("public Supabase key")) {
     return "إعدادات Supabase ناقصة في Vercel: تأكد من NEXT_PUBLIC_SUPABASE_URL والمفتاح العام ثم أعد النشر.";
