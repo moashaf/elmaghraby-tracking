@@ -1,7 +1,7 @@
 export type UserRole = "admin" | "manager" | "viewer";
 
 export const ROLE_LABELS: Record<UserRole, string> = {
-  admin: "مدير",
+  admin: "مدير النظام",
   manager: "مشرف",
   viewer: "مشاهدة فقط",
 };

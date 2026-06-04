@@ -1,6 +1,13 @@
 import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
+import { ROLE_LABELS } from "@/lib/permissions";
 
 export type AdminRole = "admin" | "manager" | "viewer";
+
+function getAccessToken(request: Request) {
+  const header = request.headers.get("authorization") ?? "";
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() ?? "";
+}
 
 /** Server-only Supabase secret (sb_secret_… or legacy JWT service_role). */
 export function getServiceRoleKey() {
@@ -76,26 +83,52 @@ export async function requireAdmin(request: Request) {
     return { ok: false as const, error: serverConfigError(configError), status: 500 as const };
   }
 
+  const accessToken = getAccessToken(request);
+  if (!accessToken) {
+    return { ok: false as const, error: "غير مصرح بالدخول — أعد تسجيل الدخول.", status: 401 as const };
+  }
+
   const {
     data: { user },
     error,
-  } = await requestClient.auth.getUser().catch((authError) => ({
+  } = await requestClient.auth.getUser(accessToken).catch((authError) => ({
     data: { user: null },
     error: authError instanceof Error ? authError : new Error("تعذر التحقق من الجلسة."),
   }));
 
   if (error || !user) {
-    return { ok: false as const, error: "غير مصرح بالدخول", status: 401 as const };
+    return { ok: false as const, error: "غير مصرح بالدخول — أعد تسجيل الدخول.", status: 401 as const };
   }
 
   const { data: profile, error: profileError } = await adminClient
     .from("profiles")
     .select("id, full_name, role")
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
 
-  if (profileError || profile?.role !== "admin") {
-    return { ok: false as const, error: "هذه الصفحة متاحة للمدير فقط", status: 403 as const };
+  if (profileError) {
+    return {
+      ok: false as const,
+      error: `تعذر التحقق من الصلاحيات: ${profileError.message}`,
+      status: 500 as const,
+    };
+  }
+
+  if (!profile) {
+    return {
+      ok: false as const,
+      error: "لا يوجد ملف لحسابك. سجّل خروج ثم ادخل مجدداً، أو اطلب من مدير النظام إنشاء ملفك.",
+      status: 403 as const,
+    };
+  }
+
+  if (profile.role !== "admin") {
+    const roleLabel = ROLE_LABELS[profile.role as AdminRole] ?? profile.role;
+    return {
+      ok: false as const,
+      error: `دورك الحالي «${roleLabel}» — صفحة المستخدمين للمدير (admin) فقط.`,
+      status: 403 as const,
+    };
   }
 
   return { ok: true as const, user, profile, adminClient };
