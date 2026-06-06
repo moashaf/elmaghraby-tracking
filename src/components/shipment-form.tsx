@@ -319,10 +319,19 @@ export function ShipmentForm({
     const supabase = createClient();
 
     const acidValue = form.acid.trim();
-    let acidQuery = supabase.from("shipments").select("id").ilike("acid", acidValue);
-    if (shipment?.id) acidQuery = acidQuery.neq("id", shipment.id);
-    const acidCheck = await acidQuery.maybeSingle();
-    if (acidCheck.data?.id) {
+    const { data: acidMatches, error: acidCheckError } = await supabase
+      .from("shipments")
+      .select("id")
+      .eq("acid", acidValue);
+
+    if (acidCheckError) {
+      setLoading(false);
+      setError(acidCheckError.message);
+      return;
+    }
+
+    const acidConflict = (acidMatches ?? []).find((row) => row.id !== shipment?.id);
+    if (acidConflict) {
       setLoading(false);
       setError("رقم ACID مستخدم في شحنة أخرى ولا يمكن تكراره.");
       return;
@@ -432,7 +441,14 @@ export function ShipmentForm({
     setLoading(false);
 
     if (productsInsert.error) {
-      setError(productsInsert.error.message);
+      const message = productsInsert.error.message;
+      if (message.includes("shipment_products_shipment_id_product_id_key")) {
+        setError(
+          "قاعدة البيانات لسه تمنع تكرار نفس الصنف في الشحنة. شغّل migration: 20260604000001_allow_duplicate_shipment_products.sql من Supabase SQL Editor ثم حاول الحفظ مرة أخرى (البيانات في النموذج محفوظة)."
+        );
+        return;
+      }
+      setError(message);
       return;
     }
 
