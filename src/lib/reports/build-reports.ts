@@ -372,32 +372,13 @@ export async function fetchCategoryShippedProducts(categoryId: string, categorie
   );
   if (result.error) return { error: result.error, rows: [] as ReportRow[] };
 
-  const grouped = new Map<string, ReportRow>();
+  const lines: ProductLine[] = [];
   for (const raw of result.data as unknown as ShipmentProductJoin[]) {
     const product = raw.products;
     if (!product?.category_id || !categoryIds.has(product.category_id)) continue;
-    const shipmentRaw = unwrapRelation(raw.shipments) as Record<string, unknown> | null;
-    if (!shipmentRaw) continue;
-    const company = unwrapRelation(shipmentRaw.companies as { name_ar?: string } | { name_ar?: string }[] | null);
-    const key = product.sku;
-    const line = `${raw.cartons_count ?? raw.quantity} كرت — ${String(shipmentRaw.eta ?? "-")} — ${raw.is_disassembled ? "مفكك" : "كامل"}`;
-    const existing = grouped.get(key);
-    if (existing) {
-      existing["تفاصيل الشحن"] = `${existing["تفاصيل الشحن"]} | ${line}`;
-      existing["إجمالي الكرتين"] = Number(existing["إجمالي الكرتين"] ?? 0) + Number(raw.cartons_count ?? raw.quantity ?? 0);
-    } else {
-      grouped.set(key, {
-        SKU: product.sku,
-        المنتج: product.name_ar,
-        التصنيف: product.category ?? "-",
-        "تفاصيل الشحن": line,
-        "إجمالي الكرتين": Number(raw.cartons_count ?? raw.quantity ?? 0),
-        ACID: String(shipmentRaw.acid ?? "-"),
-        الشركة: company?.name_ar ?? "-",
-        ...(product.image_url ? { _imagePath: product.image_url } : {}),
-      });
-    }
+    const line = toProductLine({ ...raw, shipments: normalizeShipmentJoin(raw.shipments) });
+    if (line) lines.push(line);
   }
 
-  return { rows: Array.from(grouped.values()).sort((a, b) => String(a.المنتج).localeCompare(String(b.المنتج), "ar")) };
+  return { rows: groupProductLines(lines) };
 }

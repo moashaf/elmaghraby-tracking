@@ -18,10 +18,51 @@ export type ProductLine = {
   status: string;
 };
 
-function formatArrivalLine(line: ProductLine) {
-  const cartons = line.cartons_count ?? line.quantity;
+export function arrivalColumnKey(index: number) {
+  return `وصول ${index + 1}`;
+}
+
+export function formatArrivalCell(line: ProductLine) {
+  const cartons = line.cartons_count;
+  const pieces = Number(line.quantity ?? 0);
+  const qtyPart =
+    cartons != null && cartons > 0 ? `${cartons} كرتونة (${pieces} قطعة)` : `${pieces} قطعة`;
   const kind = line.is_disassembled ? "مفكك" : "كامل";
-  return `${cartons} كرت — ${line.eta} — ${kind}`;
+  return `${qtyPart} — ${line.eta} — ${kind}`;
+}
+
+function rowsToReportRows(
+  grouped: Array<{
+    sku: string;
+    name: string;
+    category_name: string | null;
+    image_path: string | null;
+    details: string[];
+    totalCartons: number;
+    totalPieces: number;
+  }>
+): ReportRow[] {
+  const maxArrivals = Math.max(1, ...grouped.map((row) => row.details.length));
+
+  return grouped
+    .sort((a, b) => a.name.localeCompare(b.name, "ar"))
+    .map((row) => {
+      const reportRow: ReportRow = {
+        SKU: row.sku,
+        المنتج: row.name,
+        التصنيف: row.category_name ?? "-",
+        "إجمالي الكرتين": row.totalCartons,
+        "إجمالي القطع": row.totalPieces,
+      };
+
+      for (let index = 0; index < maxArrivals; index += 1) {
+        reportRow[arrivalColumnKey(index)] = row.details[index] ?? "-";
+      }
+
+      if (row.image_path) reportRow._imagePath = row.image_path;
+
+      return reportRow;
+    });
 }
 
 export function groupProductLines(
@@ -52,6 +93,7 @@ export function groupProductLines(
       image_path: string | null;
       details: string[];
       totalCartons: number;
+      totalPieces: number;
     }
   >();
 
@@ -64,24 +106,17 @@ export function groupProductLines(
       image_path: line.image_path,
       details: [],
       totalCartons: 0,
+      totalPieces: 0,
     };
-    current.details.push(formatArrivalLine(line));
-    current.totalCartons += Number(line.cartons_count ?? line.quantity ?? 0);
+    current.details.push(formatArrivalCell(line));
+    current.totalCartons += Number(line.cartons_count ?? 0);
+    current.totalPieces += Number(line.quantity ?? 0);
     if (!current.image_path && line.image_path) current.image_path = line.image_path;
     if (!current.category_name && line.category_name) current.category_name = line.category_name;
     grouped.set(line.sku, current);
   }
 
-  return Array.from(grouped.values())
-    .sort((a, b) => a.name.localeCompare(b.name, "ar"))
-    .map((row) => ({
-      SKU: row.sku,
-      المنتج: row.name,
-      التصنيف: row.category_name ?? "-",
-      "تفاصيل الوصول": row.details.join(" | "),
-      "إجمالي الكرتين": row.totalCartons,
-      ...(row.image_path ? { _imagePath: row.image_path } : {}),
-    }));
+  return rowsToReportRows(Array.from(grouped.values()));
 }
 
 export function productLinesToDetailRows(lines: ProductLine[], withImagePath = false): ReportRow[] {

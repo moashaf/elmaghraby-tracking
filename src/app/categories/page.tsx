@@ -179,6 +179,11 @@ export default function CategoriesPage() {
 
   const activeCount = rows.filter((row) => row.is_active).length;
 
+  const shippedColumns = useMemo(() => {
+    if (!shippedProducts.length) return [];
+    return Object.keys(shippedProducts[0]).filter((key) => !key.startsWith("_"));
+  }, [shippedProducts]);
+
   function openUnder(parentId: string) {
     setListScope({ type: "under", parentId });
     if (!form.id) {
@@ -405,33 +410,33 @@ export default function CategoriesPage() {
             <table className="min-w-full text-sm">
               <thead className="table-head">
                 <tr>
-                  <th className="p-3 text-right">SKU</th>
-                  <th className="p-3 text-right">{tr("المنتج", "Product")}</th>
-                  <th className="p-3 text-right">{tr("التصنيف", "Category")}</th>
-                  <th className="p-3 text-right">{tr("تفاصيل الشحن", "Shipment details")}</th>
-                  <th className="p-3 text-right">{tr("إجمالي الكرتين", "Total cartons")}</th>
+                  {shippedColumns.map((column) => (
+                    <th className="p-3 text-right" key={column}>
+                      {column}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {shippedLoading ? (
                   <tr>
-                    <td className="p-4 text-[var(--muted)]" colSpan={5}>
+                    <td className="p-4 text-[var(--muted)]" colSpan={Math.max(shippedColumns.length, 1)}>
                       {tr("جاري التحميل...", "Loading...")}
                     </td>
                   </tr>
                 ) : shippedProducts.length ? (
                   shippedProducts.map((row, index) => (
                     <tr className="border-t border-[var(--border)]" key={index}>
-                      <td className="p-3 font-semibold">{row.SKU}</td>
-                      <td className="p-3">{row.المنتج}</td>
-                      <td className="p-3">{row.التصنيف}</td>
-                      <td className="p-3">{row["تفاصيل الشحن"]}</td>
-                      <td className="p-3">{row["إجمالي الكرتين"]}</td>
+                      {shippedColumns.map((column) => (
+                        <td className="p-3" key={column}>
+                          {row[column] ?? "-"}
+                        </td>
+                      ))}
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td className="p-4 text-[var(--muted)]" colSpan={5}>
+                    <td className="p-4 text-[var(--muted)]" colSpan={Math.max(shippedColumns.length, 1)}>
                       {tr("لا توجد منتجات مشحونة في هذه الفئة.", "No shipped products in this category.")}
                     </td>
                   </tr>
