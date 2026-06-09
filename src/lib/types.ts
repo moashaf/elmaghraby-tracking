@@ -27,6 +27,7 @@ export type Product = {
   barcode: string | null;
   unit: string;
   is_active: boolean;
+  image_url?: string | null;
 };
 
 export type ShippingRoute = {
@@ -61,6 +62,7 @@ export type Shipment = {
   shipment_type: string;
   total_weight_kg: number | null;
   total_cartons: number | null;
+  value_usd: number | null;
   route: string | null;
   status: ShipmentStatus;
   notes: string | null;
@@ -89,7 +91,7 @@ export type ShipmentProduct = {
   notes: string | null;
   is_new_incoming_product: boolean;
   is_disassembled: boolean;
-  products?: Pick<Product, "sku" | "name_ar" | "unit"> | null;
+  products?: Pick<Product, "sku" | "name_ar" | "unit" | "image_url"> | null;
 };
 
 export type ShipmentCost = {
@@ -150,6 +152,7 @@ export type ShipmentFormValues = {
   shipment_type: string;
   total_weight_kg: string;
   total_cartons: string;
+  value_usd: string;
   containers_count: string;
   route: string;
   notes: string;

@@ -42,6 +42,7 @@ const emptyForm: ShipmentFormValues = {
   shipment_type: "",
   total_weight_kg: "",
   total_cartons: "",
+  value_usd: "",
   containers_count: "",
   route: "",
   notes: "",
@@ -78,6 +79,7 @@ function formFromShipment(shipment?: Shipment): ShipmentFormValues {
     shipment_type: shipment.shipment_type ?? "",
     total_weight_kg: shipment.total_weight_kg?.toString() ?? "",
     total_cartons: shipment.total_cartons?.toString() ?? "",
+    value_usd: shipment.value_usd?.toString() ?? "",
     containers_count: "",
     route: shipment.route ?? "",
     notes: shipment.notes ?? "",
@@ -354,6 +356,7 @@ export function ShipmentForm({
       shipment_type: form.shipment_type.trim() || "—",
       total_weight_kg: toNullableNumber(form.total_weight_kg),
       total_cartons: toNullableNumber(form.total_cartons),
+      value_usd: toNullableNumber(form.value_usd),
       route: form.route.trim() || null,
       notes: form.notes.trim() || null,
       created_by: user.data.user?.id ?? null,
@@ -579,6 +582,18 @@ export function ShipmentForm({
               <input className="input" min={0} type="number" value={form.total_cartons} onChange={(event) => setField("total_cartons", event.target.value)} />
             </label>
             <label className="label">
+              قيمة الشحنة (USD)
+              <input
+                className="input"
+                min={0}
+                placeholder="0.00"
+                step="0.01"
+                type="number"
+                value={form.value_usd}
+                onChange={(event) => setField("value_usd", event.target.value)}
+              />
+            </label>
+            <label className="label">
               عدد الحاويات
               <input
                 className="input"
@@ -616,7 +631,10 @@ export function ShipmentForm({
 
         <section className="space-y-3 border-t border-[var(--border)] pt-5">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="font-bold">الحاويات</h2>
+            <div>
+              <h2 className="font-bold">الحاويات</h2>
+              <p className="text-sm text-[var(--muted)]">أدخل اسم أو رقم كل حاوية فقط.</p>
+            </div>
             {!readOnly ? (
               <button className="btn btn-secondary text-sm" onClick={() => setContainers((current) => [...current, { ...emptyContainer }])} type="button">
                 <Plus className="h-4 w-4" />
@@ -626,11 +644,15 @@ export function ShipmentForm({
           </div>
           <div className="space-y-3">
             {containers.map((container, index) => (
-              <div className="grid gap-3 rounded-md border border-[var(--border)] p-3 lg:grid-cols-[1fr_120px_120px_1fr_auto]" key={index}>
-                <input className={fieldClass} disabled={disabled} placeholder="رقم الحاوية" readOnly={readOnly} value={container.container_number} onChange={(event) => updateContainer(index, { ...container, container_number: event.target.value })} />
-                <input className={fieldClass} disabled={disabled} min={0} placeholder="الوزن" readOnly={readOnly} type="number" value={container.weight_kg} onChange={(event) => updateContainer(index, { ...container, weight_kg: event.target.value })} />
-                <input className={fieldClass} disabled={disabled} min={0} placeholder="الكرتين" readOnly={readOnly} type="number" value={container.cartons_count} onChange={(event) => updateContainer(index, { ...container, cartons_count: event.target.value })} />
-                <input className={fieldClass} disabled={disabled} placeholder="ملاحظات" readOnly={readOnly} value={container.notes} onChange={(event) => updateContainer(index, { ...container, notes: event.target.value })} />
+              <div className="grid gap-3 rounded-md border border-[var(--border)] p-3 lg:grid-cols-[1fr_auto]" key={index}>
+                <input
+                  className={fieldClass}
+                  disabled={disabled}
+                  placeholder="اسم / رقم الحاوية"
+                  readOnly={readOnly}
+                  value={container.container_number}
+                  onChange={(event) => updateContainer(index, { ...container, container_number: event.target.value })}
+                />
                 {!readOnly ? (
                     <button className="btn btn-secondary px-2" onClick={() => setContainers((current) => current.length === 1 ? [{ ...emptyContainer }] : current.filter((_, rowIndex) => rowIndex !== index))} type="button">
                       <Trash2 className="h-4 w-4" />

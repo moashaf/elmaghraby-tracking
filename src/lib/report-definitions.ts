@@ -3,7 +3,7 @@ export type ReportSlug =
   | "in-sea"
   | "customs"
   | "delayed"
-  | "arriving-30"
+  | "arriving-10"
   | "closed"
   | "incoming-products"
   | "costs"
@@ -32,7 +32,7 @@ export const REPORTS: Array<{
   { slug: "in-sea", title: "الشحنات في البحر", description: "الشحنات الحالية قبل الجمارك.", dateFilter: "eta", dateHint: "فلترة حسب ETA" },
   { slug: "customs", title: "الشحنات في الجمارك", description: "شحنات جاهزة للمراجعة أو الإغلاق.", dateFilter: "eta", dateHint: "فلترة حسب ETA" },
   { slug: "delayed", title: "الشحنات المتأخرة", description: "شحنات تجاوزت ETA ولم تُغلق بعد.", dateFilter: "none" },
-  { slug: "arriving-30", title: "وصول خلال 30 يوم", description: "شحنات متوقعة الوصول خلال 30 يوم.", dateFilter: "none" },
+  { slug: "arriving-10", title: "وصول خلال 10 أيام", description: "شحنات متوقعة الوصول خلال 10 أيام.", dateFilter: "none" },
   { slug: "closed", title: "الشحنات المغلقة", description: "كل الشحنات التي تم إغلاقها.", dateFilter: "closed", dateHint: "فلترة حسب تاريخ الإغلاق" },
   { slug: "incoming-products", title: "منتجات واردة", description: "منتجات الشحنات المفتوحة والمغلقة.", dateFilter: "eta", dateHint: "فلترة حسب ETA للشحنة" },
   { slug: "costs", title: "تقرير المصاريف", description: "تكاليف الشحنات وإجمالي الإغلاق.", dateFilter: "closed", dateHint: "فلترة حسب تاريخ الإغلاق" },

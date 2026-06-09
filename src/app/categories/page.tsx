@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, Edit2, FolderTree, Plus, Save, Search, Trash2, X } from "lucide-react";
+import { ChevronLeft, Edit2, FileSpreadsheet, FolderTree, Plus, Save, Search, Trash2, X } from "lucide-react";
+import * as XLSX from "xlsx";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage, PageHeader, StatusPill } from "@/components/ui";
 import { useLanguage } from "@/context/language-context";
@@ -15,6 +16,9 @@ import {
 } from "@/lib/category-options";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { fetchAllFromTable } from "@/lib/supabase/fetch-all";
+import { signedProductImageUrls } from "@/lib/product-images";
+import { fetchCategoryShippedProducts } from "@/lib/reports/build-reports";
+import type { ReportRow } from "@/lib/reports/shipment-helpers";
 import type { ProductCategory } from "@/lib/types";
 
 type CategoryForm = {
@@ -44,6 +48,10 @@ export default function CategoriesPage() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState("");
   const [error, setError] = useState("");
+  const [shippedProducts, setShippedProducts] = useState<ReportRow[]>([]);
+  const [shippedLoading, setShippedLoading] = useState(false);
+  const [exportWithImages, setExportWithImages] = useState(false);
+  const [productImageUrls, setProductImageUrls] = useState<Map<string, string>>(new Map());
 
   async function load() {
     setError("");
@@ -89,6 +97,36 @@ export default function CategoriesPage() {
     void Promise.resolve().then(load);
   }, []);
 
+  useEffect(() => {
+    if (listScope.type !== "under") {
+      setShippedProducts([]);
+      return;
+    }
+    async function loadShipped() {
+      if (listScope.type !== "under") return;
+      const parentId = listScope.parentId;
+      setShippedLoading(true);
+      const result = await fetchCategoryShippedProducts(parentId, rows);
+      setShippedLoading(false);
+      if ("error" in result && result.error) {
+        setError(String(result.error));
+        setShippedProducts([]);
+        return;
+      }
+      setShippedProducts(result.rows);
+    }
+    if (rows.length) void loadShipped();
+  }, [listScope, rows]);
+
+  useEffect(() => {
+    if (!exportWithImages) {
+      setProductImageUrls(new Map());
+      return;
+    }
+    const paths = shippedProducts.map((row) => row._imagePath).filter((path): path is string => Boolean(path));
+    void signedProductImageUrls(paths).then(setProductImageUrls);
+  }, [exportWithImages, shippedProducts]);
+
   const rootCategories = useMemo(() => getRootCategories(rows), [rows]);
 
   const parentOptions = useMemo(() => {
@@ -115,6 +153,29 @@ export default function CategoriesPage() {
   }, [listScope, rows]);
 
   const browseParent = listScope.type === "under" ? rows.find((row) => row.id === listScope.parentId) : null;
+
+  async function exportCategoryExcel() {
+    if (listScope.type !== "under") return;
+    const result = await fetchCategoryShippedProducts(listScope.parentId, rows);
+    const categoryName = browseParent?.name_ar ?? "category";
+    const sheetRows = await Promise.all(
+      result.rows.map(async (row) => {
+        const copy: Record<string, string | number | null> = {};
+        for (const [key, value] of Object.entries(row)) {
+          if (key.startsWith("_")) continue;
+          copy[key] = value ?? "";
+        }
+        if (exportWithImages && row._imagePath) {
+          copy["رابط الصورة"] = productImageUrls.get(row._imagePath) ?? row._imagePath;
+        }
+        return copy;
+      })
+    );
+    const worksheet = XLSX.utils.json_to_sheet(sheetRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Products");
+    XLSX.writeFile(workbook, `category-${categoryName}.xlsx`);
+  }
 
   const activeCount = rows.filter((row) => row.is_active).length;
 
@@ -312,6 +373,74 @@ export default function CategoriesPage() {
           />
         </label>
       </div>
+
+      {listScope.type === "under" ? (
+        <div className="card space-y-3 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-bold">{tr("منتجات مشحونة", "Shipped products")}</h2>
+              <p className="text-sm text-[var(--muted)]">
+                {tr(
+                  `منتجات الشحنات ضمن «${browseParent?.name_ar ?? ""}» وفروعها`,
+                  `Shipment products under “${browseParent?.name_ar ?? ""}” and subcategories`
+                )}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  checked={exportWithImages}
+                  onChange={(event) => setExportWithImages(event.target.checked)}
+                  type="checkbox"
+                />
+                {tr("بالصور", "With images")}
+              </label>
+              <button className="btn btn-secondary" onClick={() => void exportCategoryExcel()} type="button">
+                <FileSpreadsheet className="h-4 w-4" />
+                Excel
+              </button>
+            </div>
+          </div>
+          <div className="overflow-auto">
+            <table className="min-w-full text-sm">
+              <thead className="table-head">
+                <tr>
+                  <th className="p-3 text-right">SKU</th>
+                  <th className="p-3 text-right">{tr("المنتج", "Product")}</th>
+                  <th className="p-3 text-right">{tr("التصنيف", "Category")}</th>
+                  <th className="p-3 text-right">{tr("تفاصيل الشحن", "Shipment details")}</th>
+                  <th className="p-3 text-right">{tr("إجمالي الكرتين", "Total cartons")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shippedLoading ? (
+                  <tr>
+                    <td className="p-4 text-[var(--muted)]" colSpan={5}>
+                      {tr("جاري التحميل...", "Loading...")}
+                    </td>
+                  </tr>
+                ) : shippedProducts.length ? (
+                  shippedProducts.map((row, index) => (
+                    <tr className="border-t border-[var(--border)]" key={index}>
+                      <td className="p-3 font-semibold">{row.SKU}</td>
+                      <td className="p-3">{row.المنتج}</td>
+                      <td className="p-3">{row.التصنيف}</td>
+                      <td className="p-3">{row["تفاصيل الشحن"]}</td>
+                      <td className="p-3">{row["إجمالي الكرتين"]}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td className="p-4 text-[var(--muted)]" colSpan={5}>
+                      {tr("لا توجد منتجات مشحونة في هذه الفئة.", "No shipped products in this category.")}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
 
       <div className="card overflow-auto">
         <table className="min-w-full text-sm">

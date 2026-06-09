@@ -5,118 +5,26 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowRight, Download, FileSpreadsheet, Printer, RefreshCw } from "lucide-react";
 import * as XLSX from "xlsx";
+import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage, PageHeader } from "@/components/ui";
-import { SHIPMENT_STATUS_LABELS, type ShipmentStatus } from "@/lib/constants";
+import { buildCategorySelectOptions } from "@/lib/category-options";
 import { getReport } from "@/lib/report-definitions";
+import { signedProductImageUrls } from "@/lib/product-images";
+import { buildReport } from "@/lib/reports/build-reports";
+import type { ProductKindFilter } from "@/lib/reports/constants";
+import { supportsIncomingFilters, supportsProductImages, hasShipmentLinks } from "@/lib/reports/constants";
+import { todayIso, type ReportRow } from "@/lib/reports/shipment-helpers";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { fetchAllFromTable } from "@/lib/supabase/fetch-all";
-
-type ReportRow = Record<string, string | number | null> & { _downloadPath?: string };
+import type { ProductCategory } from "@/lib/types";
 
 const bucket = "container-files";
 
-type ShipmentReportRow = {
-  shipment_number: string;
-  acid: string;
-  company: string;
-  supplier: string;
-  shipping_port: string;
-  arrival_port: string;
-  shipped_at: string;
-  eta: string;
-  status: ShipmentStatus;
-  closed_at: string | null;
-};
-
-type ShipmentProductJoin = {
-  quantity: number;
-  cartons_count: number | null;
-  is_new_incoming_product: boolean;
-  is_disassembled: boolean;
-  products: { sku: string; name_ar: string } | null;
-  shipments: ShipmentReportRow | null;
-};
-
-type ContainerJoin = {
-  container_number: string;
-  weight_kg: number | null;
-  cartons_count: number | null;
-  shipments: ShipmentReportRow | null;
-};
-
-type ContainerFileJoin = {
-  file_name: string;
-  storage_path: string;
-  size_bytes: number | null;
-  uploaded_at: string;
-  shipment_containers: {
-    container_number: string;
-    shipments: ShipmentReportRow | null;
-  } | null;
-};
-
-type CostJoin = {
-  customs_cost: number;
-  shipping_cost: number;
-  clearance_cost: number;
-  local_transport_cost: number;
-  other_expenses: number;
-  total_cost: number;
-  closing_notes: string | null;
-  shipments: ShipmentReportRow | null;
-};
-
-const shipmentSelect = "shipment_number,acid,shipping_port,arrival_port,shipped_at,eta,status,closed_at,companies(name_ar),suppliers(name_ar)";
-
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function inRange(date: string | null | undefined, from: string, to: string) {
-  if (!from && !to) return true;
-  if (!date) return false;
-  if (from && date < from) return false;
-  if (to && date > to) return false;
-  return true;
-}
-
-function filterShipmentByDate(row: ShipmentReportRow, from: string, to: string, mode: "eta" | "closed" | "none") {
-  if (mode === "none") return true;
-  if (mode === "closed") return inRange(row.closed_at, from, to);
-  return inRange(row.eta, from, to);
-}
-
-function normalizeShipment(row: Record<string, unknown>): ShipmentReportRow {
-  const company = row.companies as { name_ar?: string } | null;
-  const supplier = row.suppliers as { name_ar?: string } | null;
-  return {
-    shipment_number: String(row.shipment_number ?? ""),
-    acid: String(row.acid ?? ""),
-    company: company?.name_ar ?? "-",
-    supplier: supplier?.name_ar ?? "-",
-    shipping_port: String(row.shipping_port ?? ""),
-    arrival_port: String(row.arrival_port ?? ""),
-    shipped_at: String(row.shipped_at ?? ""),
-    eta: String(row.eta ?? ""),
-    status: row.status as ShipmentStatus,
-    closed_at: row.closed_at ? String(row.closed_at).slice(0, 10) : null,
-  };
-}
-
-function shipmentToReportRow(row: ShipmentReportRow): ReportRow {
-  return {
-    "رقم الشحنة": row.shipment_number,
-    ACID: row.acid,
-    الشركة: row.company,
-    المورد: row.supplier,
-    "ميناء الشحن": row.shipping_port,
-    "ميناء الوصول": row.arrival_port,
-    "تاريخ الشحن": row.shipped_at,
-    ETA: row.eta,
-    الحالة: SHIPMENT_STATUS_LABELS[row.status],
-    "تاريخ الإغلاق": row.closed_at,
-  };
-}
+const KIND_TABS: Array<{ id: ProductKindFilter; label: string }> = [
+  { id: "all", label: "الكل" },
+  { id: "disassembled", label: "مفكك" },
+  { id: "complete", label: "كامل" },
+];
 
 export default function ReportDetailPage() {
   const params = useParams<{ slug: string }>();
@@ -125,8 +33,28 @@ export default function ReportDetailPage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [query, setQuery] = useState("");
+  const [productKind, setProductKind] = useState<ProductKindFilter>("all");
+  const [categoryId, setCategoryId] = useState("");
+  const [withImages, setWithImages] = useState(false);
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
+  const [imageUrls, setImageUrls] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const showImages = withImages && supportsProductImages(params.slug);
+  const showIncomingFilters = supportsIncomingFilters(params.slug);
+  const showShipmentLinks = hasShipmentLinks(params.slug);
+
+  const extraColumns = (showImages ? 1 : 0) + (params.slug === "container-files" ? 1 : 0) + (showShipmentLinks ? 1 : 0);
+
+  useEffect(() => {
+    if (!showIncomingFilters) return;
+    void fetchAllFromTable<ProductCategory>(createClient(), "product_categories", "id,name_ar,code,parent_id,is_active", {
+      column: "name_ar",
+    }).then((result) => {
+      if (!result.error) setCategories(result.data);
+    });
+  }, [showIncomingFilters]);
 
   async function load() {
     if (!report) return;
@@ -138,15 +66,28 @@ export default function ReportDetailPage() {
     }
 
     setLoading(true);
-    const result = await buildReport(params.slug, from, to);
+    const result = await buildReport(params.slug, from, to, {
+      categoryId: categoryId || undefined,
+      productKind: showIncomingFilters ? productKind : undefined,
+    });
     setLoading(false);
 
     if ("error" in result) {
       setError(result.error);
+      setRows([]);
+      setImageUrls(new Map());
       return;
     }
 
     setRows(result.rows);
+
+    if (withImages && supportsProductImages(params.slug)) {
+      const paths = result.rows.map((row) => row._imagePath).filter((path): path is string => Boolean(path));
+      const urls = await signedProductImageUrls(paths);
+      setImageUrls(urls);
+    } else {
+      setImageUrls(new Map());
+    }
   }
 
   useEffect(() => {
@@ -154,17 +95,39 @@ export default function ReportDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.slug]);
 
+  useEffect(() => {
+    if (!showIncomingFilters) return;
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productKind, categoryId]);
+
+  useEffect(() => {
+    if (!showImages) {
+      setImageUrls(new Map());
+      return;
+    }
+    void (async () => {
+      const paths = rows.map((row) => row._imagePath).filter((path): path is string => Boolean(path));
+      setImageUrls(await signedProductImageUrls(paths));
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [withImages, rows, params.slug]);
+
   const filteredRows = useMemo(() => {
     const term = query.trim().toLowerCase();
     if (!term) return rows;
     return rows.filter((row) =>
-      Object.values(row).some((value) => String(value ?? "").toLowerCase().includes(term))
+      Object.entries(row)
+        .filter(([key]) => !key.startsWith("_"))
+        .some(([, value]) => String(value ?? "").toLowerCase().includes(term))
     );
   }, [query, rows]);
 
   const columns = filteredRows[0]
     ? Object.keys(filteredRows[0]).filter((key) => !key.startsWith("_"))
     : [];
+
+  const categoryOptions = useMemo(() => buildCategorySelectOptions(categories), [categories]);
 
   async function downloadFile(path: string) {
     const result = await createClient().storage.from(bucket).createSignedUrl(path, 120);
@@ -175,12 +138,20 @@ export default function ReportDetailPage() {
     window.open(result.data.signedUrl, "_blank", "noopener,noreferrer");
   }
 
-  function exportExcel() {
-    const exportRows = filteredRows.map((row) => {
-      const copy = { ...row };
-      delete copy._downloadPath;
-      return copy;
-    });
+  async function exportExcel() {
+    const exportRows = await Promise.all(
+      filteredRows.map(async (row) => {
+        const copy: Record<string, string | number | null> = {};
+        for (const [key, value] of Object.entries(row)) {
+          if (key.startsWith("_")) continue;
+          copy[key] = value ?? "";
+        }
+        if (showImages && row._imagePath) {
+          copy["رابط الصورة"] = imageUrls.get(row._imagePath) ?? row._imagePath;
+        }
+        return copy;
+      })
+    );
     const worksheet = XLSX.utils.json_to_sheet(exportRows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Report");
@@ -196,8 +167,9 @@ export default function ReportDetailPage() {
       <div className="report-print-title hidden">
         {report.title} — {report.description}
       </div>
-      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--card)] p-3 print:hidden">
-        <Link className="btn btn-secondary" href="/reports">
+
+      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--card)] p-3 shadow-sm print:hidden">
+        <Link className="btn btn-secondary shrink-0" href="/reports">
           <ArrowRight className="h-4 w-4" />
           رجوع للتقارير
         </Link>
@@ -205,7 +177,7 @@ export default function ReportDetailPage() {
           <RefreshCw className="h-4 w-4" />
           تحديث
         </button>
-        <button className="btn btn-secondary" onClick={exportExcel} type="button">
+        <button className="btn btn-secondary" onClick={() => void exportExcel()} type="button">
           <FileSpreadsheet className="h-4 w-4" />
           Excel
         </button>
@@ -213,6 +185,12 @@ export default function ReportDetailPage() {
           <Printer className="h-4 w-4" />
           طباعة PDF
         </button>
+        {supportsProductImages(params.slug) ? (
+          <label className="ms-auto flex items-center gap-2 rounded-md border border-[var(--border)] px-3 py-2 text-sm">
+            <input checked={withImages} onChange={(event) => setWithImages(event.target.checked)} type="checkbox" />
+            بالصور
+          </label>
+        ) : null}
       </div>
 
       <PageHeader title={report.title} description={report.description} />
@@ -225,7 +203,37 @@ export default function ReportDetailPage() {
             {report.dateHint ?? (report.dateFilter === "closed" ? "فلترة حسب تاريخ الإغلاق" : "فلترة حسب ETA")}
           </p>
         ) : null}
-        <div className={`grid gap-3 ${report.dateFilter !== "none" ? "sm:grid-cols-2 lg:grid-cols-[160px_160px_minmax(0,1fr)_auto]" : "sm:grid-cols-[minmax(0,1fr)_auto]"}`}>
+
+        {showIncomingFilters ? (
+          <div className="flex flex-wrap gap-2">
+            {KIND_TABS.map((tab) => (
+              <button
+                className={`rounded-full px-3 py-1 text-sm font-semibold ${productKind === tab.id ? "bg-[#0f766e] text-white" : "bg-slate-100 text-slate-700"}`}
+                key={tab.id}
+                onClick={() => setProductKind(tab.id)}
+                type="button"
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <div
+          className={`grid gap-3 ${
+            report.dateFilter !== "none" || showIncomingFilters
+              ? "sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_160px_160px_auto]"
+              : "sm:grid-cols-[minmax(0,1fr)_auto]"
+          }`}
+        >
+          {showIncomingFilters ? (
+            <SearchableSelect
+              options={[{ value: "", label: "كل الفئات", keywords: "" }, ...categoryOptions]}
+              placeholder="فلتر حسب الفئة..."
+              value={categoryId}
+              onChange={setCategoryId}
+            />
+          ) : null}
           {report.dateFilter !== "none" ? (
             <>
               <input className="input" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
@@ -233,8 +241,10 @@ export default function ReportDetailPage() {
             </>
           ) : null}
           <input className="input" placeholder="بحث داخل التقرير" value={query} onChange={(event) => setQuery(event.target.value)} />
-          {report.dateFilter !== "none" ? (
-            <button className="btn" onClick={load} type="button">تطبيق</button>
+          {report.dateFilter !== "none" || showIncomingFilters ? (
+            <button className="btn" onClick={load} type="button">
+              تطبيق
+            </button>
           ) : null}
         </div>
       </div>
@@ -243,230 +253,82 @@ export default function ReportDetailPage() {
         <table className="min-w-full text-sm">
           <thead className="table-head">
             <tr>
+              {showImages ? <th className="p-3 text-right w-16">صورة</th> : null}
               {columns.map((column) => (
-                <th className="p-3 text-right" key={column}>{column}</th>
+                <th className="p-3 text-right" key={column}>
+                  {column}
+                </th>
               ))}
               {params.slug === "container-files" ? <th className="p-3 text-right">تحميل</th> : null}
+              {showShipmentLinks ? <th className="p-3 text-right print:hidden">فتح الشحنة</th> : null}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td className="p-4 text-[var(--muted)]" colSpan={Math.max(columns.length, 1) + (params.slug === "container-files" ? 1 : 0)}>جاري التحميل...</td></tr>
-            ) : filteredRows.length ? filteredRows.map((row, index) => (
-              <tr className="border-t border-[var(--border)]" key={index}>
-                {columns.map((column) => (
-                  <td className="p-3" key={column}>{row[column] ?? "-"}</td>
-                ))}
-                {params.slug === "container-files" && row._downloadPath ? (
-                  <td className="p-3">
-                    <button className="btn btn-secondary px-2 py-1 text-xs" onClick={() => downloadFile(String(row._downloadPath))} type="button">
-                      <Download className="h-4 w-4" />
-                      Excel
-                    </button>
-                  </td>
-                ) : params.slug === "container-files" ? (
-                  <td className="p-3 text-[var(--muted)]">-</td>
-                ) : null}
+              <tr>
+                <td className="p-4 text-[var(--muted)]" colSpan={Math.max(columns.length, 1) + extraColumns}>
+                  جاري التحميل...
+                </td>
               </tr>
-            )) : (
-              <tr><td className="p-4 text-[var(--muted)]" colSpan={Math.max(columns.length, 1) + (params.slug === "container-files" ? 1 : 0)}>لا توجد بيانات.</td></tr>
+            ) : filteredRows.length ? (
+              filteredRows.map((row, index) => (
+                <tr className="border-t border-[var(--border)]" key={index}>
+                  {showImages ? (
+                    <td className="p-2">
+                      {row._imagePath && imageUrls.get(row._imagePath) ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          alt=""
+                          className="h-12 w-12 rounded object-cover print:h-10 print:w-10"
+                          src={imageUrls.get(row._imagePath)}
+                        />
+                      ) : (
+                        <span className="text-[var(--muted)]">-</span>
+                      )}
+                    </td>
+                  ) : null}
+                  {columns.map((column) => (
+                    <td className="p-3" key={column}>
+                      {row[column] ?? "-"}
+                    </td>
+                  ))}
+                  {params.slug === "container-files" && row._downloadPath ? (
+                    <td className="p-3">
+                      <button
+                        className="btn btn-secondary px-2 py-1 text-xs"
+                        onClick={() => downloadFile(String(row._downloadPath))}
+                        type="button"
+                      >
+                        <Download className="h-4 w-4" />
+                        Excel
+                      </button>
+                    </td>
+                  ) : params.slug === "container-files" ? (
+                    <td className="p-3 text-[var(--muted)]">-</td>
+                  ) : null}
+                  {showShipmentLinks ? (
+                    <td className="p-3 print:hidden">
+                      {row._shipmentId ? (
+                        <Link className="btn btn-secondary px-2 py-1 text-xs whitespace-nowrap" href={`/shipments/${row._shipmentId}`}>
+                          عرض الشحنة
+                        </Link>
+                      ) : (
+                        <span className="text-[var(--muted)]">-</span>
+                      )}
+                    </td>
+                  ) : null}
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td className="p-4 text-[var(--muted)]" colSpan={Math.max(columns.length, 1) + extraColumns}>
+                  لا توجد بيانات.
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
       </div>
     </div>
   );
-}
-
-async function buildReport(slug: string, from: string, to: string): Promise<{ rows: ReportRow[] } | { error: string }> {
-  const supabase = createClient();
-
-  if (slug === "all-products") return allProductsReport();
-
-  if (["containers", "container-files", "incoming-products", "new-products", "disassembled-products", "duplicate-products", "date-range-products", "product-history", "costs"].includes(slug)) {
-    if (slug === "containers") return containersReport(from, to);
-    if (slug === "container-files") return containerFilesReport();
-    if (slug === "costs") return costsReport(from, to);
-    return productsReport(slug, from, to);
-  }
-
-  const result = await supabase.from("shipments").select(shipmentSelect).order("created_at", { ascending: false });
-  if (result.error) return { error: result.error.message };
-
-  const shipments = ((result.data ?? []) as Array<Record<string, unknown>>).map(normalizeShipment);
-  const today = todayIso();
-  const next30 = new Date();
-  next30.setDate(next30.getDate() + 30);
-  const next30Iso = next30.toISOString().slice(0, 10);
-
-  let filtered = shipments.filter((row) => filterShipmentByDate(row, from, to, slug === "closed" ? "closed" : "eta"));
-  if (slug === "in-sea") filtered = filtered.filter((row) => row.status === "in_sea");
-  if (slug === "customs" || slug === "ready-to-close") filtered = filtered.filter((row) => row.status === "customs");
-  if (slug === "closed") filtered = filtered.filter((row) => row.status === "closed");
-  if (slug === "delayed") filtered = filtered.filter((row) => row.status !== "closed" && row.eta < today);
-  if (slug === "arriving-30") filtered = filtered.filter((row) => row.status !== "closed" && row.eta >= today && row.eta <= next30Iso);
-
-  if (slug === "suppliers") {
-    const grouped = new Map<string, number>();
-    shipments.forEach((row) => grouped.set(row.supplier, (grouped.get(row.supplier) ?? 0) + 1));
-    return { rows: Array.from(grouped.entries()).map(([supplier, count]) => ({ المورد: supplier, "عدد الشحنات": count })) };
-  }
-
-  if (slug === "companies") {
-    const grouped = new Map<string, number>();
-    shipments.forEach((row) => grouped.set(row.company, (grouped.get(row.company) ?? 0) + 1));
-    return { rows: Array.from(grouped.entries()).map(([company, count]) => ({ الشركة: company, "عدد الشحنات": count })) };
-  }
-
-  return { rows: filtered.map(shipmentToReportRow) };
-}
-
-async function allProductsReport(): Promise<{ rows: ReportRow[] } | { error: string }> {
-  const result = await fetchAllFromTable(
-    createClient(),
-    "products",
-    "sku,name_ar,barcode,category,is_active",
-    { column: "name_ar", ascending: true }
-  );
-
-  if (result.error) return { error: result.error };
-
-  return {
-    rows: (result.data as Array<{
-      sku: string;
-      name_ar: string;
-      barcode: string | null;
-      category: string | null;
-      is_active: boolean;
-    }>).map((row) => ({
-      الكود: row.sku,
-      "اسم الصنف": row.name_ar,
-      الباركود: row.barcode ?? "",
-      التصنيف: row.category ?? "",
-      الحالة: row.is_active ? "نشط" : "متوقف",
-    })),
-  };
-}
-
-async function productsReport(slug: string, from: string, to: string): Promise<{ rows: ReportRow[] } | { error: string }> {
-  const result = await createClient()
-    .from("shipment_products")
-    .select(`quantity,cartons_count,is_new_incoming_product,is_disassembled,products(sku,name_ar),shipments(${shipmentSelect})`);
-
-  if (result.error) return { error: result.error.message };
-
-  let rows = ((result.data ?? []) as unknown as ShipmentProductJoin[])
-    .filter((row) => row.shipments && filterShipmentByDate(row.shipments, from, to, "eta"));
-
-  if (slug === "new-products") rows = rows.filter((row) => row.is_new_incoming_product);
-  if (slug === "disassembled-products") rows = rows.filter((row) => row.is_disassembled);
-
-  if (slug === "duplicate-products") {
-    const openCounts = new Map<string, number>();
-    rows.forEach((row) => {
-      if (row.shipments?.status !== "closed" && row.products?.sku) {
-        openCounts.set(row.products.sku, (openCounts.get(row.products.sku) ?? 0) + 1);
-      }
-    });
-    rows = rows.filter((row) => row.products?.sku && (openCounts.get(row.products.sku) ?? 0) > 1);
-  }
-
-  if (slug === "product-history") {
-    const grouped = new Map<string, { name: string; quantity: number; shipments: number; lastSeen: string }>();
-    rows.forEach((row) => {
-      if (!row.products || !row.shipments) return;
-      const current = grouped.get(row.products.sku) ?? { name: row.products.name_ar, quantity: 0, shipments: 0, lastSeen: "" };
-      current.quantity += Number(row.quantity ?? 0);
-      current.shipments += 1;
-      current.lastSeen = current.lastSeen > row.shipments.eta ? current.lastSeen : row.shipments.eta;
-      grouped.set(row.products.sku, current);
-    });
-    return {
-      rows: Array.from(grouped.entries()).map(([sku, value]) => ({
-        SKU: sku,
-        المنتج: value.name,
-        "إجمالي الكمية": value.quantity,
-        "مرات الاستيراد": value.shipments,
-        "آخر ETA": value.lastSeen,
-      })),
-    };
-  }
-
-  return {
-    rows: rows.map((row) => ({
-      SKU: row.products?.sku ?? "-",
-      المنتج: row.products?.name_ar ?? "-",
-      الكمية: row.quantity,
-      الكرتين: row.cartons_count,
-      "منتج جديد": row.is_new_incoming_product ? "نعم" : "لا",
-      مفكك: row.is_disassembled ? "نعم" : "لا",
-      "رقم الشحنة": row.shipments?.shipment_number ?? "-",
-      ACID: row.shipments?.acid ?? "-",
-      المورد: row.shipments?.supplier ?? "-",
-      ETA: row.shipments?.eta ?? "-",
-      الحالة: row.shipments ? SHIPMENT_STATUS_LABELS[row.shipments.status] : "-",
-    })),
-  };
-}
-
-async function containersReport(from: string, to: string): Promise<{ rows: ReportRow[] } | { error: string }> {
-  const result = await createClient()
-    .from("shipment_containers")
-    .select(`container_number,weight_kg,cartons_count,shipments(${shipmentSelect})`);
-  if (result.error) return { error: result.error.message };
-  const rows = ((result.data ?? []) as unknown as ContainerJoin[]).filter((row) => row.shipments && filterShipmentByDate(row.shipments, from, to, "eta"));
-  return {
-    rows: rows.map((row) => ({
-      "رقم الحاوية": row.container_number,
-      الوزن: row.weight_kg,
-      الكرتين: row.cartons_count,
-      "رقم الشحنة": row.shipments?.shipment_number ?? "-",
-      الشركة: row.shipments?.company ?? "-",
-      المورد: row.shipments?.supplier ?? "-",
-      ETA: row.shipments?.eta ?? "-",
-      الحالة: row.shipments ? SHIPMENT_STATUS_LABELS[row.shipments.status] : "-",
-    })),
-  };
-}
-
-async function containerFilesReport(): Promise<{ rows: ReportRow[] } | { error: string }> {
-  const result = await createClient()
-    .from("container_files")
-    .select(`file_name,storage_path,size_bytes,uploaded_at,shipment_containers(container_number,shipments(${shipmentSelect}))`)
-    .order("uploaded_at", { ascending: false });
-  if (result.error) return { error: result.error.message };
-  const rows = ((result.data ?? []) as unknown as ContainerFileJoin[]);
-  return {
-    rows: rows.map((row) => ({
-      "رقم الشحنة": row.shipment_containers?.shipments?.shipment_number ?? "-",
-      ACID: row.shipment_containers?.shipments?.acid ?? "-",
-      الحاوية: row.shipment_containers?.container_number ?? "-",
-      الملف: row.file_name,
-      "تاريخ الرفع": row.uploaded_at.slice(0, 10),
-      ETA: row.shipment_containers?.shipments?.eta ?? "-",
-      _downloadPath: row.storage_path,
-    })),
-  };
-}
-
-async function costsReport(from: string, to: string): Promise<{ rows: ReportRow[] } | { error: string }> {
-  const result = await createClient()
-    .from("shipment_costs")
-    .select(`customs_cost,shipping_cost,clearance_cost,local_transport_cost,other_expenses,total_cost,closing_notes,shipments(${shipmentSelect})`);
-  if (result.error) return { error: result.error.message };
-  const rows = ((result.data ?? []) as unknown as CostJoin[]).filter((row) => row.shipments && filterShipmentByDate(row.shipments, from, to, "closed"));
-  return {
-    rows: rows.map((row) => ({
-      "رقم الشحنة": row.shipments?.shipment_number ?? "-",
-      الشركة: row.shipments?.company ?? "-",
-      المورد: row.shipments?.supplier ?? "-",
-      جمارك: row.customs_cost,
-      شحن: row.shipping_cost,
-      تخليص: row.clearance_cost,
-      "نقل داخلي": row.local_transport_cost,
-      أخرى: row.other_expenses,
-      الإجمالي: row.total_cost,
-      ملاحظات: row.closing_notes,
-    })),
-  };
 }

@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Edit2, Plus, Save, Search, Trash2 } from "lucide-react";
+import { Edit2, ImagePlus, Plus, Save, Search, Trash2 } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage, PageHeader } from "@/components/ui";
 import { useProfile } from "@/context/profile-context";
 import { useLanguage } from "@/context/language-context";
 import { buildCategorySelectOptions } from "@/lib/category-options";
+import { uploadProductImage, signedProductImageUrl } from "@/lib/product-images";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { fetchAllFromTable } from "@/lib/supabase/fetch-all";
 import type { Product, ProductCategory } from "@/lib/types";
@@ -19,6 +20,7 @@ type ProductForm = {
   barcode: string;
   unit: string;
   is_active: boolean;
+  image_url?: string | null;
 };
 
 const emptyForm: ProductForm = {
@@ -56,6 +58,8 @@ export default function ProductsPage() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState("");
   const [error, setError] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   async function loadCategories() {
     setError("");
@@ -100,7 +104,7 @@ export default function ProductsPage() {
 
     const result = await createClient()
       .from("products")
-      .select("id,sku,name_ar,name_en,category,category_id,barcode,unit,is_active")
+      .select("id,sku,name_ar,name_en,category,category_id,barcode,unit,is_active,image_url")
       .or(filter)
       .order("name_ar")
       .limit(SEARCH_LIMIT);
@@ -158,12 +162,11 @@ export default function ProductsPage() {
     };
 
     const result = form.id
-      ? await createClient().from("products").update(payload).eq("id", form.id)
-      : await createClient().from("products").insert(payload);
-
-    setSaving(false);
+      ? await createClient().from("products").update(payload).eq("id", form.id).select("id").single()
+      : await createClient().from("products").insert(payload).select("id").single();
 
     if (result.error) {
+      setSaving(false);
       if (result.error.message.includes("products_barcode_unique_idx")) {
         setError("الباركود مستخدم لمنتج آخر.");
       } else if (result.error.message.includes("products_sku_key")) {
@@ -174,8 +177,39 @@ export default function ProductsPage() {
       return;
     }
 
+    const productId = (result.data as { id: string }).id;
+    if (imageFile) {
+      const upload = await uploadProductImage(productId, imageFile);
+      if (upload.error) {
+        setSaving(false);
+        setError(`تم حفظ المنتج لكن فشل رفع الصورة: ${upload.error}`);
+        return;
+      }
+    }
+
+    setSaving(false);
     setForm(emptyForm);
+    setImageFile(null);
+    setImagePreview(null);
     if (hasQuery) await searchProducts(query.trim());
+  }
+
+  async function loadImagePreview(path: string | null | undefined) {
+    if (!path) {
+      setImagePreview(null);
+      return;
+    }
+    const url = await signedProductImageUrl(path);
+    setImagePreview(url);
+  }
+
+  function onImagePick(file: File | null) {
+    setImageFile(file);
+    if (!file) {
+      setImagePreview(form.image_url ? imagePreview : null);
+      return;
+    }
+    setImagePreview(URL.createObjectURL(file));
   }
 
   async function removeProduct(row: Product) {
@@ -238,7 +272,23 @@ export default function ProductsPage() {
             value="piece"
             title={tr("الوحدة الافتراضية", "Default unit")}
           />
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-2 md:col-span-2 xl:col-span-1">
+            <label className="btn btn-secondary cursor-pointer justify-center">
+              <ImagePlus className="h-4 w-4" />
+              {tr("صورة (اختياري)", "Image (optional)")}
+              <input
+                accept="image/*"
+                className="hidden"
+                onChange={(event) => onImagePick(event.target.files?.[0] ?? null)}
+                type="file"
+              />
+            </label>
+            {imagePreview ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img alt="" className="h-16 w-16 rounded object-cover" src={imagePreview} />
+            ) : null}
+          </div>
+          <div className="flex items-center gap-2 xl:col-span-2">
             <label className="flex items-center gap-2 text-sm text-[var(--muted)]">
               <input
                 checked={form.is_active}
@@ -317,7 +367,7 @@ export default function ProductsPage() {
                       {canWrite ? (
                         <button
                           className="btn btn-secondary px-2 py-1 text-xs"
-                          onClick={() =>
+                          onClick={() => {
                             setForm({
                               id: row.id,
                               sku: row.sku,
@@ -326,8 +376,11 @@ export default function ProductsPage() {
                               barcode: row.barcode ?? "",
                               unit: row.unit,
                               is_active: row.is_active,
-                            })
-                          }
+                              image_url: row.image_url,
+                            });
+                            setImageFile(null);
+                            void loadImagePreview(row.image_url);
+                          }}
                           type="button"
                         >
                           <Edit2 className="h-4 w-4" />

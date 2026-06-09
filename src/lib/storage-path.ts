@@ -28,3 +28,9 @@ export function shipmentInvPath(shipmentId: string, fileName: string) {
 export function shipmentContainerFilePath(shipmentId: string, containerId: string, fileName: string) {
   return `${shipmentId}/containers/${containerId}/${safeStorageFileName(fileName)}`;
 }
+
+export function productImagePath(productId: string, fileName: string) {
+  return `products/${productId}/${safeStorageFileName(fileName)}`;
+}
+
+export const PRODUCT_IMAGES_BUCKET = "product-images";

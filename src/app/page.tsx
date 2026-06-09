@@ -16,6 +16,7 @@ import {
 import { ErrorMessage, PageHeader } from "@/components/ui";
 import { useLanguage } from "@/context/language-context";
 import { SHIPMENT_STATUS_LABELS, SHIPMENT_STATUS_LABELS_EN } from "@/lib/constants";
+import { formatUsd } from "@/lib/format";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
 import type { Shipment } from "@/lib/types";
@@ -300,33 +301,39 @@ export default function DashboardPage() {
               <table className="min-w-full text-sm">
                 <thead className="table-head">
                   <tr>
-                    <th className="p-3 text-right">{t("shipment.number")}</th>
-                    <th className="p-3 text-right">{t("shipment.company")}</th>
-                    <th className="p-3 text-right">{t("shipment.supplier")}</th>
+                    <th className="p-3 text-right">{lang === "ar" ? "نوع البضاعة" : "Cargo type"}</th>
+                    <th className="p-3 text-right">{lang === "ar" ? "عدد الكراتين" : "Cartons"}</th>
+                    <th className="p-3 text-right">{lang === "ar" ? "قيمة الشحنة ($)" : "Value (USD)"}</th>
+                    <th className="p-3 text-right">{lang === "ar" ? "تاريخ الشحن" : "Shipped"}</th>
+                    <th className="p-3 text-right">{lang === "ar" ? "تاريخ الوصول" : "Arrival"}</th>
+                    <th className="p-3 text-right">ACID</th>
                     <th className="p-3 text-right">{t("shipment.status")}</th>
-                    <th className="p-3 text-right">{t("shipment.eta")}</th>
+                    <th className="p-3 text-right">{t("shipment.company")}</th>
                     <th className="p-3 text-right">{""}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td className="p-4 text-[var(--muted)]" colSpan={6}>
+                      <td className="p-4 text-[var(--muted)]" colSpan={9}>
                         {lang === "ar" ? "جاري التحميل..." : "Loading..."}
                       </td>
                     </tr>
                   ) : recentShipments.length ? (
                     recentShipments.map((shipment) => (
                       <tr className="row-hover border-t border-[var(--border)]" key={shipment.id}>
+                        <td className="p-3">{shipment.shipment_type || "-"}</td>
+                        <td className="p-3">{shipment.total_cartons ?? "-"}</td>
+                        <td className="p-3 font-semibold">{formatUsd(shipment.value_usd)}</td>
+                        <td className="p-3">{formatDate(shipment.shipped_at, lang)}</td>
+                        <td className="p-3">{formatDate(shipment.eta, lang)}</td>
                         <td className="p-3 font-semibold">
-                          <Link href={`/shipments/${shipment.id}`}>{shipment.shipment_number}</Link>
+                          <Link href={`/shipments/${shipment.id}`}>{shipment.acid}</Link>
                         </td>
-                        <td className="p-3">{shipment.companies?.name_ar ?? "-"}</td>
-                        <td className="p-3">{shipment.suppliers?.name_ar ?? "-"}</td>
                         <td className="p-3">
                           <StatusLabel status={shipment.status} lang={lang} />
                         </td>
-                        <td className="p-3">{formatDate(shipment.eta, lang)}</td>
+                        <td className="p-3">{shipment.companies?.name_ar ?? "-"}</td>
                         <td className="p-3">
                           <Link className="btn btn-secondary text-xs" href={`/shipments/${shipment.id}`}>
                             {t("actions.view")}
@@ -336,7 +343,7 @@ export default function DashboardPage() {
                     ))
                   ) : (
                     <tr>
-                      <td className="p-4 text-[var(--muted)]" colSpan={6}>
+                      <td className="p-4 text-[var(--muted)]" colSpan={9}>
                         {lang === "ar" ? "لا توجد شحنات بعد." : "No shipments yet."}
                       </td>
                     </tr>

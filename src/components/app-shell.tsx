@@ -121,7 +121,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <div className="lg:mr-72">
+      <div className="lg:mr-72 print:mr-0">
         <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-[var(--border)] bg-white/95 px-4 backdrop-blur lg:px-8 print:hidden dark:bg-slate-900/95">
           <div className="flex min-w-0 items-center gap-2">
             <button

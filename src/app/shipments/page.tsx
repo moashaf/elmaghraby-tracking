@@ -15,6 +15,7 @@ import {
 } from "@/lib/constants";
 import { useProfile } from "@/context/profile-context";
 import { useLanguage } from "@/context/language-context";
+import { formatUsd } from "@/lib/format";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
 import type { Shipment } from "@/lib/types";
@@ -185,35 +186,37 @@ export default function ShipmentsPage() {
           <table className="min-w-full text-sm">
             <thead className="table-head">
               <tr>
-                <th className="p-3 text-right">رقم الشحنة</th>
+                <th className="p-3 text-right">نوع البضاعة</th>
+                <th className="p-3 text-right">عدد الكراتين</th>
+                <th className="p-3 text-right">قيمة الشحنة ($)</th>
+                <th className="p-3 text-right">تاريخ الشحن</th>
+                <th className="p-3 text-right">تاريخ الوصول</th>
                 <th className="p-3 text-right">ACID</th>
-                <th className="p-3 text-right">الشركة</th>
-                <th className="p-3 text-right">المورد</th>
-                <th className="p-3 text-right">ميناء الشحن</th>
-                <th className="p-3 text-right">ETA</th>
                 <th className="p-3 text-right">الحالة</th>
+                <th className="p-3 text-right">الشركة</th>
                 <th className="p-3 text-right">إجراءات</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="p-4 text-[var(--muted)]" colSpan={8}>جاري التحميل...</td>
+                  <td className="p-4 text-[var(--muted)]" colSpan={9}>جاري التحميل...</td>
                 </tr>
               ) : shipments.length ? (
                 shipments.map((shipment) => {
                   const action = getNextStatusAction(shipment.status);
                   return (
                     <tr className="row-hover border-t border-[var(--border)]" key={shipment.id}>
-                      <td className="p-3 font-semibold">{shipment.shipment_number}</td>
-                      <td className="p-3">{shipment.acid}</td>
-                      <td className="p-3">{shipment.companies?.name_ar ?? "-"}</td>
-                      <td className="p-3">{shipment.suppliers?.name_ar ?? "-"}</td>
-                      <td className="p-3">{shipment.shipping_port}</td>
-                      <td className="p-3">{shipment.eta}</td>
+                      <td className="p-3">{shipment.shipment_type || "-"}</td>
+                      <td className="p-3">{shipment.total_cartons ?? "-"}</td>
+                      <td className="p-3 font-semibold">{formatUsd(shipment.value_usd)}</td>
+                      <td className="p-3">{shipment.shipped_at || "-"}</td>
+                      <td className="p-3">{shipment.eta || "-"}</td>
+                      <td className="p-3 font-semibold">{shipment.acid}</td>
                       <td className="p-3">
                         <span className={`status-badge status-${shipment.status}`}>{statusLabels[shipment.status]}</span>
                       </td>
+                      <td className="p-3">{shipment.companies?.name_ar ?? "-"}</td>
                       <td className="p-3">
                         <div className="flex flex-wrap gap-2">
                           <Link className="btn btn-secondary px-2 py-1 text-xs" href={`/shipments/${shipment.id}/report`} title="تقرير للطباعة">
@@ -247,7 +250,7 @@ export default function ShipmentsPage() {
                 })
               ) : (
                 <tr>
-                  <td className="p-4 text-[var(--muted)]" colSpan={8}>لا توجد شحنات مطابقة.</td>
+                  <td className="p-4 text-[var(--muted)]" colSpan={9}>لا توجد شحنات مطابقة.</td>
                 </tr>
               )}
             </tbody>
