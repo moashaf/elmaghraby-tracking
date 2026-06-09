@@ -18,31 +18,44 @@ export type ProductLine = {
   status: string;
 };
 
-export function arrivalColumnKey(index: number) {
-  return `وصول ${index + 1}`;
+type GroupedSku = {
+  sku: string;
+  name: string;
+  category_name: string | null;
+  image_path: string | null;
+  byEta: Map<string, string[]>;
+  totalCartons: number;
+  totalPieces: number;
+};
+
+/** ETA column header: DD-MM-YYYY */
+export function formatEtaHeader(eta: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(eta);
+  if (match) return `${match[3]}-${match[2]}-${match[1]}`;
+  return eta;
 }
 
-export function formatArrivalCell(line: ProductLine) {
+export function formatQuantityCell(line: ProductLine) {
   const cartons = line.cartons_count;
   const pieces = Number(line.quantity ?? 0);
   const qtyPart =
     cartons != null && cartons > 0 ? `${cartons} كرتونة (${pieces} قطعة)` : `${pieces} قطعة`;
   const kind = line.is_disassembled ? "مفكك" : "كامل";
-  return `${qtyPart} — ${line.eta} — ${kind}`;
+  return `${qtyPart} — ${kind}`;
 }
 
-function rowsToReportRows(
-  grouped: Array<{
-    sku: string;
-    name: string;
-    category_name: string | null;
-    image_path: string | null;
-    details: string[];
-    totalCartons: number;
-    totalPieces: number;
-  }>
-): ReportRow[] {
-  const maxArrivals = Math.max(1, ...grouped.map((row) => row.details.length));
+function collectDateColumns(grouped: GroupedSku[]) {
+  const dates = new Set<string>();
+  for (const row of grouped) {
+    for (const eta of row.byEta.keys()) {
+      if (eta && eta !== "-") dates.add(eta);
+    }
+  }
+  return Array.from(dates).sort();
+}
+
+function rowsToReportRows(grouped: GroupedSku[]): ReportRow[] {
+  const dateColumns = collectDateColumns(grouped);
 
   return grouped
     .sort((a, b) => a.name.localeCompare(b.name, "ar"))
@@ -51,13 +64,16 @@ function rowsToReportRows(
         SKU: row.sku,
         المنتج: row.name,
         التصنيف: row.category_name ?? "-",
-        "إجمالي الكرتين": row.totalCartons,
-        "إجمالي القطع": row.totalPieces,
       };
 
-      for (let index = 0; index < maxArrivals; index += 1) {
-        reportRow[arrivalColumnKey(index)] = row.details[index] ?? "-";
+      for (const eta of dateColumns) {
+        const header = formatEtaHeader(eta);
+        const cells = row.byEta.get(eta);
+        reportRow[header] = cells?.length ? cells.join(" | ") : "-";
       }
+
+      reportRow["إجمالي الكرتين"] = row.totalCartons;
+      reportRow["إجمالي القطع"] = row.totalPieces;
 
       if (row.image_path) reportRow._imagePath = row.image_path;
 
@@ -84,18 +100,7 @@ export function groupProductLines(
     filtered = filtered.filter((line) => !line.is_disassembled);
   }
 
-  const grouped = new Map<
-    string,
-    {
-      sku: string;
-      name: string;
-      category_name: string | null;
-      image_path: string | null;
-      details: string[];
-      totalCartons: number;
-      totalPieces: number;
-    }
-  >();
+  const grouped = new Map<string, GroupedSku>();
 
   for (const line of filtered) {
     if (!line.sku) continue;
@@ -104,11 +109,17 @@ export function groupProductLines(
       name: line.name,
       category_name: line.category_name,
       image_path: line.image_path,
-      details: [],
+      byEta: new Map<string, string[]>(),
       totalCartons: 0,
       totalPieces: 0,
     };
-    current.details.push(formatArrivalCell(line));
+
+    const eta = line.eta?.trim() || "-";
+    const cell = formatQuantityCell(line);
+    const cells = current.byEta.get(eta) ?? [];
+    cells.push(cell);
+    current.byEta.set(eta, cells);
+
     current.totalCartons += Number(line.cartons_count ?? 0);
     current.totalPieces += Number(line.quantity ?? 0);
     if (!current.image_path && line.image_path) current.image_path = line.image_path;
