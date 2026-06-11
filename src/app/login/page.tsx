@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogIn, ShipWheel } from "lucide-react";
+import { ShipIllustration } from "@/components/decor/ship-illustration";
 import { ErrorMessage } from "@/components/ui";
 import { useLanguage } from "@/context/language-context";
 import { APP_CREDIT_NAME } from "@/lib/constants";
@@ -82,38 +83,68 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-screen place-items-center p-4">
-      <div className="w-full max-w-md space-y-3">
-      <form className="card w-full space-y-5 p-6" onSubmit={submit}>
-        <div className="flex items-center gap-3">
-          <div className="grid h-12 w-12 place-items-center rounded-md bg-[#0f766e] text-white">
-            <ShipWheel className="h-6 w-6" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold">{tr("تسجيل الدخول", "Sign in")}</h1>
-            <p className="text-sm text-[var(--muted)]">Elmaghraby Tracing</p>
-          </div>
+    <div className="login-page grid min-h-screen lg:grid-cols-2">
+      <div className="login-hero-panel relative flex flex-col justify-end lg:justify-between">
+        <ShipIllustration className="login-hero-art" />
+        <div className="login-hero-copy">
+          <p className="text-sm font-semibold uppercase tracking-widest text-white/80">Elmaghraby Tracing</p>
+          <h2 className="mt-2 text-3xl font-bold leading-tight lg:text-4xl">
+            {tr("نظام تتبع الشحنات والاستيراد", "Shipment & import tracking")}
+          </h2>
+          <p className="mt-3 max-w-md text-sm text-white/85 lg:text-base">
+            {tr(
+              "تابع شحناتك من البحر حتى الجمارك — في مكان واحد.",
+              "Track shipments from sea to customs — in one place."
+            )}
+          </p>
         </div>
-        <ErrorMessage message={error} />
-        <label className="label">
-          {tr("البريد الإلكتروني", "Email")}
-          <input className="input" required type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
-        </label>
-        <label className="label">
-          {tr("كلمة المرور", "Password")}
-          <input className="input" required type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
-        </label>
-        <button className="btn w-full" disabled={loading || checking || Boolean(error)} type="submit">
-          <LogIn className="h-4 w-4" />
-          {checking
-            ? tr("جاري التحقق...", "Checking...")
-            : loading
-              ? tr("جاري الدخول...", "Signing in...")
-              : tr("دخول", "Sign in")}
-        </button>
-      </form>
-      <p className="text-center text-xs text-[var(--muted)]">Powered by {APP_CREDIT_NAME}</p>
       </div>
-    </main>
+
+      <div className="login-form-panel">
+        <div className="w-full max-w-md space-y-3">
+          <form className="card login-form-card w-full space-y-5 p-6" onSubmit={submit}>
+            <div className="flex items-center gap-3">
+              <div className="grid h-12 w-12 place-items-center rounded-md bg-[#0f766e] text-white">
+                <ShipWheel className="h-6 w-6" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold">{tr("تسجيل الدخول", "Sign in")}</h1>
+                <p className="text-sm text-[var(--muted)]">Elmaghraby Tracing</p>
+              </div>
+            </div>
+            <ErrorMessage message={error} />
+            <label className="label">
+              {tr("البريد الإلكتروني", "Email")}
+              <input
+                className="input"
+                required
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+            </label>
+            <label className="label">
+              {tr("كلمة المرور", "Password")}
+              <input
+                className="input"
+                required
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </label>
+            <button className="btn w-full" disabled={loading || checking || Boolean(error)} type="submit">
+              <LogIn className="h-4 w-4" />
+              {checking
+                ? tr("جاري التحقق...", "Checking...")
+                : loading
+                  ? tr("جاري الدخول...", "Signing in...")
+                  : tr("دخول", "Sign in")}
+            </button>
+          </form>
+          <p className="text-center text-xs text-[var(--muted)]">Powered by {APP_CREDIT_NAME}</p>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -27,6 +27,7 @@ import { useProfile } from "@/context/profile-context";
 import { useLanguage } from "@/context/language-context";
 import { APP_CREDIT_NAME } from "@/lib/constants";
 import { ROLE_LABELS } from "@/lib/permissions";
+import { AppWaveBackground } from "@/components/decor/app-wave-background";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
 const navItems = [
@@ -99,7 +100,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="min-h-screen bg-[var(--background)]">
+    <div className="relative min-h-screen bg-[var(--background)]">
+      <AppWaveBackground />
       <aside className="fixed right-0 top-0 z-10 hidden h-screen w-72 border-l border-[var(--border)] bg-[var(--navy)] text-white lg:block print:hidden">
         <div className="flex h-16 items-center gap-3 border-b border-white/10 px-5">
           <div className="grid h-10 w-10 place-items-center rounded-md bg-[#0f766e]">
@@ -159,7 +161,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </button>
           </div>
         </header>
-        <main className="mx-auto max-w-7xl p-4 pb-24 lg:p-8 lg:pb-8">{children}</main>
+        <main className="app-main-content mx-auto max-w-7xl p-4 pb-24 lg:p-8 lg:pb-8">{children}</main>
         <footer className="mx-auto max-w-7xl border-t border-[var(--border)] px-4 py-3 text-center text-xs text-[var(--muted)] print:hidden lg:mr-72">
           Powered by <span className="font-semibold text-[var(--foreground)]">{APP_CREDIT_NAME}</span>
         </footer>

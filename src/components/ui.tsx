@@ -13,6 +13,7 @@ export function PageHeader({
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 className="text-2xl font-bold">{title}</h1>
+        <div className="page-title-accent" />
         {description ? (
           <p className="mt-1 text-sm text-[var(--muted)]">{description}</p>
         ) : null}
