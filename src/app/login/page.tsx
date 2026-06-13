@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { LogIn, ShipWheel } from "lucide-react";
-import { ShipIllustration } from "@/components/decor/ship-illustration";
 import { ErrorMessage } from "@/components/ui";
 import { useLanguage } from "@/context/language-context";
 import { APP_CREDIT_NAME } from "@/lib/constants";
@@ -83,25 +83,33 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="login-page grid min-h-screen lg:grid-cols-2">
-      <div className="login-hero-panel relative flex flex-col justify-end lg:justify-between">
-        <ShipIllustration className="login-hero-art" />
-        <div className="login-hero-copy">
-          <p className="text-sm font-semibold uppercase tracking-widest text-white/80">Elmaghraby Tracing</p>
-          <h2 className="mt-2 text-3xl font-bold leading-tight lg:text-4xl">
-            {tr("نظام تتبع الشحنات والاستيراد", "Shipment & import tracking")}
-          </h2>
-          <p className="mt-3 max-w-md text-sm text-white/85 lg:text-base">
-            {tr(
-              "تابع شحناتك من البحر حتى الجمارك — في مكان واحد.",
-              "Track shipments from sea to customs — in one place."
-            )}
-          </p>
-        </div>
+    <div className="login-page grid min-h-screen lg:grid-cols-[1.15fr_0.85fr]" dir="ltr">
+      <div className="login-hero-panel relative">
+        <Image
+          alt=""
+          aria-hidden
+          className="login-hero-art"
+          fill
+          priority
+          sizes="(max-width: 1024px) 100vw, 58vw"
+          src="/login-ship-hero.png"
+        />
       </div>
 
-      <div className="login-form-panel">
-        <div className="w-full max-w-md space-y-3">
+      <div className="login-form-panel" dir="auto">
+        <div className="w-full max-w-md space-y-4">
+          <div className="login-hero-copy hidden text-center lg:block">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#0f766e]">Elmaghraby Tracing</p>
+            <h2 className="mt-2 text-2xl font-bold leading-snug text-[#1e293b]">
+              {tr("نظام تتبع الشحنات والاستيراد", "Shipment & import tracking")}
+            </h2>
+            <p className="mt-2 text-sm text-[var(--muted)]">
+              {tr(
+                "تابع شحناتك من البحر حتى الجمارك — في مكان واحد.",
+                "Track shipments from sea to customs — in one place."
+              )}
+            </p>
+          </div>
           <form className="card login-form-card w-full space-y-5 p-6" onSubmit={submit}>
             <div className="flex items-center gap-3">
               <div className="grid h-12 w-12 place-items-center rounded-md bg-[#0f766e] text-white">
