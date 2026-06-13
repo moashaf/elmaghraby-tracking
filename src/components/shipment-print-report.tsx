@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Download, FileSpreadsheet, Printer } from "lucide-react";
-import * as XLSX from "xlsx";
+import { downloadExcelWithOptionalImages } from "@/lib/excel-export";
 import { ErrorMessage } from "@/components/ui";
 import { SHIPMENT_STATUS_LABELS } from "@/lib/constants";
-import { signedProductImageUrls } from "@/lib/product-images";
 import { formatUsd } from "@/lib/format";
+import { signedProductImageUrls } from "@/lib/product-images";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import type { Shipment, ShipmentContainer, ShipmentCost, ShipmentDocument, ShipmentProduct } from "@/lib/types";
 
@@ -86,27 +86,28 @@ export function ShipmentPrintReport({ shipmentId }: { shipmentId: string }) {
   function exportProductsExcel() {
     if (!shipment) return;
     void (async () => {
-      const rows = await Promise.all(
-        products.map(async (row) => {
-          const imagePath = row.products?.image_url;
-          return {
-            ACID: shipment.acid,
-            SKU: row.products?.sku ?? "-",
-            المنتج: row.products?.name_ar ?? "-",
-            الكمية: row.quantity,
-            الكرتين: row.cartons_count,
-            مفكك: row.is_disassembled ? "نعم" : "لا",
-            جديد: row.is_new_incoming_product ? "نعم" : "لا",
-            ...(withImages && imagePath
-              ? { "رابط الصورة": imageUrls.get(imagePath) ?? imagePath }
-              : {}),
-          };
-        })
-      );
-      const worksheet = XLSX.utils.json_to_sheet(rows);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Products");
-      XLSX.writeFile(workbook, `shipment-${shipment.acid}-products.xlsx`);
+      const exportRows = products.map((row) => ({
+        ACID: shipment.acid,
+        SKU: row.products?.sku ?? "-",
+        المنتج: row.products?.name_ar ?? "-",
+        الكمية: row.quantity,
+        الكرتين: row.cartons_count,
+        مفكك: row.is_disassembled ? "نعم" : "لا",
+        جديد: row.is_new_incoming_product ? "نعم" : "لا",
+      }));
+      const imageUrlList = withImages
+        ? products.map((row) => {
+            const path = row.products?.image_url;
+            return path ? imageUrls.get(path) : null;
+          })
+        : undefined;
+
+      await downloadExcelWithOptionalImages({
+        filename: `shipment-${shipment.acid}-products.xlsx`,
+        sheetName: "Products",
+        rows: exportRows,
+        imageUrls: imageUrlList,
+      });
     })();
   }
 

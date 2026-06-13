@@ -20,6 +20,7 @@
     "@tanstack/react-query": "^5.100.11",
     "@tauri-apps/api": "^2.11.0",
     "date-fns": "^4.2.1",
+    "exceljs": "^4.4.0",
     "lucide-react": "^1.16.0",
     "next": "16.2.6",
     "react": "19.2.4",
@@ -29,7 +30,6 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "pg": "^8.16.3",
     "@tailwindcss/postcss": "^4",
     "@tauri-apps/cli": "^2.11.2",
     "@types/node": "^20",
@@ -37,6 +37,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
+    "pg": "^8.16.3",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

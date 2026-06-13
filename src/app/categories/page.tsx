@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, Edit2, FileSpreadsheet, FolderTree, Plus, Save, Search, Trash2, X } from "lucide-react";
-import * as XLSX from "xlsx";
+import { downloadExcelWithOptionalImages } from "@/lib/excel-export";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage, PageHeader, StatusPill } from "@/components/ui";
 import { useLanguage } from "@/context/language-context";
@@ -158,23 +158,23 @@ export default function CategoriesPage() {
     if (listScope.type !== "under") return;
     const result = await fetchCategoryShippedProducts(listScope.parentId, rows);
     const categoryName = browseParent?.name_ar ?? "category";
-    const sheetRows = await Promise.all(
-      result.rows.map(async (row) => {
-        const copy: Record<string, string | number | null> = {};
-        for (const [key, value] of Object.entries(row)) {
-          if (key.startsWith("_")) continue;
-          copy[key] = value ?? "";
-        }
-        if (exportWithImages && row._imagePath) {
-          copy["رابط الصورة"] = productImageUrls.get(row._imagePath) ?? row._imagePath;
-        }
-        return copy;
-      })
-    );
-    const worksheet = XLSX.utils.json_to_sheet(sheetRows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Products");
-    XLSX.writeFile(workbook, `category-${categoryName}.xlsx`);
+    const sheetRows = result.rows.map((row) => {
+      const copy: Record<string, string | number | null> = {};
+      for (const [key, value] of Object.entries(row)) {
+        if (key.startsWith("_")) continue;
+        copy[key] = value ?? "";
+      }
+      return copy;
+    });
+    const imageUrlList = exportWithImages
+      ? result.rows.map((row) => (row._imagePath ? productImageUrls.get(row._imagePath) : null))
+      : undefined;
+    await downloadExcelWithOptionalImages({
+      filename: `category-${categoryName}.xlsx`,
+      sheetName: "Products",
+      rows: sheetRows,
+      imageUrls: imageUrlList,
+    });
   }
 
   const activeCount = rows.filter((row) => row.is_active).length;

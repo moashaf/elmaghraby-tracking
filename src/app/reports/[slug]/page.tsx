@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowRight, Download, FileSpreadsheet, Printer, RefreshCw } from "lucide-react";
-import * as XLSX from "xlsx";
+import { downloadExcelWithOptionalImages } from "@/lib/excel-export";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage, PageHeader } from "@/components/ui";
 import { buildCategorySelectOptions } from "@/lib/category-options";
@@ -139,23 +139,24 @@ export default function ReportDetailPage() {
   }
 
   async function exportExcel() {
-    const exportRows = await Promise.all(
-      filteredRows.map(async (row) => {
-        const copy: Record<string, string | number | null> = {};
-        for (const [key, value] of Object.entries(row)) {
-          if (key.startsWith("_")) continue;
-          copy[key] = value ?? "";
-        }
-        if (showImages && row._imagePath) {
-          copy["رابط الصورة"] = imageUrls.get(row._imagePath) ?? row._imagePath;
-        }
-        return copy;
-      })
-    );
-    const worksheet = XLSX.utils.json_to_sheet(exportRows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Report");
-    XLSX.writeFile(workbook, `${params.slug}-${todayIso()}.xlsx`);
+    const exportRows = filteredRows.map((row) => {
+      const copy: Record<string, string | number | null> = {};
+      for (const [key, value] of Object.entries(row)) {
+        if (key.startsWith("_")) continue;
+        copy[key] = value ?? "";
+      }
+      return copy;
+    });
+    const imageUrlList = showImages
+      ? filteredRows.map((row) => (row._imagePath ? imageUrls.get(row._imagePath) : null))
+      : undefined;
+
+    await downloadExcelWithOptionalImages({
+      filename: `${params.slug}-${todayIso()}.xlsx`,
+      sheetName: "Report",
+      rows: exportRows,
+      imageUrls: imageUrlList,
+    });
   }
 
   if (!report) {
