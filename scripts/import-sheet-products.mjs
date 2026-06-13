@@ -50,6 +50,7 @@ const PARENT_CODES = {
   "متنوع رمضان": "RAMM",
   "عدد ومفكات": "TOOL",
   "العاب اطفال": "TOYS",
+  "مستلزم انتاج": "PROD",
 };
 
 const ROOT_CATEGORY_CODES = {
