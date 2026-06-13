@@ -1,16 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8fafc;
+  --background: #faf9f7;
   --foreground: #0f172a;
   --primary: #0f766e;
   --primary-foreground: #ffffff;
   --surface: #ffffff;
   --muted: #64748b;
-  --border: #cbd5e1;
+  --border: rgb(15 118 110 / 14%);
   --danger: #dc2626;
   --navy: #123c5a;
-  --shadow-soft: 0 12px 28px rgb(15 23 42 / 8%);
+  --shadow-soft: 0 8px 32px rgb(15 23 42 / 6%);
 }
 
 @theme inline {
@@ -29,10 +29,14 @@ body {
 }
 
 .card {
-  border: 1px solid color-mix(in srgb, var(--border), transparent 20%);
-  border-radius: 8px;
+  border: 1px solid rgb(15 118 110 / 10%);
+  border-radius: 12px;
   background: var(--surface);
   box-shadow: var(--shadow-soft);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
 }
 
 .btn {
@@ -61,12 +65,13 @@ body {
 
 .input {
   width: 100%;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  border: 1px solid rgb(15 118 110 / 16%);
+  border-radius: 8px;
   background: #fff;
   padding: 10px 12px;
   font-size: 14px;
   outline: none;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 
 .input:focus {
@@ -83,12 +88,12 @@ body {
 }
 
 .table-head {
-  background: #f1f5f9;
+  background: linear-gradient(180deg, #f5f3ef 0%, #f0eeea 100%);
   color: #475569;
 }
 
 .row-hover:hover {
-  background: #f8fafc;
+  background: rgb(15 118 110 / 4%);
 }
 
 html.dark {
@@ -255,31 +260,58 @@ html.dark .table-head {
   box-shadow: 0 8px 32px rgb(15 23 42 / 7%);
 }
 
-/* ——— App pages subtle decor ——— */
+/* ——— App pages decor (login-style, not crowded) ——— */
 .app-wave-bg {
   position: fixed;
   inset: 0;
   z-index: 0;
   overflow: hidden;
-  color: rgb(15 118 110 / 6%);
+  pointer-events: none;
+}
+
+.app-wave-bg__glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(8px);
+}
+
+.app-wave-bg__glow--start {
+  top: -10rem;
+  inset-inline-start: -6rem;
+  width: 24rem;
+  height: 24rem;
+  background: radial-gradient(circle, rgb(15 118 110 / 10%) 0%, transparent 72%);
+}
+
+.app-wave-bg__glow--end {
+  bottom: 8rem;
+  inset-inline-end: -4rem;
+  width: 18rem;
+  height: 18rem;
+  background: radial-gradient(circle, rgb(18 60 90 / 7%) 0%, transparent 70%);
 }
 
 .app-wave-bg__svg {
   position: absolute;
   bottom: 0;
-  left: 0;
+  inset-inline-start: 0;
   width: 100%;
   height: auto;
-  opacity: 0.55;
+  color: rgb(15 118 110 / 14%);
+}
+
+.app-wave-bg__svg--back {
+  bottom: 1.25rem;
+  color: rgb(15 118 110 / 7%);
 }
 
 .app-wave-bg__corner {
   position: absolute;
   bottom: -2rem;
-  left: -2rem;
-  width: 10rem;
-  height: 10rem;
-  opacity: 0.35;
+  inset-inline-start: -2rem;
+  width: 11rem;
+  height: 11rem;
+  color: rgb(15 118 110 / 12%);
 }
 
 .app-main-content {
@@ -287,10 +319,21 @@ html.dark .table-head {
   z-index: 1;
 }
 
+.app-shell-header {
+  border-color: rgb(15 118 110 / 10%);
+  background: rgb(250 249 247 / 88%);
+  backdrop-filter: blur(12px);
+}
+
+.app-shell-footer {
+  border-color: rgb(15 118 110 / 10%);
+  background: rgb(250 249 247 / 72%);
+}
+
 .page-title-accent {
-  margin-top: 0.5rem;
+  margin-top: 0.625rem;
   height: 3px;
-  width: 3rem;
+  width: 4.5rem;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--primary), rgb(15 118 110 / 20%));
+  background: linear-gradient(90deg, var(--primary), rgb(15 118 110 / 18%));
 }

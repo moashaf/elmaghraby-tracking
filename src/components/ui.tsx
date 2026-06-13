@@ -12,10 +12,10 @@ export function PageHeader({
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h1 className="text-2xl font-bold">{title}</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-[#1e293b]">{title}</h1>
         <div className="page-title-accent" />
         {description ? (
-          <p className="mt-1 text-sm text-[var(--muted)]">{description}</p>
+          <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">{description}</p>
         ) : null}
       </div>
       {actions}

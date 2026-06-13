@@ -84,8 +84,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
         return (
           <Link
-            className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold transition ${
-              active ? "bg-white text-[#123c5a]" : "text-white/80 hover:bg-white/10"
+            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+              active ? "bg-[#0f766e] text-white shadow-sm" : "text-white/78 hover:bg-white/10"
             }`}
             href={item.href}
             key={item.href}
@@ -102,7 +102,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative min-h-screen bg-[var(--background)]">
       <AppWaveBackground />
-      <aside className="fixed right-0 top-0 z-10 hidden h-screen w-72 border-l border-[var(--border)] bg-[var(--navy)] text-white lg:block print:hidden">
+      <aside className="fixed right-0 top-0 z-10 hidden h-screen w-72 border-l border-white/10 bg-gradient-to-b from-[#123c5a] to-[#0c3149] text-white shadow-[inset_1px_0_0_rgb(255_255_255_/_6%)] lg:block print:hidden">
         <div className="flex h-16 items-center gap-3 border-b border-white/10 px-5">
           <div className="grid h-10 w-10 place-items-center rounded-md bg-[#0f766e]">
             <ShipWheel className="h-5 w-5" />
@@ -124,7 +124,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="lg:mr-72 print:mr-0">
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-[var(--border)] bg-white/95 px-4 backdrop-blur lg:px-8 print:hidden dark:bg-slate-900/95">
+        <header className="app-shell-header sticky top-0 z-20 flex h-16 items-center justify-between border-b px-4 lg:px-8 print:hidden dark:bg-slate-900/95">
           <div className="flex min-w-0 items-center gap-2">
             <button
               className="btn btn-secondary shrink-0 px-2 lg:hidden"
@@ -162,7 +162,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
         <main className="app-main-content mx-auto max-w-7xl p-4 pb-24 lg:p-8 lg:pb-8">{children}</main>
-        <footer className="mx-auto max-w-7xl border-t border-[var(--border)] px-4 py-3 text-center text-xs text-[var(--muted)] print:hidden lg:mr-72">
+        <footer className="app-shell-footer mx-auto max-w-7xl border-t px-4 py-3 text-center text-xs text-[var(--muted)] print:hidden lg:mr-72">
           Powered by <span className="font-semibold text-[var(--foreground)]">{APP_CREDIT_NAME}</span>
         </footer>
       </div>
@@ -189,15 +189,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       ) : null}
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--border)] bg-white/95 px-1 py-2 shadow-[0_-8px_24px_rgb(15_23_42_/_10%)] backdrop-blur lg:hidden safe-area-pb print:hidden">
+      <nav className="app-shell-header fixed inset-x-0 bottom-0 z-30 border-t px-1 py-2 shadow-[0_-8px_24px_rgb(15_23_42_/_8%)] lg:hidden safe-area-pb print:hidden">
         <div className="grid grid-cols-6 gap-1">
           {mobileNavItems.slice(0, 6).map((item) => {
             const Icon = item.icon;
             const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
             return (
               <Link
-                className={`flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-md px-1 text-[10px] font-semibold leading-tight ${
-                  active ? "bg-[#123c5a] text-white" : "text-slate-600"
+                className={`flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[10px] font-semibold leading-tight ${
+                  active ? "bg-[#0f766e] text-white shadow-sm" : "text-slate-600"
                 }`}
                 href={item.href}
                 key={item.href}
