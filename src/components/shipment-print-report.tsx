@@ -7,6 +7,7 @@ import { downloadExcelWithOptionalImages } from "@/lib/excel-export";
 import { ErrorMessage } from "@/components/ui";
 import { SHIPMENT_STATUS_LABELS } from "@/lib/constants";
 import { formatUsd } from "@/lib/format";
+import { displayUnitPerCarton } from "@/lib/shipment-product-quantity";
 import { signedProductImageUrls } from "@/lib/product-images";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import type { Shipment, ShipmentContainer, ShipmentCost, ShipmentDocument, ShipmentProduct } from "@/lib/types";
@@ -90,8 +91,9 @@ export function ShipmentPrintReport({ shipmentId }: { shipmentId: string }) {
         ACID: shipment.acid,
         SKU: row.products?.sku ?? "-",
         المنتج: row.products?.name_ar ?? "-",
-        الكمية: row.quantity,
         الكرتين: row.cartons_count,
+        الوحدة: displayUnitPerCarton(row.cartons_count, row.quantity),
+        "إجمالي القطع": row.quantity,
         مفكك: row.is_disassembled ? "نعم" : "لا",
         جديد: row.is_new_incoming_product ? "نعم" : "لا",
       }));
@@ -236,8 +238,9 @@ export function ShipmentPrintReport({ shipmentId }: { shipmentId: string }) {
               {withImages ? <th className="p-3 text-right">صورة</th> : null}
               <th className="p-3 text-right">SKU</th>
               <th className="p-3 text-right">المنتج</th>
-              <th className="p-3 text-right">الكمية</th>
               <th className="p-3 text-right">الكرتين</th>
+              <th className="p-3 text-right">الوحدة</th>
+              <th className="p-3 text-right">إجمالي القطع</th>
               <th className="p-3 text-right">مفكك</th>
               <th className="p-3 text-right">جديد</th>
             </tr>
@@ -262,15 +265,16 @@ export function ShipmentPrintReport({ shipmentId }: { shipmentId: string }) {
                   ) : null}
                   <td className="p-3 font-semibold">{row.products?.sku ?? "-"}</td>
                   <td className="p-3">{row.products?.name_ar ?? "-"}</td>
-                  <td className="p-3">{row.quantity}</td>
                   <td className="p-3">{row.cartons_count ?? "-"}</td>
+                  <td className="p-3">{displayUnitPerCarton(row.cartons_count, row.quantity)}</td>
+                  <td className="p-3">{row.quantity}</td>
                   <td className="p-3">{row.is_disassembled ? "نعم" : "لا"}</td>
                   <td className="p-3">{row.is_new_incoming_product ? "نعم" : "لا"}</td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td className="p-4 text-[var(--muted)]" colSpan={withImages ? 7 : 6}>
+                <td className="p-4 text-[var(--muted)]" colSpan={withImages ? 8 : 7}>
                   لا توجد منتجات.
                 </td>
               </tr>

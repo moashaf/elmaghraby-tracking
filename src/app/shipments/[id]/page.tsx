@@ -11,6 +11,7 @@ import { getNextStatusAction, NEXT_ACTION_LABELS, SHIPMENT_STATUS_LABELS } from 
 import { useProfile } from "@/context/profile-context";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { addDaysToIsoDate } from "@/lib/eta";
+import { displayUnitPerCarton } from "@/lib/shipment-product-quantity";
 import type { Shipment, ShipmentContainer, ShipmentCost, ShipmentDocument, ShipmentProduct, TimelineEvent } from "@/lib/types";
 
 const bucket = "container-files";
@@ -326,8 +327,9 @@ function ProductsTable({ rows }: { rows: ShipmentProduct[] }) {
           <tr>
             <th className="p-3 text-right">SKU</th>
             <th className="p-3 text-right">المنتج</th>
-            <th className="p-3 text-right">الكمية</th>
             <th className="p-3 text-right">الكرتين</th>
+            <th className="p-3 text-right">الوحدة</th>
+            <th className="p-3 text-right">إجمالي القطع</th>
             <th className="p-3 text-right">جديد</th>
             <th className="p-3 text-right">مفكك</th>
           </tr>
@@ -337,13 +339,14 @@ function ProductsTable({ rows }: { rows: ShipmentProduct[] }) {
             <tr className="border-t border-[var(--border)]" key={row.id}>
               <td className="p-3 font-semibold">{row.products?.sku ?? "-"}</td>
               <td className="p-3">{row.products?.name_ar ?? "-"}</td>
-              <td className="p-3">{row.quantity}</td>
               <td className="p-3">{row.cartons_count ?? "-"}</td>
+              <td className="p-3">{displayUnitPerCarton(row.cartons_count, row.quantity)}</td>
+              <td className="p-3">{row.quantity}</td>
               <td className="p-3">{row.is_new_incoming_product ? "نعم" : "لا"}</td>
               <td className="p-3">{row.is_disassembled ? "نعم" : "لا"}</td>
             </tr>
           )) : (
-            <tr><td className="p-4 text-[var(--muted)]" colSpan={6}>لا توجد منتجات.</td></tr>
+            <tr><td className="p-4 text-[var(--muted)]" colSpan={7}>لا توجد منتجات.</td></tr>
           )}
         </tbody>
       </table>

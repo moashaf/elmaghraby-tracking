@@ -169,6 +169,7 @@ export type ShipmentProductDraft = {
   product_id: string;
   quantity: string;
   cartons_count: string;
+  unit_quantity: string;
   notes: string;
   is_new_incoming_product: boolean;
   is_disassembled: boolean;

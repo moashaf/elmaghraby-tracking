@@ -9,6 +9,7 @@ import { toEntityOptions } from "@/lib/entity-options";
 import { PORT_SELECT_OPTIONS } from "@/lib/port-options";
 import { buildCategorySelectOptions } from "@/lib/category-options";
 import { addDaysToIsoDate, findRouteDuration } from "@/lib/eta";
+import { syncProductQuantityFields, unitFromCartonsAndTotal } from "@/lib/shipment-product-quantity";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { fetchAllFromTable } from "@/lib/supabase/fetch-all";
 import { shipmentInvPath } from "@/lib/storage-path";
@@ -59,6 +60,7 @@ const emptyProduct: ShipmentProductDraft = {
   product_id: "",
   quantity: "",
   cartons_count: "",
+  unit_quantity: "",
   notes: "",
   is_new_incoming_product: false,
   is_disassembled: false,
@@ -104,6 +106,7 @@ function productDrafts(rows?: ShipmentProduct[]): ShipmentProductDraft[] {
     product_id: row.product_id,
     quantity: row.quantity.toString(),
     cartons_count: row.cartons_count?.toString() ?? "",
+    unit_quantity: unitFromCartonsAndTotal(row.cartons_count, row.quantity),
     notes: row.notes ?? "",
     is_new_incoming_product: row.is_new_incoming_product,
     is_disassembled: row.is_disassembled ?? false,
@@ -298,7 +301,12 @@ export function ShipmentForm({
     }
 
     const validContainers = containers.filter((container) => container.container_number.trim());
-    const validProducts = shipmentProducts.filter((row) => row.product_id && toPositiveNumber(row.quantity) > 0);
+    const validProducts = shipmentProducts.filter((row) => {
+      if (!row.product_id) return false;
+      const cartons = toPositiveNumber(row.cartons_count);
+      const unit = toPositiveNumber(row.unit_quantity);
+      return cartons > 0 && unit > 0;
+    });
 
     if (!validContainers.length) {
       setError("أضف حاوية واحدة على الأقل.");
@@ -306,7 +314,7 @@ export function ShipmentForm({
     }
 
     if (!validProducts.length) {
-      setError("أضف منتجا واحدا على الأقل بكمية صحيحة.");
+      setError("أضف منتجا واحدا على الأقل مع كرتين ووحدة صحيحة.");
       return;
     }
 
@@ -433,7 +441,7 @@ export function ShipmentForm({
       validProducts.map((row) => ({
         shipment_id: shipmentId,
         product_id: row.product_id,
-        quantity: toPositiveNumber(row.quantity),
+        quantity: toPositiveNumber(row.cartons_count) * toPositiveNumber(row.unit_quantity),
         cartons_count: toNullableNumber(row.cartons_count),
         notes: row.notes.trim() || null,
         is_new_incoming_product: row.is_new_incoming_product,
@@ -704,7 +712,7 @@ export function ShipmentForm({
             {shipmentProducts.map((row, index) => {
               const selected = productById.get(row.product_id);
               return (
-                <div className="grid gap-3 rounded-md border border-[var(--border)] p-3 md:grid-cols-[1fr_130px_130px_220px_auto]" key={index}>
+                <div className="grid gap-3 rounded-md border border-[var(--border)] p-3 md:grid-cols-[1fr_100px_100px_110px_220px_auto]" key={index}>
                   <SearchableSelect
                     options={productOptions}
                     disabled={readOnly}
@@ -712,8 +720,42 @@ export function ShipmentForm({
                     onChange={(value) => updateShipmentProduct(index, { ...row, product_id: value })}
                     placeholder="ابحث عن المنتج (SKU أو الاسم)"
                   />
-                  <input className="input" min={0} placeholder="الكمية" type="number" value={row.quantity} onChange={(event) => updateShipmentProduct(index, { ...row, quantity: event.target.value })} />
-                  <input className="input" min={0} placeholder="الكرتين" type="number" value={row.cartons_count} onChange={(event) => updateShipmentProduct(index, { ...row, cartons_count: event.target.value })} />
+                  <input
+                    className={fieldClass}
+                    min={0}
+                    placeholder="الكرتين"
+                    readOnly={readOnly}
+                    type="number"
+                    value={row.cartons_count}
+                    onChange={(event) =>
+                      updateShipmentProduct(
+                        index,
+                        syncProductQuantityFields({ ...row, cartons_count: event.target.value })
+                      )
+                    }
+                  />
+                  <input
+                    className={fieldClass}
+                    min={0}
+                    placeholder="الوحدة"
+                    readOnly={readOnly}
+                    type="number"
+                    value={row.unit_quantity}
+                    onChange={(event) =>
+                      updateShipmentProduct(
+                        index,
+                        syncProductQuantityFields({ ...row, unit_quantity: event.target.value })
+                      )
+                    }
+                  />
+                  <input
+                    className="input bg-slate-50 text-[var(--foreground)]"
+                    placeholder="إجمالي القطع"
+                    readOnly
+                    tabIndex={-1}
+                    type="number"
+                    value={row.quantity}
+                  />
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[var(--muted)]">
                     <label className="flex items-center gap-2">
                       <input
