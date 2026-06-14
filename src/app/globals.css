@@ -426,3 +426,8 @@ html.dark .table-head {
 .report-section-row td {
   font-weight: 700;
 }
+
+.table-nowrap th,
+.table-nowrap td {
+  white-space: nowrap;
+}

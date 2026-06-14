@@ -186,7 +186,7 @@ export default function ReportDetailPage() {
   return (
     <div className="report-print-root space-y-5">
       <div className="report-print-title hidden">
-        {report.title} — {report.description}
+        {report.title} — {new Date().toLocaleDateString("ar-EG")}
       </div>
 
       <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--card)] p-3 shadow-sm print:hidden">
@@ -275,7 +275,7 @@ export default function ReportDetailPage() {
       </div>
 
       <div className="card overflow-auto print:overflow-visible report-print-table-wrap">
-        <table className="report-print-table min-w-full text-sm">
+        <table className="report-print-table table-nowrap min-w-full text-sm">
           <thead className="table-head">
             <tr>
               {showImages ? <th className="p-3 text-right w-16">صورة</th> : null}
@@ -396,7 +396,7 @@ export default function ReportDetailPage() {
       {params.slug === "summary" && statusSummary ? (
         <div className="report-status-summary report-print-section card overflow-auto print-avoid">
           <h3 className="border-b border-[var(--border)] p-3 text-base font-bold">ملخص حسب الحالة</h3>
-          <table className="report-print-table min-w-full text-sm">
+          <table className="report-print-table table-nowrap min-w-full text-sm">
             <thead className="table-head">
               <tr>
                 <th className="p-3 text-right w-40" />

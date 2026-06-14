@@ -20,3 +20,14 @@ export function compareShipmentsByInvoiceNumber(
   if (diff !== 0) return diff;
   return (a.invoice_file_name ?? "").localeCompare(b.invoice_file_name ?? "", "ar");
 }
+
+export function invoiceMapFromDocuments(
+  docs: Array<{ shipment_id: string; doc_type: string; file_name: string }>
+): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const row of docs) {
+    if (row.doc_type?.toUpperCase() !== "INV") continue;
+    if (!map.has(row.shipment_id)) map.set(row.shipment_id, row.file_name);
+  }
+  return map;
+}

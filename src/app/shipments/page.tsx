@@ -18,6 +18,7 @@ import { useProfile } from "@/context/profile-context";
 import { useLanguage } from "@/context/language-context";
 import { formatUsd } from "@/lib/format";
 import { readEmbeddedContainerCount } from "@/lib/shipment-container-count";
+import { displayInvoiceNumber, invoiceMapFromDocuments } from "@/lib/shipment-invoice-number";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
 import type { Shipment } from "@/lib/types";
@@ -36,6 +37,7 @@ export default function ShipmentsPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
+  const [invoiceByShipmentId, setInvoiceByShipmentId] = useState<Map<string, string>>(new Map());
   const [error, setError] = useState("");
 
   async function load() {
@@ -58,14 +60,30 @@ export default function ShipmentsPage() {
       if (status) request = request.eq("status", status);
       if (query.trim()) request = request.or(`shipment_number.ilike.%${query.trim()}%,acid.ilike.%${query.trim()}%`);
 
-      const result = await request;
+      const [result, documentsResult] = await Promise.all([
+        request,
+        supabase
+          .from("shipment_documents")
+          .select("shipment_id,doc_type,file_name,uploaded_at")
+          .eq("doc_type", "INV")
+          .order("uploaded_at", { ascending: false }),
+      ]);
 
       if (result.error) {
         setError(getSupabaseErrorMessage(result.error));
         return;
       }
+      if (documentsResult.error) {
+        setError(getSupabaseErrorMessage(documentsResult.error));
+        return;
+      }
 
       setShipments((result.data as Shipment[] | null) ?? []);
+      setInvoiceByShipmentId(
+        invoiceMapFromDocuments(
+          (documentsResult.data as Array<{ shipment_id: string; doc_type: string; file_name: string }> | null) ?? []
+        )
+      );
     } catch (loadError) {
       setError(getSupabaseErrorMessage(loadError));
     } finally {
@@ -145,8 +163,11 @@ export default function ShipmentsPage() {
   }
 
   async function exportExcel() {
-    const rows = shipments.map((shipment) => ({
-      ACID: shipment.acid,
+    const rows = shipments.map((shipment) => {
+      const invoiceFile = invoiceByShipmentId.get(shipment.id);
+      return {
+        [tr("رقم الشحنة", "Shipment no.")]: invoiceFile ? displayInvoiceNumber(invoiceFile) : "-",
+        ACID: shipment.acid,
       [tr("الشركة", "Company")]: shipment.companies?.name_ar ?? "-",
       [tr("عدد الكراتين", "Cartons")]: shipment.total_cartons ?? "",
       [tr("عدد الحاويات", "Containers")]: readEmbeddedContainerCount(
@@ -157,7 +178,8 @@ export default function ShipmentsPage() {
       [tr("تاريخ الوصول", "ETA")]: shipment.eta || "-",
       [tr("الحالة", "Status")]: statusLabels[shipment.status],
       [tr("نوع البضاعة", "Cargo type")]: shipment.shipment_type || "-",
-    }));
+      };
+    });
 
     await downloadExcelWithOptionalImages({
       filename: `shipments-${new Date().toISOString().slice(0, 10)}.xlsx`,
@@ -235,9 +257,10 @@ export default function ShipmentsPage() {
 
       <div className="card overflow-hidden report-print-table-wrap">
         <div className="overflow-auto">
-          <table className="report-print-table min-w-full text-sm">
+          <table className="report-print-table table-nowrap min-w-full text-sm">
             <thead className="table-head">
               <tr>
+                <th className="p-3 text-right">رقم الشحنة</th>
                 <th className="p-3 text-right">نوع البضاعة</th>
                 <th className="p-3 text-right">عدد الكراتين</th>
                 <th className="p-3 text-right">عدد الحاويات</th>
@@ -253,13 +276,17 @@ export default function ShipmentsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="p-4 text-[var(--muted)]" colSpan={10}>جاري التحميل...</td>
+                  <td className="p-4 text-[var(--muted)]" colSpan={11}>جاري التحميل...</td>
                 </tr>
               ) : shipments.length ? (
                 shipments.map((shipment) => {
                   const action = getNextStatusAction(shipment.status);
+                  const invoiceFile = invoiceByShipmentId.get(shipment.id);
                   return (
                     <tr className="row-hover border-t border-[var(--border)]" key={shipment.id}>
+                      <td className="p-3 font-semibold">
+                        {invoiceFile ? displayInvoiceNumber(invoiceFile) : "-"}
+                      </td>
                       <td className="p-3">{shipment.shipment_type || "-"}</td>
                       <td className="p-3">{shipment.total_cartons ?? "-"}</td>
                       <td className="p-3">
@@ -308,7 +335,7 @@ export default function ShipmentsPage() {
                 })
               ) : (
                 <tr>
-                  <td className="p-4 text-[var(--muted)]" colSpan={10}>لا توجد شحنات مطابقة.</td>
+                  <td className="p-4 text-[var(--muted)]" colSpan={11}>لا توجد شحنات مطابقة.</td>
                 </tr>
             )}
           </tbody>
@@ -316,6 +343,7 @@ export default function ShipmentsPage() {
             <tfoot className="table-head font-bold">
               <tr>
                 <td className="p-3">الإجمالي</td>
+                <td className="p-3" />
                 <td className="p-3">{listTotals.cartons.toLocaleString("ar-EG")}</td>
                 <td className="p-3">{listTotals.containers.toLocaleString("ar-EG")}</td>
                 <td className="p-3" colSpan={7} />

@@ -17,6 +17,7 @@ import { ErrorMessage, PageHeader } from "@/components/ui";
 import { useLanguage } from "@/context/language-context";
 import { SHIPMENT_STATUS_LABELS, SHIPMENT_STATUS_LABELS_EN } from "@/lib/constants";
 import { formatUsd } from "@/lib/format";
+import { displayInvoiceNumber, invoiceMapFromDocuments } from "@/lib/shipment-invoice-number";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
 import type { Shipment } from "@/lib/types";
@@ -93,6 +94,7 @@ export default function DashboardPage() {
   const [containers, setContainers] = useState<ContainerRow[]>([]);
   const [incomingProducts, setIncomingProducts] = useState<FlaggedProductRow[]>([]);
   const [disassembledProducts, setDisassembledProducts] = useState<FlaggedProductRow[]>([]);
+  const [invoiceByShipmentId, setInvoiceByShipmentId] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const { t, lang } = useLanguage();
@@ -107,7 +109,7 @@ export default function DashboardPage() {
       try {
         const supabase = createClient();
         await supabase.rpc("auto_move_shipments_to_customs");
-        const [shipmentsResult, containersResult, newProductsResult, disassembledResult] = await Promise.all([
+        const [shipmentsResult, containersResult, newProductsResult, disassembledResult, documentsResult] = await Promise.all([
           supabase
             .from("shipments")
             .select("*,companies(name_ar),suppliers(name_ar)")
@@ -121,10 +123,19 @@ export default function DashboardPage() {
             .from("shipment_products")
             .select("shipments(status)")
             .eq("is_disassembled", true),
+          supabase
+            .from("shipment_documents")
+            .select("shipment_id,doc_type,file_name,uploaded_at")
+            .eq("doc_type", "INV")
+            .order("uploaded_at", { ascending: false }),
         ]);
 
         const firstError =
-          shipmentsResult.error || containersResult.error || newProductsResult.error || disassembledResult.error;
+          shipmentsResult.error ||
+          containersResult.error ||
+          newProductsResult.error ||
+          disassembledResult.error ||
+          documentsResult.error;
         if (firstError) {
           setError(getSupabaseErrorMessage(firstError));
           return;
@@ -134,6 +145,11 @@ export default function DashboardPage() {
         setContainers((containersResult.data as ContainerRow[] | null) ?? []);
         setIncomingProducts((newProductsResult.data as unknown as FlaggedProductRow[] | null) ?? []);
         setDisassembledProducts((disassembledResult.data as unknown as FlaggedProductRow[] | null) ?? []);
+        setInvoiceByShipmentId(
+          invoiceMapFromDocuments(
+            (documentsResult.data as Array<{ shipment_id: string; doc_type: string; file_name: string }> | null) ?? []
+          )
+        );
       } catch (loadError) {
         setError(getSupabaseErrorMessage(loadError));
       } finally {
@@ -310,9 +326,10 @@ export default function DashboardPage() {
               </Link>
             </div>
             <div className="overflow-auto">
-              <table className="min-w-full text-sm">
+              <table className="table-nowrap min-w-full text-sm">
                 <thead className="table-head">
                   <tr>
+                    <th className="p-3 text-right">{lang === "ar" ? "رقم الشحنة" : "Shipment no."}</th>
                     <th className="p-3 text-right">{lang === "ar" ? "نوع البضاعة" : "Cargo type"}</th>
                     <th className="p-3 text-right">{lang === "ar" ? "عدد الكراتين" : "Cartons"}</th>
                     <th className="p-3 text-right">{lang === "ar" ? "عدد الحاويات" : "Containers"}</th>
@@ -328,13 +345,18 @@ export default function DashboardPage() {
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td className="p-4 text-[var(--muted)]" colSpan={10}>
+                      <td className="p-4 text-[var(--muted)]" colSpan={11}>
                         {lang === "ar" ? "جاري التحميل..." : "Loading..."}
                       </td>
                     </tr>
                   ) : recentShipments.length ? (
-                    recentShipments.map((shipment) => (
+                    recentShipments.map((shipment) => {
+                      const invoiceFile = invoiceByShipmentId.get(shipment.id);
+                      return (
                       <tr className="row-hover border-t border-[var(--border)]" key={shipment.id}>
+                        <td className="p-3 font-semibold">
+                          {invoiceFile ? displayInvoiceNumber(invoiceFile) : "-"}
+                        </td>
                         <td className="p-3">{shipment.shipment_type || "-"}</td>
                         <td className="p-3">{shipment.total_cartons ?? "-"}</td>
                         <td className="p-3">{containerCountByShipment.get(shipment.id) ?? 0}</td>
@@ -354,10 +376,11 @@ export default function DashboardPage() {
                           </Link>
                         </td>
                       </tr>
-                    ))
+                    );
+                    })
                   ) : (
                     <tr>
-                      <td className="p-4 text-[var(--muted)]" colSpan={10}>
+                      <td className="p-4 text-[var(--muted)]" colSpan={11}>
                         {lang === "ar" ? "لا توجد شحنات بعد." : "No shipments yet."}
                       </td>
                     </tr>
@@ -367,6 +390,7 @@ export default function DashboardPage() {
                   <tfoot className="table-head font-bold">
                     <tr>
                       <td className="p-3">الإجمالي</td>
+                      <td className="p-3" />
                       <td className="p-3">{recentTotals.cartons.toLocaleString("ar-EG")}</td>
                       <td className="p-3">{recentTotals.containers.toLocaleString("ar-EG")}</td>
                       <td className="p-3" colSpan={7} />
