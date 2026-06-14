@@ -218,7 +218,9 @@ export default function ReportDetailPage() {
         <PageHeader title={report.title} description={report.description} />
       </div>
 
-      <ErrorMessage message={error} />
+      <div className="print:hidden">
+        <ErrorMessage message={error} />
+      </div>
 
       <div className="card space-y-3 p-4 print:hidden">
         {report.dateFilter !== "none" ? (
@@ -272,8 +274,8 @@ export default function ReportDetailPage() {
         </div>
       </div>
 
-      <div className="card overflow-auto print:overflow-visible">
-        <table className="min-w-full text-sm">
+      <div className="card overflow-auto print:overflow-visible report-print-table-wrap">
+        <table className="report-print-table min-w-full text-sm">
           <thead className="table-head">
             <tr>
               {showImages ? <th className="p-3 text-right w-16">صورة</th> : null}
@@ -296,7 +298,7 @@ export default function ReportDetailPage() {
             ) : filteredRows.length ? (
               filteredRows.map((row, index) =>
                 row._sectionHeader ? (
-                  <tr className="bg-slate-100 font-bold print:bg-slate-100" key={`section-${index}`}>
+                  <tr className="report-section-row bg-slate-100 font-bold print:bg-slate-100" key={`section-${index}`}>
                     <td className="p-3" colSpan={Math.max(columns.length, 1) + printableExtraColumns + (showShipmentLinks ? 1 : 0)}>
                       {row._sectionHeader}
                     </td>
@@ -392,9 +394,9 @@ export default function ReportDetailPage() {
       </div>
 
       {params.slug === "summary" && statusSummary ? (
-        <div className="report-status-summary card overflow-auto print-avoid">
-          <h3 className="border-b border-[var(--border)] p-3 font-bold">ملخص حسب الحالة</h3>
-          <table className="min-w-full text-sm">
+        <div className="report-status-summary report-print-section card overflow-auto print-avoid">
+          <h3 className="border-b border-[var(--border)] p-3 text-base font-bold">ملخص حسب الحالة</h3>
+          <table className="report-print-table min-w-full text-sm">
             <thead className="table-head">
               <tr>
                 <th className="p-3 text-right w-40" />

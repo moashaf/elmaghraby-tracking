@@ -126,13 +126,15 @@ html.dark .table-head {
   }
 
   @page {
-    margin: 12mm;
+    margin: 10mm;
     size: A4 landscape;
   }
 
   body {
     background: #fff !important;
     color: #000 !important;
+    font-size: 13px;
+    font-weight: 600;
   }
 
   main {
@@ -145,14 +147,22 @@ html.dark .table-head {
     margin-right: 0 !important;
   }
 
+  .report-print-root,
+  .shipments-print-root {
+    padding: 0 !important;
+    color: #000 !important;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
   .card {
     box-shadow: none !important;
     border-color: #94a3b8 !important;
-    break-inside: auto;
-    page-break-inside: auto;
   }
 
-  .print-avoid {
+  .print-avoid,
+  .report-print-section,
+  .report-status-summary {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
@@ -161,53 +171,85 @@ html.dark .table-head {
     overflow: visible !important;
   }
 
-  .report-print-root {
-    padding: 0 !important;
+  .report-print-title,
+  .shipments-print-title {
+    display: block !important;
+    margin-bottom: 14px;
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1.35;
+  }
+
+  .report-print-root table,
+  .shipments-print-root table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .report-print-root thead,
+  .shipments-print-root thead {
+    display: table-header-group;
+  }
+
+  .report-print-root tfoot,
+  .shipments-print-root tfoot {
+    display: table-footer-group;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .report-print-root th,
+  .shipments-print-root th {
+    font-size: 13px;
+    font-weight: 800;
+    background: #e8e6e1 !important;
+    color: #000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .report-print-root td,
+  .shipments-print-root td {
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .report-print-root tfoot td,
+  .shipments-print-root tfoot td {
+    font-size: 14px;
+    font-weight: 800;
+    background: #f5f3ef !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .report-section-row td {
+    font-size: 14px !important;
+    font-weight: 800 !important;
+    background: #e8e6e1 !important;
+    break-after: avoid;
+    page-break-after: avoid;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   .report-status-summary {
-    break-inside: avoid !important;
-    page-break-inside: avoid !important;
-    margin-top: 12px;
+    margin-top: 14px;
   }
 
-  .report-print-root > .card.overflow-auto {
-    break-inside: auto;
-    page-break-inside: auto;
-  }
-
-  .report-print-root .table-head {
-    break-inside: avoid;
-    page-break-inside: avoid;
-  }
-
-  tfoot {
-    break-inside: avoid;
-    page-break-inside: avoid;
-  }
-
-  .report-print-title {
-    display: block !important;
-    margin-bottom: 12px;
-    font-size: 18px;
+  .status-badge {
     font-weight: 700;
-  }
-
-  .shipments-print-title {
-    display: block !important;
-    margin-bottom: 12px;
-    font-size: 18px;
-    font-weight: 700;
-  }
-
-  table {
-    font-size: 11px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   th,
   td {
-    border: 1px solid #cbd5e1 !important;
-    padding: 6px 8px !important;
+    border: 1px solid #94a3b8 !important;
+    padding: 7px 9px !important;
+    vertical-align: middle;
   }
 }
 
@@ -366,4 +408,21 @@ html.dark .table-head {
   width: 4.5rem;
   border-radius: 999px;
   background: linear-gradient(90deg, var(--primary), rgb(15 118 110 / 18%));
+}
+
+/* ——— Report tables (screen + print base) ——— */
+.report-print-table {
+  font-weight: 600;
+}
+
+.report-print-table th {
+  font-weight: 700;
+}
+
+.report-print-table tfoot td {
+  font-weight: 800;
+}
+
+.report-section-row td {
+  font-weight: 700;
 }

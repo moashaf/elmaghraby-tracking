@@ -25,6 +25,7 @@ export type ShipmentReportRow = {
   total_cartons: number | null;
   value_usd: number | null;
   containers_count: number;
+  invoice_file_name: string | null;
 };
 
 export const shipmentSelect =
@@ -67,6 +68,7 @@ export function normalizeShipment(row: Record<string, unknown>): ShipmentReportR
     total_cartons: row.total_cartons == null ? null : Number(row.total_cartons),
     value_usd: row.value_usd == null ? null : Number(row.value_usd),
     containers_count: readEmbeddedContainerCount(row.shipment_containers),
+    invoice_file_name: null,
   };
 }
 

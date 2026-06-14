@@ -8,6 +8,7 @@ import { ErrorMessage } from "@/components/ui";
 import { SHIPMENT_STATUS_LABELS } from "@/lib/constants";
 import { formatUsd } from "@/lib/format";
 import { displayUnitPerCarton } from "@/lib/shipment-product-quantity";
+import { displayInvoiceNumber } from "@/lib/shipment-invoice-number";
 import { signedProductImageUrls } from "@/lib/product-images";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import type { Shipment, ShipmentContainer, ShipmentCost, ShipmentDocument, ShipmentProduct } from "@/lib/types";
@@ -125,6 +126,9 @@ export function ShipmentPrintReport({ shipmentId }: { shipmentId: string }) {
 
   return (
     <div className="report-print-root space-y-5">
+      <div className="report-print-title hidden">
+        تقرير الشحنة {invDoc ? displayInvoiceNumber(invDoc.file_name) : shipment.shipment_number} — ACID: {shipment.acid}
+      </div>
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
         <div className="flex flex-wrap gap-2">
           <Link className="btn btn-secondary" href="/shipments">
@@ -151,19 +155,22 @@ export function ShipmentPrintReport({ shipmentId }: { shipmentId: string }) {
         </div>
       </div>
 
-      <ErrorMessage message={error} />
+      <div className="print:hidden">
+        <ErrorMessage message={error} />
+      </div>
 
-      <header className="report-print-title card space-y-2 p-5 text-center">
-        <div className="text-sm text-[var(--muted)]">Elmaghraby Tracing</div>
+      <header className="report-print-section card space-y-2 p-5 text-center">
+        <div className="text-sm font-semibold text-[var(--muted)]">Elmaghraby Tracing</div>
         <h1 className="text-2xl font-bold">تقرير الشحنة {shipment.shipment_number}</h1>
-        <p className="text-sm text-[var(--muted)]">
+        <p className="text-sm font-semibold text-[var(--muted)]">
           {shipment.companies?.name_ar ?? "-"} — ACID: {shipment.acid}
         </p>
       </header>
 
-      <section className="card p-5">
-        <h2 className="mb-3 font-bold">البيانات الأساسية</h2>
+      <section className="report-print-section card p-5">
+        <h2 className="mb-3 text-base font-bold">البيانات الأساسية</h2>
         <div className="grid gap-3 text-sm md:grid-cols-3">
+          <Field label="رقم الشحنة" value={invDoc ? displayInvoiceNumber(invDoc.file_name) : "-"} />
           <Field label="ACID" value={shipment.acid} />
           <Field label="الحالة" value={SHIPMENT_STATUS_LABELS[shipment.status]} />
           <Field label="نوع البضاعة" value={shipment.shipment_type ?? "-"} />
@@ -180,7 +187,7 @@ export function ShipmentPrintReport({ shipmentId }: { shipmentId: string }) {
       </section>
 
       {invDoc ? (
-        <section className="card p-5">
+        <section className="report-print-section card p-5 print-avoid">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="font-bold">ملف INV</h2>
@@ -196,9 +203,9 @@ export function ShipmentPrintReport({ shipmentId }: { shipmentId: string }) {
         <section className="card p-4 text-sm text-[var(--muted)] print:hidden">لا يوجد ملف INV مرفوع لهذه الشحنة.</section>
       )}
 
-      <section className="card overflow-auto p-0">
-        <h2 className="border-b border-[var(--border)] p-4 font-bold">الحاويات ({containers.length})</h2>
-        <table className="min-w-full text-sm">
+      <section className="report-print-section card overflow-auto p-0 report-print-table-wrap print-avoid">
+        <h2 className="border-b border-[var(--border)] p-4 text-base font-bold">الحاويات ({containers.length})</h2>
+        <table className="report-print-table min-w-full text-sm">
           <thead className="table-head">
             <tr>
               <th className="p-3 text-right">#</th>
@@ -230,9 +237,9 @@ export function ShipmentPrintReport({ shipmentId }: { shipmentId: string }) {
         </table>
       </section>
 
-      <section className="card overflow-auto p-0">
-        <h2 className="border-b border-[var(--border)] p-4 font-bold">المنتجات ({products.length})</h2>
-        <table className="min-w-full text-sm">
+      <section className="card overflow-auto p-0 report-print-table-wrap">
+        <h2 className="border-b border-[var(--border)] p-4 text-base font-bold">المنتجات ({products.length})</h2>
+        <table className="report-print-table min-w-full text-sm">
           <thead className="table-head">
             <tr>
               {withImages ? <th className="p-3 text-right">صورة</th> : null}
@@ -284,8 +291,8 @@ export function ShipmentPrintReport({ shipmentId }: { shipmentId: string }) {
       </section>
 
       {cost ? (
-        <section className="card p-5">
-          <h2 className="mb-3 font-bold">مصاريف الإغلاق</h2>
+        <section className="report-print-section card p-5 print-avoid">
+          <h2 className="mb-3 text-base font-bold">مصاريف الإغلاق</h2>
           <div className="grid gap-3 text-sm md:grid-cols-3">
             <Field label="جمارك" value={Number(cost.customs_cost).toLocaleString("ar-EG")} />
             <Field label="شحن" value={Number(cost.shipping_cost).toLocaleString("ar-EG")} />
@@ -307,9 +314,9 @@ export function ShipmentPrintReport({ shipmentId }: { shipmentId: string }) {
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-[var(--border)] p-3 print-avoid">
-      <div className="text-xs text-[var(--muted)]">{label}</div>
-      <div className="mt-1 font-semibold">{value}</div>
+    <div className="rounded-md border border-[var(--border)] p-3">
+      <div className="text-xs font-semibold text-[var(--muted)]">{label}</div>
+      <div className="mt-1 font-bold">{value}</div>
     </div>
   );
 }

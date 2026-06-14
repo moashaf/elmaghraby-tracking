@@ -171,33 +171,37 @@ export default function ShipmentsPage() {
       <div className="shipments-print-title hidden">
         {tr("الشحنات", "Shipments")} — {new Date().toLocaleDateString(lang === "ar" ? "ar-EG" : "en-GB")}
       </div>
-      <PageHeader
-        title={tr("الشحنات", "Shipments")}
-        description={tr(
-          "قائمة الشحنات مع فلترة الحالة وزر التالي بجانب كل حالة.",
-          "Shipments list with status filters and next-action shortcuts."
-        )}
-        actions={
-          <div className="flex flex-wrap gap-2 print:hidden">
-            <button className="btn btn-secondary" onClick={() => void exportExcel()} type="button">
-              <FileSpreadsheet className="h-4 w-4" />
-              Excel
-            </button>
-            <button className="btn btn-secondary" onClick={() => window.print()} type="button">
-              <Printer className="h-4 w-4" />
-              {tr("طباعة", "Print")}
-            </button>
-            {canWrite ? (
-              <Link className="btn" href="/shipments/new">
-                <Plus className="h-4 w-4" />
-                {tr("شحنة جديدة", "New shipment")}
-              </Link>
-            ) : null}
-          </div>
-        }
-      />
+      <div className="print:hidden">
+        <PageHeader
+          title={tr("الشحنات", "Shipments")}
+          description={tr(
+            "قائمة الشحنات مع فلترة الحالة وزر التالي بجانب كل حالة.",
+            "Shipments list with status filters and next-action shortcuts."
+          )}
+          actions={
+            <div className="flex flex-wrap gap-2">
+              <button className="btn btn-secondary" onClick={() => void exportExcel()} type="button">
+                <FileSpreadsheet className="h-4 w-4" />
+                Excel
+              </button>
+              <button className="btn btn-secondary" onClick={() => window.print()} type="button">
+                <Printer className="h-4 w-4" />
+                {tr("طباعة", "Print")}
+              </button>
+              {canWrite ? (
+                <Link className="btn" href="/shipments/new">
+                  <Plus className="h-4 w-4" />
+                  {tr("شحنة جديدة", "New shipment")}
+                </Link>
+              ) : null}
+            </div>
+          }
+        />
+      </div>
 
-      <ErrorMessage message={error} />
+      <div className="print:hidden">
+        <ErrorMessage message={error} />
+      </div>
 
       <div className="grid gap-4 md:grid-cols-3 print:hidden">
         {counts.map((item) => (
@@ -229,9 +233,9 @@ export default function ShipmentsPage() {
         </button>
       </div>
 
-      <div className="card overflow-hidden">
+      <div className="card overflow-hidden report-print-table-wrap">
         <div className="overflow-auto">
-          <table className="min-w-full text-sm">
+          <table className="report-print-table min-w-full text-sm">
             <thead className="table-head">
               <tr>
                 <th className="p-3 text-right">نوع البضاعة</th>

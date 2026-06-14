@@ -157,12 +157,16 @@ export default function ProductSmartSearchPage() {
     <div className="report-print-root space-y-5">
       <div className="report-print-title hidden">{printTitle}</div>
 
-      <PageHeader
-        title={tr("بحث المنتجات الذكي", "Smart product search")}
-        description={tr("ابحث عن أي منتج — داخل شحنة أو غير مرتبط بشحنة.", "Search any product (in shipments or standalone).")}
-      />
+      <div className="print:hidden">
+        <PageHeader
+          title={tr("بحث المنتجات الذكي", "Smart product search")}
+          description={tr("ابحث عن أي منتج — داخل شحنة أو غير مرتبط بشحنة.", "Search any product (in shipments or standalone).")}
+        />
+      </div>
 
-      <ErrorMessage message={error} />
+      <div className="print:hidden">
+        <ErrorMessage message={error} />
+      </div>
 
       <form className="card grid gap-3 p-4 md:grid-cols-[1fr_auto] print:hidden" onSubmit={search}>
         <input className="input" placeholder="ابحث بالاسم أو SKU أو التصنيف أو الباركود" value={query} onChange={(event) => setQuery(event.target.value)} />
@@ -213,7 +217,7 @@ export default function ProductSmartSearchPage() {
       ) : null}
 
       {product ? (
-        <section className="card space-y-4 p-4">
+        <section className="report-print-section card space-y-4 p-4 print-avoid">
           <div className="flex flex-wrap items-start justify-between gap-3 print:hidden">
             <h2 className="text-lg font-bold">تفاصيل المنتج</h2>
             <button className="btn btn-secondary text-sm" onClick={() => window.print()} type="button">
@@ -250,8 +254,8 @@ export default function ProductSmartSearchPage() {
           ) : null}
 
           {!detailLoading && hasShipment ? (
-            <div className="overflow-auto">
-              <table className="min-w-full text-sm">
+            <div className="overflow-auto report-print-table-wrap">
+              <table className="report-print-table min-w-full text-sm">
                 <thead className="table-head">
                   <tr>
                     <th className="p-3 text-right">الشحنة</th>

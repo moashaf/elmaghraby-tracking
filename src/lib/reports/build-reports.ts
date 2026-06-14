@@ -4,9 +4,9 @@ import { SHIPMENT_STATUS_LABELS } from "@/lib/constants";
 import { formatUsd } from "@/lib/format";
 import {
   computeShipmentStatusSummary,
-  SHIPMENT_STATUS_SORT_ORDER,
   type ShipmentStatusSummary,
 } from "@/lib/shipment-container-count";
+import { compareShipmentsByInvoiceNumber, displayInvoiceNumber } from "@/lib/shipment-invoice-number";
 import { collectDescendantCategoryIds } from "@/lib/category-tree";
 import type { ProductCategory } from "@/lib/types";
 import type { ProductKindFilter } from "@/lib/reports/constants";
@@ -73,6 +73,7 @@ type CostJoin = {
 
 function shipmentToReportRow(row: ShipmentReportRow): ReportRow {
   return {
+    "رقم الشحنة": row.invoice_file_name ? displayInvoiceNumber(row.invoice_file_name) : "-",
     ACID: row.acid,
     الشركة: row.company,
     "عدد الكراتين": row.total_cartons ?? "-",
@@ -87,18 +88,32 @@ function shipmentToReportRow(row: ShipmentReportRow): ReportRow {
   };
 }
 
-function buildGroupedSummaryRows(filtered: ShipmentReportRow[]): ReportRow[] {
-  const rows: ReportRow[] = [];
+async function fetchInvoiceFileNamesByShipmentId(): Promise<Map<string, string>> {
+  const result = await fetchAllFromTable(
+    createClient(),
+    "shipment_documents",
+    "shipment_id,doc_type,file_name,uploaded_at",
+    { column: "uploaded_at", ascending: false }
+  );
+  if (result.error) return new Map();
 
-  for (const status of SHIPMENT_STATUS_SORT_ORDER) {
-    const group = filtered.filter((row) => row.status === status);
-    if (!group.length) continue;
-
-    rows.push({ _sectionHeader: SHIPMENT_STATUS_LABELS[status] });
-    rows.push(...group.map(shipmentToReportRow));
+  const map = new Map<string, string>();
+  for (const row of result.data as Array<{ shipment_id: string; doc_type: string; file_name: string }>) {
+    if (row.doc_type?.toUpperCase() !== "INV") continue;
+    if (!map.has(row.shipment_id)) map.set(row.shipment_id, row.file_name);
   }
+  return map;
+}
 
-  return rows;
+function attachInvoiceNumbers(shipments: ShipmentReportRow[], invoiceMap: Map<string, string>): ShipmentReportRow[] {
+  return shipments.map((row) => ({
+    ...row,
+    invoice_file_name: invoiceMap.get(row.id) ?? null,
+  }));
+}
+
+function sortShipmentsByInvoiceNumber(shipments: ShipmentReportRow[]): ShipmentReportRow[] {
+  return [...shipments].sort(compareShipmentsByInvoiceNumber);
 }
 
 function normalizeShipmentJoin(value: ShipmentReportRow | ShipmentReportRow[] | null): ShipmentReportRow | null {
@@ -164,7 +179,11 @@ export async function buildReport(
   const result = await supabase.from("shipments").select(`id,${shipmentSelect}`).order("created_at", { ascending: false });
   if (result.error) return { error: result.error.message };
 
-  const shipments = ((result.data ?? []) as Array<Record<string, unknown>>).map(normalizeShipment);
+  const invoiceMap = await fetchInvoiceFileNamesByShipmentId();
+  const shipments = attachInvoiceNumbers(
+    ((result.data ?? []) as Array<Record<string, unknown>>).map(normalizeShipment),
+    invoiceMap
+  );
   const today = todayIso();
   const next10 = new Date();
   next10.setDate(next10.getDate() + 10);
@@ -192,13 +211,14 @@ export async function buildReport(
   }
 
   if (slug === "summary") {
+    const sorted = sortShipmentsByInvoiceNumber(filtered);
     return {
-      rows: buildGroupedSummaryRows(filtered),
+      rows: sorted.map(shipmentToReportRow),
       statusSummary: computeShipmentStatusSummary(filtered),
     };
   }
 
-  return { rows: filtered.map(shipmentToReportRow) };
+  return { rows: sortShipmentsByInvoiceNumber(filtered).map(shipmentToReportRow) };
 }
 
 async function allProductsReport(): Promise<{ rows: ReportRow[] } | { error: string }> {
