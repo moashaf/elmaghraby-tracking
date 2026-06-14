@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/client";
 import { fetchAllFromTable } from "@/lib/supabase/fetch-all";
 import { SHIPMENT_STATUS_LABELS } from "@/lib/constants";
+import { formatUsd } from "@/lib/format";
 import { collectDescendantCategoryIds } from "@/lib/category-tree";
 import type { ProductCategory } from "@/lib/types";
 import type { ProductKindFilter } from "@/lib/reports/constants";
@@ -67,16 +68,14 @@ type CostJoin = {
 
 function shipmentToReportRow(row: ShipmentReportRow): ReportRow {
   return {
-    "رقم الشحنة": row.shipment_number,
     ACID: row.acid,
     الشركة: row.company,
-    المورد: row.supplier,
-    "ميناء الشحن": row.shipping_port,
-    "ميناء الوصول": row.arrival_port,
-    "تاريخ الشحن": row.shipped_at,
-    ETA: row.eta,
+    "عدد الكراتين": row.total_cartons ?? "-",
+    "قيمة الشحنة ($)": formatUsd(row.value_usd),
+    "تاريخ الشحن": row.shipped_at || "-",
+    "تاريخ الوصول": row.eta || "-",
     الحالة: SHIPMENT_STATUS_LABELS[row.status],
-    "تاريخ الإغلاق": row.closed_at,
+    "نوع البضاعة": row.shipment_type || "-",
     ...(row.id ? { _shipmentId: row.id } : {}),
   };
 }

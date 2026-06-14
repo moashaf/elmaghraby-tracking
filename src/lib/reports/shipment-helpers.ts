@@ -18,10 +18,13 @@ export type ShipmentReportRow = {
   eta: string;
   status: ShipmentStatus;
   closed_at: string | null;
+  shipment_type: string;
+  total_cartons: number | null;
+  value_usd: number | null;
 };
 
 export const shipmentSelect =
-  "shipment_number,acid,shipping_port,arrival_port,shipped_at,eta,status,closed_at,companies(name_ar),suppliers(name_ar)";
+  "shipment_number,acid,shipment_type,total_cartons,value_usd,shipping_port,arrival_port,shipped_at,eta,status,closed_at,companies(name_ar),suppliers(name_ar)";
 
 export function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -56,6 +59,9 @@ export function normalizeShipment(row: Record<string, unknown>): ShipmentReportR
     eta: String(row.eta ?? ""),
     status: row.status as ShipmentStatus,
     closed_at: row.closed_at ? String(row.closed_at).slice(0, 10) : null,
+    shipment_type: String(row.shipment_type ?? ""),
+    total_cartons: row.total_cartons == null ? null : Number(row.total_cartons),
+    value_usd: row.value_usd == null ? null : Number(row.value_usd),
   };
 }
 
