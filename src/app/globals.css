@@ -119,6 +119,8 @@ html.dark .table-head {
   aside,
   header,
   nav,
+  .app-shell-footer,
+  .app-wave-bg,
   .print\:hidden {
     display: none !important;
   }
@@ -161,6 +163,27 @@ html.dark .table-head {
 
   .report-print-root {
     padding: 0 !important;
+  }
+
+  .report-status-summary {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    margin-top: 12px;
+  }
+
+  .report-print-root > .card.overflow-auto {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .report-print-root .table-head {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  tfoot {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .report-print-title {

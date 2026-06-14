@@ -15,7 +15,7 @@ import type { ProductKindFilter } from "@/lib/reports/constants";
 import { supportsIncomingFilters, supportsProductImages, hasShipmentLinks } from "@/lib/reports/constants";
 import { todayIso, type ReportRow } from "@/lib/reports/shipment-helpers";
 import { SHIPMENT_STATUS_LABELS } from "@/lib/constants";
-import { sumReportColumn, type ShipmentStatusSummary } from "@/lib/shipment-container-count";
+import { sumReportColumn, SHIPMENT_STATUS_SORT_ORDER, type ShipmentStatusSummary } from "@/lib/shipment-container-count";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { fetchAllFromTable } from "@/lib/supabase/fetch-all";
 import type { ProductCategory } from "@/lib/types";
@@ -144,6 +144,9 @@ export default function ReportDetailPage() {
     };
   }, [dataRows, params.slug]);
 
+  const printableExtraColumns =
+    (showImages ? 1 : 0) + (params.slug === "container-files" ? 1 : 0);
+
   const categoryOptions = useMemo(() => buildCategorySelectOptions(categories), [categories]);
 
   async function downloadFile(path: string) {
@@ -211,7 +214,9 @@ export default function ReportDetailPage() {
         ) : null}
       </div>
 
-      <PageHeader title={report.title} description={report.description} />
+      <div className="print:hidden">
+        <PageHeader title={report.title} description={report.description} />
+      </div>
 
       <ErrorMessage message={error} />
 
@@ -284,7 +289,7 @@ export default function ReportDetailPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td className="p-4 text-[var(--muted)]" colSpan={Math.max(columns.length, 1) + extraColumns}>
+                <td className="p-4 text-[var(--muted)]" colSpan={Math.max(columns.length, 1) + printableExtraColumns + (showShipmentLinks ? 1 : 0)}>
                   جاري التحميل...
                 </td>
               </tr>
@@ -292,7 +297,7 @@ export default function ReportDetailPage() {
               filteredRows.map((row, index) =>
                 row._sectionHeader ? (
                   <tr className="bg-slate-100 font-bold print:bg-slate-100" key={`section-${index}`}>
-                    <td className="p-3" colSpan={Math.max(columns.length, 1) + extraColumns}>
+                    <td className="p-3" colSpan={Math.max(columns.length, 1) + printableExtraColumns + (showShipmentLinks ? 1 : 0)}>
                       {row._sectionHeader}
                     </td>
                   </tr>
@@ -347,7 +352,7 @@ export default function ReportDetailPage() {
               )
             ) : (
               <tr>
-                <td className="p-4 text-[var(--muted)]" colSpan={Math.max(columns.length, 1) + extraColumns}>
+                <td className="p-4 text-[var(--muted)]" colSpan={Math.max(columns.length, 1) + printableExtraColumns + (showShipmentLinks ? 1 : 0)}>
                   لا توجد بيانات.
                 </td>
               </tr>
@@ -387,16 +392,38 @@ export default function ReportDetailPage() {
       </div>
 
       {params.slug === "summary" && statusSummary ? (
-        <div className="grid gap-4 md:grid-cols-3 print:grid-cols-3">
-          {(["in_sea", "customs", "closed"] as const).map((status) => (
-            <div className="card p-4 text-center" key={status}>
-              <div className="text-sm font-semibold text-[var(--muted)]">{SHIPMENT_STATUS_LABELS[status]}</div>
-              <div className="mt-2 text-3xl font-bold">{statusSummary[status].shipments}</div>
-              <div className="text-xs text-[var(--muted)]">شحنة</div>
-              <div className="mt-3 text-2xl font-bold text-[#0f766e]">{statusSummary[status].containers}</div>
-              <div className="text-xs text-[var(--muted)]">حاوية</div>
-            </div>
-          ))}
+        <div className="report-status-summary card overflow-auto print-avoid">
+          <h3 className="border-b border-[var(--border)] p-3 font-bold">ملخص حسب الحالة</h3>
+          <table className="min-w-full text-sm">
+            <thead className="table-head">
+              <tr>
+                <th className="p-3 text-right w-40" />
+                {SHIPMENT_STATUS_SORT_ORDER.map((status) => (
+                  <th className="p-3 text-right" key={status}>
+                    {SHIPMENT_STATUS_LABELS[status]}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-t border-[var(--border)]">
+                <td className="p-3 font-semibold">عدد الشحنات</td>
+                {SHIPMENT_STATUS_SORT_ORDER.map((status) => (
+                  <td className="p-3 text-center text-xl font-bold" key={status}>
+                    {statusSummary[status].shipments}
+                  </td>
+                ))}
+              </tr>
+              <tr className="border-t border-[var(--border)]">
+                <td className="p-3 font-semibold">عدد الحاويات</td>
+                {SHIPMENT_STATUS_SORT_ORDER.map((status) => (
+                  <td className="p-3 text-center text-xl font-bold text-[#0f766e]" key={status}>
+                    {statusSummary[status].containers}
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
         </div>
       ) : null}
     </div>
