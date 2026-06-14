@@ -2,15 +2,23 @@
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { AppLanguage } from "@/lib/i18n";
-import { DEFAULT_LANGUAGE, languageToDir, t as translate } from "@/lib/i18n";
+import {
+  DEFAULT_LANGUAGE,
+  isAppLanguage,
+  languageToDir,
+  resolveInline,
+  t as translate,
+  translateColumn,
+} from "@/lib/i18n";
 
 type LanguageContextValue = {
   lang: AppLanguage;
   dir: "rtl" | "ltr";
   setLanguage: (lang: AppLanguage) => void;
-  toggleLanguage: () => void;
   t: (key: string) => string;
-  tr: (ar: string, en: string) => string;
+  tr: (ar: string, en?: string, zh?: string) => string;
+  ui: (ar: string) => string;
+  tc: (columnKey: string) => string;
 };
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
@@ -18,8 +26,7 @@ const LanguageContext = createContext<LanguageContextValue | null>(null);
 function readStoredLanguage(): AppLanguage | null {
   if (typeof window === "undefined") return null;
   const raw = window.localStorage.getItem("app_lang");
-  if (raw === "ar" || raw === "en") return raw;
-  return null;
+  return isAppLanguage(raw) ? raw : null;
 }
 
 function persistLanguage(lang: AppLanguage) {
@@ -31,8 +38,9 @@ function persistLanguage(lang: AppLanguage) {
 function applyDocumentLanguage(lang: AppLanguage) {
   if (typeof document === "undefined") return;
   const dir = languageToDir(lang);
-  document.documentElement.lang = lang;
+  document.documentElement.lang = lang === "zh" ? "zh-CN" : lang;
   document.documentElement.dir = dir;
+  document.documentElement.dataset.lang = lang;
 }
 
 export function LanguageProvider({ children, initialLanguage }: { children: ReactNode; initialLanguage?: AppLanguage }) {
@@ -45,6 +53,8 @@ export function LanguageProvider({ children, initialLanguage }: { children: Reac
 
   const value = useMemo<LanguageContextValue>(() => {
     const dir = languageToDir(lang);
+    const tr = (arText: string, enText?: string, zhText?: string) =>
+      resolveInline(arText, lang, { en: enText, zh: zhText });
     return {
       lang,
       dir,
@@ -53,14 +63,10 @@ export function LanguageProvider({ children, initialLanguage }: { children: Reac
         applyDocumentLanguage(next);
         persistLanguage(next);
       },
-      toggleLanguage: () => {
-        const next = lang === "ar" ? "en" : "ar";
-        setLang(next);
-        applyDocumentLanguage(next);
-        persistLanguage(next);
-      },
       t: (key) => translate(key, lang),
-      tr: (arText, enText) => (lang === "ar" ? arText : enText),
+      tr,
+      ui: (arText) => tr(arText),
+      tc: (columnKey) => translateColumn(columnKey, lang),
     };
   }, [lang]);
 
@@ -72,4 +78,3 @@ export function useLanguage() {
   if (!ctx) throw new Error("useLanguage must be used within LanguageProvider");
   return ctx;
 }
-

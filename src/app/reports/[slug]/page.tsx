@@ -7,14 +7,14 @@ import { ArrowRight, Download, FileSpreadsheet, Printer, RefreshCw } from "lucid
 import { downloadExcelWithOptionalImages } from "@/lib/excel-export";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage, PageHeader } from "@/components/ui";
+import { useLanguage } from "@/context/language-context";
 import { buildCategorySelectOptions } from "@/lib/category-options";
-import { getReport } from "@/lib/report-definitions";
+import { findLocalizedReport, getStatusLabel, languageToLocale, localizeReportCell } from "@/lib/i18n";
 import { signedProductImageUrls } from "@/lib/product-images";
 import { buildReport } from "@/lib/reports/build-reports";
 import type { ProductKindFilter } from "@/lib/reports/constants";
 import { supportsIncomingFilters, supportsProductImages, hasShipmentLinks } from "@/lib/reports/constants";
 import { todayIso, type ReportRow } from "@/lib/reports/shipment-helpers";
-import { SHIPMENT_STATUS_LABELS } from "@/lib/constants";
 import { sumReportColumn, SHIPMENT_STATUS_SORT_ORDER, type ShipmentStatusSummary } from "@/lib/shipment-container-count";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { fetchAllFromTable } from "@/lib/supabase/fetch-all";
@@ -22,15 +22,18 @@ import type { ProductCategory } from "@/lib/types";
 
 const bucket = "container-files";
 
-const KIND_TABS: Array<{ id: ProductKindFilter; label: string }> = [
-  { id: "all", label: "الكل" },
-  { id: "disassembled", label: "مفكك" },
-  { id: "complete", label: "كامل" },
-];
-
 export default function ReportDetailPage() {
   const params = useParams<{ slug: string }>();
-  const report = getReport(params.slug);
+  const { ui, tc, tr, lang } = useLanguage();
+  const report = findLocalizedReport(params.slug, lang);
+  const kindTabs = useMemo<Array<{ id: ProductKindFilter; label: string }>>(
+    () => [
+      { id: "all", label: ui("الكل") },
+      { id: "disassembled", label: ui("مفكك") },
+      { id: "complete", label: ui("كامل") },
+    ],
+    [ui]
+  );
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [statusSummary, setStatusSummary] = useState<ShipmentStatusSummary | null>(null);
   const [from, setFrom] = useState("");
@@ -64,7 +67,7 @@ export default function ReportDetailPage() {
     setError("");
     if (!isSupabaseConfigured()) {
       setLoading(false);
-      setError("اضبط ملف .env.local أولا بقيم Supabase.");
+      setError(ui("اضبط ملف .env.local أولا بقيم Supabase."));
       return;
     }
 
@@ -173,18 +176,18 @@ export default function ReportDetailPage() {
       columns.forEach((column, index) => {
         if (column === "عدد الكراتين") totalRow[column] = shipmentTotals.cartons;
         else if (column === "عدد الحاويات") totalRow[column] = shipmentTotals.containers;
-        else totalRow[column] = index === 0 ? "الإجمالي" : "";
+        else totalRow[column] = index === 0 ? ui("الإجمالي") : "";
       });
       exportRows.push(totalRow);
     }
 
     if (params.slug === "summary" && statusSummary) {
       exportRows.push({});
-      exportRows.push({ [columns[0] ?? "ملخص"]: "ملخص حسب الحالة" });
-      const summaryRow: Record<string, string | number | null> = { [columns[0] ?? ""]: "عدد الشحنات" };
-      const containerRow: Record<string, string | number | null> = { [columns[0] ?? ""]: "عدد الحاويات" };
+      exportRows.push({ [columns[0] ?? tc("ملخص")]: ui("ملخص حسب الحالة") });
+      const summaryRow: Record<string, string | number | null> = { [columns[0] ?? ""]: ui("عدد الشحنات") };
+      const containerRow: Record<string, string | number | null> = { [columns[0] ?? ""]: ui("عدد الحاويات") };
       SHIPMENT_STATUS_SORT_ORDER.forEach((status) => {
-        const label = SHIPMENT_STATUS_LABELS[status];
+        const label = getStatusLabel(status, lang);
         summaryRow[label] = statusSummary[status].shipments;
         containerRow[label] = statusSummary[status].containers;
       });
@@ -204,23 +207,23 @@ export default function ReportDetailPage() {
   }
 
   if (!report) {
-    return <ErrorMessage message="التقرير غير موجود." />;
+    return <ErrorMessage message={ui("التقرير غير موجود.")} />;
   }
 
   return (
     <div className="report-print-root space-y-5">
       <div className="report-print-title hidden">
-        {report.title} — {new Date().toLocaleDateString("ar-EG")}
+        {report.title} — {new Date().toLocaleDateString(languageToLocale(lang))}
       </div>
 
       <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--card)] p-3 shadow-sm print:hidden">
         <Link className="btn btn-secondary shrink-0" href="/reports">
           <ArrowRight className="h-4 w-4" />
-          رجوع للتقارير
+          {ui("رجوع للتقارير")}
         </Link>
         <button className="btn btn-secondary" onClick={load} type="button">
           <RefreshCw className="h-4 w-4" />
-          تحديث
+          {ui("تحديث")}
         </button>
         <button className="btn btn-secondary" onClick={() => void exportExcel()} type="button">
           <FileSpreadsheet className="h-4 w-4" />
@@ -228,12 +231,12 @@ export default function ReportDetailPage() {
         </button>
         <button className="btn" onClick={() => window.print()} type="button">
           <Printer className="h-4 w-4" />
-          طباعة PDF
+          {ui("طباعة PDF")}
         </button>
         {supportsProductImages(params.slug) ? (
           <label className="ms-auto flex items-center gap-2 rounded-md border border-[var(--border)] px-3 py-2 text-sm">
             <input checked={withImages} onChange={(event) => setWithImages(event.target.checked)} type="checkbox" />
-            بالصور
+            {ui("بالصور")}
           </label>
         ) : null}
       </div>
@@ -243,19 +246,19 @@ export default function ReportDetailPage() {
       </div>
 
       <div className="print:hidden">
-        <ErrorMessage message={error} />
+        <ErrorMessage message={error ? ui(error) : ""} />
       </div>
 
       <div className="card space-y-3 p-4 print:hidden">
         {report.dateFilter !== "none" ? (
           <p className="text-xs text-[var(--muted)]">
-            {report.dateHint ?? (report.dateFilter === "closed" ? "فلترة حسب تاريخ الإغلاق" : "فلترة حسب ETA")}
+            {report.dateHint ?? (report.dateFilter === "closed" ? ui("فلترة حسب تاريخ الإغلاق") : ui("فلترة حسب ETA"))}
           </p>
         ) : null}
 
         {showIncomingFilters ? (
           <div className="flex flex-wrap gap-2">
-            {KIND_TABS.map((tab) => (
+            {kindTabs.map((tab) => (
               <button
                 className={`rounded-full px-3 py-1 text-sm font-semibold ${productKind === tab.id ? "bg-[#0f766e] text-white" : "bg-slate-100 text-slate-700"}`}
                 key={tab.id}
@@ -277,8 +280,8 @@ export default function ReportDetailPage() {
         >
           {showIncomingFilters ? (
             <SearchableSelect
-              options={[{ value: "", label: "كل الفئات", keywords: "" }, ...categoryOptions]}
-              placeholder="فلتر حسب الفئة..."
+              options={[{ value: "", label: ui("كل الفئات"), keywords: "" }, ...categoryOptions]}
+              placeholder={ui("فلتر حسب الفئة...")}
               value={categoryId}
               onChange={setCategoryId}
             />
@@ -289,10 +292,10 @@ export default function ReportDetailPage() {
               <input className="input" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
             </>
           ) : null}
-          <input className="input" placeholder="بحث داخل التقرير" value={query} onChange={(event) => setQuery(event.target.value)} />
+          <input className="input" placeholder={ui("بحث داخل التقرير")} value={query} onChange={(event) => setQuery(event.target.value)} />
           {report.dateFilter !== "none" || showIncomingFilters ? (
             <button className="btn" onClick={load} type="button">
-              تطبيق
+              {ui("تطبيق")}
             </button>
           ) : null}
         </div>
@@ -302,21 +305,21 @@ export default function ReportDetailPage() {
         <table className="report-print-table table-nowrap min-w-full text-sm">
           <thead className="table-head">
             <tr>
-              {showImages ? <th className="p-3 text-right w-16">صورة</th> : null}
+              {showImages ? <th className="p-3 text-right w-16">{ui("صورة")}</th> : null}
               {columns.map((column) => (
                 <th className="p-3 text-right" key={column}>
-                  {column}
+                  {tc(column)}
                 </th>
               ))}
-              {params.slug === "container-files" ? <th className="p-3 text-right">تحميل</th> : null}
-              {showShipmentLinks ? <th className="p-3 text-right print:hidden">فتح الشحنة</th> : null}
+              {params.slug === "container-files" ? <th className="p-3 text-right">{ui("تحميل")}</th> : null}
+              {showShipmentLinks ? <th className="p-3 text-right print:hidden">{ui("فتح الشحنة")}</th> : null}
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
                 <td className="p-4 text-[var(--muted)]" colSpan={Math.max(columns.length, 1) + printableExtraColumns + (showShipmentLinks ? 1 : 0)}>
-                  جاري التحميل...
+                  {ui("جاري التحميل...")}
                 </td>
               </tr>
             ) : filteredRows.length ? (
@@ -345,7 +348,7 @@ export default function ReportDetailPage() {
                     ) : null}
                     {columns.map((column) => (
                       <td className="p-3" key={column}>
-                        {row[column] ?? "-"}
+                        {localizeReportCell(column, row[column], lang, row)}
                       </td>
                     ))}
                     {params.slug === "container-files" && row._downloadPath ? (
@@ -366,7 +369,7 @@ export default function ReportDetailPage() {
                       <td className="p-3 print:hidden">
                         {row._shipmentId ? (
                           <Link className="btn btn-secondary px-2 py-1 text-xs whitespace-nowrap" href={`/shipments/${row._shipmentId}`}>
-                            عرض الشحنة
+                            {ui("عرض الشحنة")}
                           </Link>
                         ) : (
                           <span className="text-[var(--muted)]">-</span>
@@ -379,7 +382,7 @@ export default function ReportDetailPage() {
             ) : (
               <tr>
                 <td className="p-4 text-[var(--muted)]" colSpan={Math.max(columns.length, 1) + printableExtraColumns + (showShipmentLinks ? 1 : 0)}>
-                  لا توجد بيانات.
+                  {ui("لا توجد بيانات.")}
                 </td>
               </tr>
             )}
@@ -392,20 +395,20 @@ export default function ReportDetailPage() {
                   if (column === "عدد الكراتين") {
                     return (
                       <td className="p-3" key={column}>
-                        {shipmentTotals.cartons.toLocaleString("ar-EG")}
+                        {shipmentTotals.cartons.toLocaleString(languageToLocale(lang))}
                       </td>
                     );
                   }
                   if (column === "عدد الحاويات") {
                     return (
                       <td className="p-3" key={column}>
-                        {shipmentTotals.containers.toLocaleString("ar-EG")}
+                        {shipmentTotals.containers.toLocaleString(languageToLocale(lang))}
                       </td>
                     );
                   }
                   return (
                     <td className="p-3" key={column}>
-                      {index === 0 ? "الإجمالي" : ""}
+                      {index === 0 ? ui("الإجمالي") : ""}
                     </td>
                   );
                 })}
@@ -419,21 +422,21 @@ export default function ReportDetailPage() {
 
       {params.slug === "summary" && statusSummary ? (
         <div className="report-status-summary report-print-section card overflow-auto print-avoid">
-          <h3 className="border-b border-[var(--border)] p-3 text-base font-bold">ملخص حسب الحالة</h3>
+          <h3 className="border-b border-[var(--border)] p-3 text-base font-bold">{ui("ملخص حسب الحالة")}</h3>
           <table className="report-print-table table-nowrap min-w-full text-sm">
             <thead className="table-head">
               <tr>
                 <th className="p-3 text-right w-40" />
                 {SHIPMENT_STATUS_SORT_ORDER.map((status) => (
                   <th className="p-3 text-right" key={status}>
-                    {SHIPMENT_STATUS_LABELS[status]}
+                    {getStatusLabel(status, lang)}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               <tr className="border-t border-[var(--border)]">
-                <td className="p-3 font-semibold">عدد الشحنات</td>
+                <td className="p-3 font-semibold">{ui("عدد الشحنات")}</td>
                 {SHIPMENT_STATUS_SORT_ORDER.map((status) => (
                   <td className="p-3 text-center text-xl font-bold" key={status}>
                     {statusSummary[status].shipments}
@@ -441,7 +444,7 @@ export default function ReportDetailPage() {
                 ))}
               </tr>
               <tr className="border-t border-[var(--border)]">
-                <td className="p-3 font-semibold">عدد الحاويات</td>
+                <td className="p-3 font-semibold">{ui("عدد الحاويات")}</td>
                 {SHIPMENT_STATUS_SORT_ORDER.map((status) => (
                   <td className="p-3 text-center text-xl font-bold text-[#0f766e]" key={status}>
                     {statusSummary[status].containers}

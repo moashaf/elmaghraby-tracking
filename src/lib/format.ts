@@ -4,7 +4,7 @@ export function formatUsd(value: number | null | undefined) {
 }
 
 /** Display date as DD/MM/YYYY in Arabic UI, keep ISO in exports when needed. */
-export function formatDisplayDate(iso: string | null | undefined, lang: "ar" | "en" = "ar") {
+export function formatDisplayDate(iso: string | null | undefined, lang: "ar" | "en" | "zh" = "ar") {
   if (!iso) return "-";
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.slice(0, 10));
   if (!match) return iso;

@@ -5,7 +5,8 @@ import Link from "next/link";
 import { Printer, Search } from "lucide-react";
 import { ErrorMessage, PageHeader } from "@/components/ui";
 import { useLanguage } from "@/context/language-context";
-import { SHIPMENT_STATUS_LABELS, type ShipmentStatus } from "@/lib/constants";
+import { getStatusLabel } from "@/lib/i18n";
+import type { ShipmentStatus } from "@/lib/constants";
 import { displayInvoiceNumber, invoiceMapFromDocuments, shipmentInvoiceLabel } from "@/lib/shipment-invoice-number";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
@@ -36,7 +37,7 @@ function escapeIlike(term: string) {
 }
 
 export default function ProductSmartSearchPage() {
-  const { tr } = useLanguage();
+  const { tr, lang } = useLanguage();
   const [query, setQuery] = useState("");
   const [matches, setMatches] = useState<ProductDetail[]>([]);
   const [product, setProduct] = useState<ProductDetail | null>(null);
@@ -297,7 +298,7 @@ export default function ProductSmartSearchPage() {
                       </td>
                       <td className="p-3">{row.eta}</td>
                       <td className="p-3">
-                        <span className={`status-badge status-${row.status}`}>{SHIPMENT_STATUS_LABELS[row.status]}</span>
+                        <span className={`status-badge status-${row.status}`}>{getStatusLabel(row.status, lang)}</span>
                       </td>
                       <td className="p-3">{row.supplier}</td>
                       <td className="p-3">{row.company}</td>

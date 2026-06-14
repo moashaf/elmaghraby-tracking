@@ -7,7 +7,9 @@ import { ArrowRight, Coins, Download, Pencil, RefreshCw, X } from "lucide-react"
 import { ShipmentFiles } from "@/components/shipment-files";
 import { ShipmentForm } from "@/components/shipment-form";
 import { ErrorMessage, PageHeader } from "@/components/ui";
-import { getNextStatusAction, NEXT_ACTION_LABELS, SHIPMENT_STATUS_LABELS } from "@/lib/constants";
+import { getNextStatusAction } from "@/lib/constants";
+import { useLanguage } from "@/context/language-context";
+import { getNextActionLabel, getStatusLabel } from "@/lib/i18n";
 import { useProfile } from "@/context/profile-context";
 import { displayInvoiceNumber } from "@/lib/shipment-invoice-number";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
@@ -20,19 +22,11 @@ const CUSTOMS_CLEARANCE_DAYS = 15;
 
 type Tab = "summary" | "containers" | "products" | "files" | "timeline" | "costs";
 
-const tabs: Array<{ id: Tab; label: string }> = [
-  { id: "summary", label: "ملخص" },
-  { id: "containers", label: "الحاويات" },
-  { id: "products", label: "المنتجات" },
-  { id: "files", label: "الملفات" },
-  { id: "timeline", label: "السجل" },
-  { id: "costs", label: "المصاريف" },
-];
-
 export default function ShipmentDetailsPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const { canWrite, isAdmin } = useProfile();
+  const { ui, lang } = useLanguage();
   const [shipment, setShipment] = useState<Shipment | null>(null);
   const [containers, setContainers] = useState<ShipmentContainer[]>([]);
   const [products, setProducts] = useState<ShipmentProduct[]>([]);
@@ -46,10 +40,22 @@ export default function ShipmentDetailsPage() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const tabs = useMemo<Array<{ id: Tab; label: string }>>(
+    () => [
+      { id: "summary", label: ui("ملخص") },
+      { id: "containers", label: ui("الحاويات") },
+      { id: "products", label: ui("المنتجات") },
+      { id: "files", label: ui("الملفات") },
+      { id: "timeline", label: ui("السجل") },
+      { id: "costs", label: ui("المصاريف") },
+    ],
+    [ui]
+  );
+
   async function load() {
     if (!isSupabaseConfigured()) {
       setLoading(false);
-      setError("اضبط ملف .env.local أولا بقيم Supabase.");
+      setError(ui("اضبط ملف .env.local أولا بقيم Supabase."));
       return;
     }
 
@@ -113,7 +119,7 @@ export default function ShipmentDetailsPage() {
 
     const todayIso = new Date().toISOString().slice(0, 10);
     if (shipment.eta && todayIso < shipment.eta) {
-      setError("لا يمكن تحويل الشحنة إلى «في الجمرك» قبل تاريخ الوصول المتوقع (ETA).");
+      setError(ui("لا يمكن تحويل الشحنة إلى «في الجمرك» قبل تاريخ الوصول المتوقع (ETA)."));
       return;
     }
 
@@ -134,7 +140,7 @@ export default function ShipmentDetailsPage() {
 
   async function revertToInSea() {
     if (!shipment) return;
-    if (!window.confirm("إرجاع الشحنة إلى «في البحر»؟")) return;
+    if (!window.confirm(ui("إرجاع الشحنة إلى «في البحر»؟"))) return;
     setSaving(true);
     const result = await createClient().rpc("revert_shipment_to_in_sea", { p_shipment_id: shipment.id });
     setSaving(false);
@@ -146,11 +152,11 @@ export default function ShipmentDetailsPage() {
   }
 
   if (loading) {
-    return <div className="card p-5 text-sm text-[var(--muted)]">جاري تحميل الشحنة...</div>;
+    return <div className="card p-5 text-sm text-[var(--muted)]">{ui("جاري تحميل الشحنة...")}</div>;
   }
 
   if (!shipment) {
-    return <ErrorMessage message={error || "الشحنة غير موجودة."} />;
+    return <ErrorMessage message={error || ui("الشحنة غير موجودة.")} />;
   }
 
   const action = getNextStatusAction(shipment.status);
@@ -162,35 +168,35 @@ export default function ShipmentDetailsPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title={`شحنة ${invDoc ? displayInvoiceNumber(invDoc.file_name) : shipment.shipment_number}`}
-        description={`${shipment.companies?.name_ar ?? "شركة غير محددة"} — ${shipment.suppliers?.name_ar ?? "مورد غير محدد"}`}
+        title={`${ui("شحنة")} ${invDoc ? displayInvoiceNumber(invDoc.file_name) : shipment.shipment_number}`}
+        description={`${shipment.companies?.name_ar ?? ui("شركة غير محددة")} — ${shipment.suppliers?.name_ar ?? ui("مورد غير محدد")}`}
         actions={
           <div className="flex flex-wrap gap-2">
             <Link className="btn btn-secondary" href="/shipments">
               <ArrowRight className="h-4 w-4" />
-              رجوع
+              {ui("رجوع")}
             </Link>
             <Link className="btn btn-secondary" href={`/shipments/${shipment.id}/report`}>
-              تقرير / PDF
+              {ui("تقرير / PDF")}
             </Link>
             {readOnly && canWrite ? (
               <button className="btn btn-secondary" onClick={() => setEditing(true)} type="button">
                 <Pencil className="h-4 w-4" />
-                تعديل
+                {ui("تعديل")}
               </button>
             ) : null}
             {editing && shipment.status === "closed" ? (
               <button className="btn btn-secondary" onClick={() => setEditing(false)} type="button">
-                إلغاء التعديل
+                {ui("إلغاء التعديل")}
               </button>
             ) : null}
             <button className="btn btn-secondary" onClick={load} type="button">
               <RefreshCw className="h-4 w-4" />
-              تحديث
+              {ui("تحديث")}
             </button>
             {action ? (
               <button className="btn" disabled={saving} onClick={nextAction} type="button">
-                {saving ? "..." : NEXT_ACTION_LABELS[action]}
+                {saving ? "..." : getNextActionLabel(action, lang)}
               </button>
             ) : null}
           </div>
@@ -200,21 +206,21 @@ export default function ShipmentDetailsPage() {
       <ErrorMessage message={error} />
 
       <section className="grid gap-4 md:grid-cols-4">
-        <InfoCard label="الحالة" value={SHIPMENT_STATUS_LABELS[shipment.status]} badge={`status-${shipment.status}`} />
-        <InfoCard label="تاريخ الشحن" value={shipment.shipped_at} />
-        <InfoCard label="الوصول المتوقع" value={shipment.eta} />
-        <InfoCard label="خروج جمرك (+15 يوم)" value={customsExit} />
-        <InfoCard label="عدد الحاويات" value={containers.length.toString()} />
+        <InfoCard label={ui("الحالة")} value={getStatusLabel(shipment.status, lang)} badge={`status-${shipment.status}`} />
+        <InfoCard label={ui("تاريخ الشحن")} value={shipment.shipped_at} />
+        <InfoCard label={ui("الوصول المتوقع")} value={shipment.eta} />
+        <InfoCard label={ui("خروج جمرك (+15 يوم)")} value={customsExit} />
+        <InfoCard label={ui("عدد الحاويات")} value={containers.length.toString()} />
       </section>
 
       {canRevert ? (
         <div className="card flex flex-wrap items-center justify-between gap-3 border-amber-200 bg-amber-50 p-4 text-sm">
           <div>
-            <div className="font-semibold">تنبيه</div>
-            <div className="text-[var(--muted)]">الشحنة في «الجمرك» قبل الـ ETA. يمكنك إرجاعها إلى «في البحر».</div>
+            <div className="font-semibold">{ui("تنبيه")}</div>
+            <div className="text-[var(--muted)]">{ui("الشحنة في «الجمرك» قبل الـ ETA. يمكنك إرجاعها إلى «في البحر».")}</div>
           </div>
           <button className="btn btn-secondary" disabled={saving} onClick={revertToInSea} type="button">
-            إرجاع لفي البحر
+            {ui("إرجاع لفي البحر")}
           </button>
         </div>
       ) : null}
@@ -222,12 +228,12 @@ export default function ShipmentDetailsPage() {
       {invDoc ? (
         <section className="card flex flex-wrap items-center justify-between gap-3 p-4">
           <div>
-            <div className="font-bold">ملف INV</div>
+            <div className="font-bold">{ui("ملف INV")}</div>
             <p className="text-sm text-[var(--muted)]">{invDoc.file_name}</p>
           </div>
           <button className="btn btn-secondary" onClick={() => downloadDocument(invDoc.storage_path)} type="button">
             <Download className="h-4 w-4" />
-            تحميل INV
+            {ui("تحميل INV")}
           </button>
         </section>
       ) : null}
@@ -292,15 +298,17 @@ function InfoCard({ label, value, badge }: { label: string; value: string; badge
 }
 
 function ContainersTable({ rows }: { rows: ShipmentContainer[] }) {
+  const { ui } = useLanguage();
+
   return (
     <div className="card overflow-auto">
       <table className="min-w-full text-sm">
         <thead className="table-head">
           <tr>
-            <th className="p-3 text-right">رقم الحاوية</th>
-            <th className="p-3 text-right">الوزن</th>
-            <th className="p-3 text-right">الكرتين</th>
-            <th className="p-3 text-right">ملاحظات</th>
+            <th className="p-3 text-right">{ui("رقم الحاوية")}</th>
+            <th className="p-3 text-right">{ui("الوزن")}</th>
+            <th className="p-3 text-right">{ui("الكرتين")}</th>
+            <th className="p-3 text-right">{ui("ملاحظات")}</th>
           </tr>
         </thead>
         <tbody>
@@ -312,7 +320,7 @@ function ContainersTable({ rows }: { rows: ShipmentContainer[] }) {
               <td className="p-3">{row.notes ?? "-"}</td>
             </tr>
           )) : (
-            <tr><td className="p-4 text-[var(--muted)]" colSpan={4}>لا توجد حاويات.</td></tr>
+            <tr><td className="p-4 text-[var(--muted)]" colSpan={4}>{ui("لا توجد حاويات.")}</td></tr>
           )}
         </tbody>
       </table>
@@ -321,18 +329,20 @@ function ContainersTable({ rows }: { rows: ShipmentContainer[] }) {
 }
 
 function ProductsTable({ rows }: { rows: ShipmentProduct[] }) {
+  const { ui } = useLanguage();
+
   return (
     <div className="card overflow-auto">
       <table className="min-w-full text-sm">
         <thead className="table-head">
           <tr>
             <th className="p-3 text-right">SKU</th>
-            <th className="p-3 text-right">المنتج</th>
-            <th className="p-3 text-right">الكرتين</th>
-            <th className="p-3 text-right">الوحدة</th>
-            <th className="p-3 text-right">إجمالي القطع</th>
-            <th className="p-3 text-right">جديد</th>
-            <th className="p-3 text-right">مفكك</th>
+            <th className="p-3 text-right">{ui("المنتج")}</th>
+            <th className="p-3 text-right">{ui("الكرتين")}</th>
+            <th className="p-3 text-right">{ui("الوحدة")}</th>
+            <th className="p-3 text-right">{ui("إجمالي القطع")}</th>
+            <th className="p-3 text-right">{ui("جديد")}</th>
+            <th className="p-3 text-right">{ui("مفكك")}</th>
           </tr>
         </thead>
         <tbody>
@@ -343,11 +353,11 @@ function ProductsTable({ rows }: { rows: ShipmentProduct[] }) {
               <td className="p-3">{row.cartons_count ?? "-"}</td>
               <td className="p-3">{displayUnitPerCarton(row.cartons_count, row.quantity)}</td>
               <td className="p-3">{row.quantity}</td>
-              <td className="p-3">{row.is_new_incoming_product ? "نعم" : "لا"}</td>
-              <td className="p-3">{row.is_disassembled ? "نعم" : "لا"}</td>
+              <td className="p-3">{row.is_new_incoming_product ? ui("نعم") : ui("لا")}</td>
+              <td className="p-3">{row.is_disassembled ? ui("نعم") : ui("لا")}</td>
             </tr>
           )) : (
-            <tr><td className="p-4 text-[var(--muted)]" colSpan={7}>لا توجد منتجات.</td></tr>
+            <tr><td className="p-4 text-[var(--muted)]" colSpan={7}>{ui("لا توجد منتجات.")}</td></tr>
           )}
         </tbody>
       </table>
@@ -356,6 +366,8 @@ function ProductsTable({ rows }: { rows: ShipmentProduct[] }) {
 }
 
 function Timeline({ rows }: { rows: TimelineEvent[] }) {
+  const { ui } = useLanguage();
+
   return (
     <div className="card divide-y divide-[var(--border)]">
       {rows.length ? rows.map((row) => (
@@ -367,29 +379,30 @@ function Timeline({ rows }: { rows: TimelineEvent[] }) {
           {row.description_ar ? <p className="mt-1 text-sm text-[var(--muted)]">{row.description_ar}</p> : null}
         </div>
       )) : (
-        <div className="p-4 text-sm text-[var(--muted)]">لا توجد أحداث بعد.</div>
+        <div className="p-4 text-sm text-[var(--muted)]">{ui("لا توجد أحداث بعد.")}</div>
       )}
     </div>
   );
 }
 
 function CostsPanel({ cost, onEdit }: { cost: ShipmentCost | null; onEdit: () => void }) {
+  const { ui } = useLanguage();
   const values = useMemo(() => cost ? [
-    ["جمارك", cost.customs_cost],
-    ["شحن", cost.shipping_cost],
-    ["تخليص", cost.clearance_cost],
-    ["نقل داخلي", cost.local_transport_cost],
-    ["مصروفات أخرى", cost.other_expenses],
-    ["الإجمالي", cost.total_cost],
-  ] : [], [cost]);
+    [ui("جمارك"), cost.customs_cost],
+    [ui("شحن"), cost.shipping_cost],
+    [ui("تخليص"), cost.clearance_cost],
+    [ui("نقل داخلي"), cost.local_transport_cost],
+    [ui("مصروفات أخرى"), cost.other_expenses],
+    [ui("الإجمالي"), cost.total_cost],
+  ] : [], [cost, ui]);
 
   if (!cost) {
     return (
       <div className="card p-5">
-        <p className="text-sm text-[var(--muted)]">لم يتم تسجيل مصاريف لهذه الشحنة بعد.</p>
+        <p className="text-sm text-[var(--muted)]">{ui("لم يتم تسجيل مصاريف لهذه الشحنة بعد.")}</p>
         <button className="btn mt-4" onClick={onEdit} type="button">
           <Coins className="h-4 w-4" />
-          إدخال المصاريف
+          {ui("إدخال المصاريف")}
         </button>
       </div>
     );
@@ -407,7 +420,7 @@ function CostsPanel({ cost, onEdit }: { cost: ShipmentCost | null; onEdit: () =>
       </div>
       {cost.closing_notes ? <p className="mt-4 text-sm text-[var(--muted)]">{cost.closing_notes}</p> : null}
       <button className="btn mt-4" onClick={onEdit} type="button">
-        تعديل المصاريف
+        {ui("تعديل المصاريف")}
       </button>
     </div>
   );
@@ -426,6 +439,7 @@ function CostsDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { ui } = useLanguage();
   const [form, setForm] = useState({
     customs_cost: cost?.customs_cost?.toString() ?? "0",
     shipping_cost: cost?.shipping_cost?.toString() ?? "0",
@@ -466,23 +480,23 @@ function CostsDialog({
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4" onClick={onClose}>
       <form className="card max-h-[90vh] w-full max-w-2xl space-y-4 overflow-auto p-5" onClick={(event) => event.stopPropagation()} onSubmit={submit}>
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold">مصاريف الإغلاق</h2>
+          <h2 className="text-lg font-bold">{ui("مصاريف الإغلاق")}</h2>
           <button className="btn btn-secondary p-2" onClick={onClose} type="button"><X className="h-4 w-4" /></button>
         </div>
         <ErrorMessage message={error} />
         <div className="grid gap-3 md:grid-cols-2">
-          <CostInput label="الجمارك" name="customs_cost" form={form} setForm={setForm} />
-          <CostInput label="الشحن" name="shipping_cost" form={form} setForm={setForm} />
-          <CostInput label="التخليص" name="clearance_cost" form={form} setForm={setForm} />
-          <CostInput label="النقل الداخلي" name="local_transport_cost" form={form} setForm={setForm} />
-          <CostInput label="مصروفات أخرى" name="other_expenses" form={form} setForm={setForm} />
+          <CostInput label={ui("الجمارك")} name="customs_cost" form={form} setForm={setForm} />
+          <CostInput label={ui("الشحن")} name="shipping_cost" form={form} setForm={setForm} />
+          <CostInput label={ui("التخليص")} name="clearance_cost" form={form} setForm={setForm} />
+          <CostInput label={ui("النقل الداخلي")} name="local_transport_cost" form={form} setForm={setForm} />
+          <CostInput label={ui("مصروفات أخرى")} name="other_expenses" form={form} setForm={setForm} />
         </div>
         <label className="label">
-          ملاحظات الإغلاق
+          {ui("ملاحظات الإغلاق")}
           <textarea className="input min-h-24" value={form.closing_notes} onChange={(event) => setForm({ ...form, closing_notes: event.target.value })} />
         </label>
         <button className="btn" disabled={loading} type="submit">
-          {loading ? "جاري الحفظ..." : isClosed ? "حفظ المصاريف" : "حفظ وإغلاق"}
+          {loading ? ui("جاري الحفظ...") : isClosed ? ui("حفظ المصاريف") : ui("حفظ وإغلاق")}
         </button>
       </form>
     </div>

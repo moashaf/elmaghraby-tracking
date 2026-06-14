@@ -34,7 +34,7 @@ const defaultSettings: SystemSettings = {
 
 export default function SettingsPage() {
   const { isAdmin: userIsAdmin } = useProfile();
-  const { tr } = useLanguage();
+  const { tr, ui } = useLanguage();
   const { theme, patchTheme, setTheme } = useTheme();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [email, setEmail] = useState("");
@@ -59,7 +59,7 @@ export default function SettingsPage() {
     setError("");
     if (!isSupabaseConfigured()) {
       setLoading(false);
-      setError("اضبط ملف .env.local أولا بقيم Supabase.");
+      setError(ui("اضبط ملف .env.local أولا بقيم Supabase."));
       return;
     }
 
@@ -69,12 +69,12 @@ export default function SettingsPage() {
       error: userError,
     } = await supabase.auth.getUser().catch((loadError) => ({
       data: { user: null },
-      error: loadError instanceof Error ? loadError : new Error("تعذر التحقق من الجلسة."),
+      error: loadError instanceof Error ? loadError : new Error(ui("تعذر التحقق من الجلسة.")),
     }));
 
     if (userError || !user) {
       setLoading(false);
-      setError("سجل الدخول أولا.");
+      setError(ui("سجل الدخول أولا."));
       return;
     }
 
@@ -112,9 +112,9 @@ export default function SettingsPage() {
     if (payload.warning) {
       setMessage(payload.warning);
     } else if (!response.ok) {
-      setError(payload.error ?? "تعذر تحميل إعدادات النظام.");
+      setError(payload.error ?? ui("تعذر تحميل إعدادات النظام."));
     }
-  }, [authHeaders]);
+  }, [authHeaders, ui]);
 
   useEffect(() => {
     void Promise.resolve().then(load);
@@ -138,7 +138,7 @@ export default function SettingsPage() {
       return;
     }
 
-    setMessage("تم حفظ الملف الشخصي.");
+    setMessage(ui("تم حفظ الملف الشخصي."));
     await load();
   }
 
@@ -168,12 +168,12 @@ export default function SettingsPage() {
     setSavingSettings(false);
 
     if (!response.ok) {
-      setError(payload.error ?? "تعذر حفظ إعدادات النظام.");
+      setError(payload.error ?? ui("تعذر حفظ إعدادات النظام."));
       return;
     }
 
     setSettings(payload.settings ?? settings);
-    setMessage("تم حفظ إعدادات النظام.");
+    setMessage(ui("تم حفظ إعدادات النظام."));
   }
 
   return (
@@ -182,35 +182,35 @@ export default function SettingsPage() {
         title={tr("الإعدادات", "Settings")}
         description={tr("إدارة الملف الشخصي وإعدادات التشغيل العامة.", "Manage your profile and system settings.")}
       />
-      <ErrorMessage message={error} />
-      {message ? <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{message}</div> : null}
+      <ErrorMessage message={error ? ui(error) : ""} />
+      {message ? <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{ui(message)}</div> : null}
 
       <section className="card space-y-4 p-4">
-        <div className="font-bold">المظهر والثيم</div>
+        <div className="font-bold">{ui("المظهر والثيم")}</div>
         <label className="flex items-center justify-between gap-3 rounded-md border border-[var(--border)] p-3 text-sm font-semibold">
-          الوضع الداكن
+          {ui("الوضع الداكن")}
           <input checked={theme.darkMode} onChange={(event) => patchTheme({ darkMode: event.target.checked })} type="checkbox" />
         </label>
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <label className="label">
-            اللون الأساسي
+            {ui("اللون الأساسي")}
             <input className="input h-11" type="color" value={theme.primary} onChange={(event) => patchTheme({ primary: event.target.value })} />
           </label>
           <label className="label">
-            لون الشريط الجانبي
+            {ui("لون الشريط الجانبي")}
             <input className="input h-11" type="color" value={theme.navy} onChange={(event) => patchTheme({ navy: event.target.value })} />
           </label>
           <label className="label">
-            لون الخلفية
+            {ui("لون الخلفية")}
             <input className="input h-11" type="color" value={theme.background} onChange={(event) => patchTheme({ background: event.target.value })} />
           </label>
           <label className="label">
-            لون الخط
+            {ui("لون الخط")}
             <input className="input h-11" type="color" value={theme.fontColor} onChange={(event) => patchTheme({ fontColor: event.target.value })} />
           </label>
         </div>
         <button className="btn btn-secondary text-sm" onClick={() => setTheme(DEFAULT_THEME)} type="button">
-          استعادة الألوان الافتراضية
+          {ui("استعادة الألوان الافتراضية")}
         </button>
       </section>
 
@@ -218,23 +218,23 @@ export default function SettingsPage() {
         <form className="card space-y-4 p-4" onSubmit={saveProfile}>
           <div className="flex items-center gap-2 font-bold">
             <UserRound className="h-5 w-5 text-[var(--primary)]" />
-            الملف الشخصي
+            {ui("الملف الشخصي")}
           </div>
           <label className="label">
-            الاسم
+            {ui("الاسم")}
             <input className="input" disabled={loading} value={fullName} onChange={(event) => setFullName(event.target.value)} />
           </label>
           <label className="label">
-            البريد الإلكتروني
+            {ui("البريد الإلكتروني")}
             <input className="input" disabled value={email} />
           </label>
           <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]">
-            الدور الحالي:
+            {ui("الدور الحالي:")}
             <StatusPill className="bg-slate-100 text-slate-700">{profile ? ROLE_LABELS[profile.role] : "..."}</StatusPill>
           </div>
           <button className="btn" disabled={savingProfile || loading} type="submit">
             <Save className="h-4 w-4" />
-            {savingProfile ? "جاري الحفظ..." : "حفظ الملف"}
+            {savingProfile ? ui("جاري الحفظ...") : ui("حفظ الملف")}
           </button>
         </form>
 
@@ -242,14 +242,14 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 font-bold">
               <Settings className="h-5 w-5 text-[var(--primary)]" />
-              إعدادات النظام
+              {ui("إعدادات النظام")}
             </div>
             <StatusPill className={isAdmin ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}>
-              {isAdmin ? "admin" : "قراءة فقط"}
+              {isAdmin ? "admin" : ui("قراءة فقط")}
             </StatusPill>
           </div>
           <label className="flex items-center justify-between gap-3 rounded-md border border-[var(--border)] p-3 text-sm font-semibold">
-            إلزام تسجيل المصاريف قبل الإغلاق
+            {ui("إلزام تسجيل المصاريف قبل الإغلاق")}
             <input
               checked={settings.require_costs_before_close}
               disabled={!isAdmin}
@@ -258,7 +258,7 @@ export default function SettingsPage() {
             />
           </label>
           <label className="flex items-center justify-between gap-3 rounded-md border border-[var(--border)] p-3 text-sm font-semibold">
-            إلزام مستند جمركي قبل الإغلاق
+            {ui("إلزام مستند جمركي قبل الإغلاق")}
             <input
               checked={settings.require_customs_document}
               disabled={!isAdmin}
@@ -267,7 +267,7 @@ export default function SettingsPage() {
             />
           </label>
           <label className="label">
-            اعتبار الشحنة متأخرة بعد ETA بعدد أيام
+            {ui("اعتبار الشحنة متأخرة بعد ETA بعدد أيام")}
             <input
               className="input"
               disabled={!isAdmin}
@@ -279,7 +279,7 @@ export default function SettingsPage() {
           </label>
           <button className="btn" disabled={!isAdmin || savingSettings || loading} type="submit">
             <ShieldCheck className="h-4 w-4" />
-            {savingSettings ? "جاري الحفظ..." : "حفظ إعدادات النظام"}
+            {savingSettings ? ui("جاري الحفظ...") : ui("حفظ إعدادات النظام")}
           </button>
         </form>
       </div>
@@ -287,7 +287,7 @@ export default function SettingsPage() {
       <section className="card grid gap-3 p-4 text-sm text-[var(--muted)] md:grid-cols-3">
         <div className="flex items-center gap-2 font-semibold text-[var(--foreground)]">
           <Info className="h-4 w-4 text-[var(--primary)]" />
-          حول النظام
+          {ui("حول النظام")}
         </div>
         <div>Elmaghraby Tracing v0.1.0</div>
         <div>Supabase + Next.js + Arabic RTL</div>

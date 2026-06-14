@@ -4,10 +4,12 @@ import Link from "next/link";
 import { FileSpreadsheet } from "lucide-react";
 import { PageHeader } from "@/components/ui";
 import { useLanguage } from "@/context/language-context";
-import { REPORTS } from "@/lib/report-definitions";
+import { getLocalizedReports } from "@/lib/i18n";
 
 export default function ReportsPage() {
-  const { tr } = useLanguage();
+  const { tr, lang } = useLanguage();
+  const reports = getLocalizedReports(lang);
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -15,7 +17,7 @@ export default function ReportsPage() {
         description={tr("تقارير تشغيلية قابلة للتصدير Excel والطباعة.", "Operational reports with Excel export and printing.")}
       />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {REPORTS.map((report) => (
+        {reports.map((report) => (
           <Link className="card group p-5 transition hover:-translate-y-0.5 hover:border-[#0f766e]" href={`/reports/${report.slug}`} key={report.slug}>
             <div className="flex items-center justify-between gap-3">
               <h2 className="font-bold">{report.title}</h2>

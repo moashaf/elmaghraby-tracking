@@ -7,7 +7,6 @@ import {
   BarChart3,
   Boxes,
   Building2,
-  Globe,
   FileText,
   Home,
   LogOut,
@@ -26,7 +25,8 @@ import {
 import { useProfile } from "@/context/profile-context";
 import { useLanguage } from "@/context/language-context";
 import { APP_CREDIT_NAME } from "@/lib/constants";
-import { ROLE_LABELS } from "@/lib/permissions";
+import { getRoleLabel } from "@/lib/i18n";
+import type { UserRole } from "@/lib/permissions";
 import { AppWaveBackground } from "@/components/decor/app-wave-background";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
@@ -50,7 +50,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const isLogin = pathname === "/login";
   const { role, canWrite, loading } = useProfile();
-  const { t, toggleLanguage, lang } = useLanguage();
+  const { t, setLanguage, lang, ui } = useLanguage();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const visibleNavItems = useMemo(
@@ -117,7 +117,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <p className="text-center text-[10px] text-white/50">Powered by {APP_CREDIT_NAME}</p>
           {!loading && role ? (
             <div className="rounded-md bg-white/10 px-3 py-2 text-xs text-white/80">
-              الدور: {ROLE_LABELS[role as keyof typeof ROLE_LABELS] ?? role}
+              {ui("الدور:")} {role ? getRoleLabel(role as UserRole, lang) : role}
             </div>
           ) : null}
         </div>
@@ -130,7 +130,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               className="btn btn-secondary shrink-0 px-2 lg:hidden"
               onClick={() => setMobileMenuOpen(true)}
               type="button"
-              aria-label={lang === "ar" ? "فتح القائمة" : "Open menu"}
+              aria-label={ui("فتح القائمة")}
             >
               <Menu className="h-5 w-5" />
             </button>
@@ -145,16 +145,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 {t("role.viewer")}
               </span>
             ) : null}
-            <button
-              className="btn btn-secondary flex items-center gap-2 text-sm"
-              onClick={toggleLanguage}
-              type="button"
-              aria-label={lang === "ar" ? "تغيير اللغة" : "Change language"}
-              title={lang === "ar" ? "English" : "عربي"}
+            <label className="sr-only" htmlFor="app-language">
+              {ui("تغيير اللغة")}
+            </label>
+            <select
+              className="btn btn-secondary max-w-[7.5rem] cursor-pointer appearance-none truncate pe-7 text-sm"
+              id="app-language"
+              onChange={(event) => setLanguage(event.target.value as typeof lang)}
+              title={ui("تغيير اللغة")}
+              value={lang}
             >
-              <Globe className="h-4 w-4" />
-              <span className="hidden sm:inline">{t("lang.toggle")}</span>
-            </button>
+              <option value="ar">{t("lang.ar")}</option>
+              <option value="en">{t("lang.en")}</option>
+              <option value="zh">{t("lang.zh")}</option>
+            </select>
             <button className="btn btn-secondary flex items-center gap-2 text-sm" onClick={signOut} type="button">
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline">{t("auth.signOut")}</span>
@@ -179,7 +183,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 className="btn btn-secondary px-2"
                 onClick={() => setMobileMenuOpen(false)}
                 type="button"
-                aria-label={lang === "ar" ? "إغلاق القائمة" : "Close menu"}
+                aria-label={ui("إغلاق القائمة")}
               >
                 <X className="h-5 w-5" />
               </button>

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Download, FileUp, Upload } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage } from "@/components/ui";
+import { useLanguage } from "@/context/language-context";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { shipmentContainerFilePath, shipmentDocumentPath } from "@/lib/storage-path";
 import type { ContainerFile, ShipmentContainer, ShipmentDocument } from "@/lib/types";
@@ -17,6 +18,7 @@ export function ShipmentFiles({
   shipmentId: string;
   containers: ShipmentContainer[];
 }) {
+  const { ui } = useLanguage();
   const [containerFiles, setContainerFiles] = useState<ContainerFile[]>([]);
   const [documents, setDocuments] = useState<ShipmentDocument[]>([]);
   const [containerId, setContainerId] = useState("");
@@ -38,20 +40,20 @@ export function ShipmentFiles({
 
   const docTypeOptions = useMemo(
     () => [
-      { value: "invoice", label: "فاتورة" },
+      { value: "invoice", label: ui("فاتورة") },
       { value: "packing_list", label: "Packing list" },
       { value: "bill_of_lading", label: "Bill of lading" },
       { value: "INV", label: "INV" },
-      { value: "other", label: "أخرى" },
+      { value: "other", label: ui("أخرى") },
     ],
-    []
+    [ui]
   );
 
   async function load() {
     setError("");
     if (!isSupabaseConfigured()) {
       setLoading(false);
-      setError("اضبط ملف .env.local أولا بقيم Supabase.");
+      setError(ui("اضبط ملف .env.local أولا بقيم Supabase."));
       return;
     }
 
@@ -72,7 +74,7 @@ export function ShipmentFiles({
     setLoading(false);
 
     if (filesResult.error || documentsResult.error) {
-      setError(filesResult.error?.message || documentsResult.error?.message || "تعذر تحميل الملفات.");
+      setError(filesResult.error?.message || documentsResult.error?.message || ui("تعذر تحميل الملفات."));
       return;
     }
 
@@ -170,17 +172,17 @@ export function ShipmentFiles({
         <section className="card space-y-4 p-4">
           <div className="flex items-center gap-2">
             <FileUp className="h-5 w-5 text-[#0f766e]" />
-            <h2 className="font-bold">ملفات الحاويات Excel/CSV</h2>
+            <h2 className="font-bold">{ui("ملفات الحاويات Excel/CSV")}</h2>
           </div>
           <SearchableSelect
             options={containerOptions}
-            placeholder="ابحث عن الحاوية..."
+            placeholder={ui("ابحث عن الحاوية...")}
             value={effectiveContainerId}
             onChange={setContainerId}
           />
           <label className="btn w-fit cursor-pointer">
             <Upload className="h-4 w-4" />
-            {uploading ? "جاري الرفع..." : "رفع ملف"}
+            {uploading ? ui("جاري الرفع...") : ui("رفع ملف")}
             <input accept=".xlsx,.xls,.csv" className="hidden" disabled={uploading || !containerId} onChange={(event) => uploadContainerFile(event.target.files?.[0] ?? null)} type="file" />
           </label>
         </section>
@@ -188,17 +190,17 @@ export function ShipmentFiles({
         <section className="card space-y-4 p-4">
           <div className="flex items-center gap-2">
             <FileUp className="h-5 w-5 text-[#0f766e]" />
-            <h2 className="font-bold">مستندات الشحنة</h2>
+            <h2 className="font-bold">{ui("مستندات الشحنة")}</h2>
           </div>
           <SearchableSelect
             options={docTypeOptions}
-            placeholder="نوع المستند"
+            placeholder={ui("نوع المستند")}
             value={docType}
             onChange={setDocType}
           />
           <label className="btn w-fit cursor-pointer">
             <Upload className="h-4 w-4" />
-            {uploading ? "جاري الرفع..." : "رفع مستند"}
+            {uploading ? ui("جاري الرفع...") : ui("رفع مستند")}
             <input className="hidden" disabled={uploading} onChange={(event) => uploadDocument(event.target.files?.[0] ?? null)} type="file" />
           </label>
         </section>
@@ -209,11 +211,11 @@ export function ShipmentFiles({
         rows={containerFiles.map((file) => ({
           id: file.id,
           label: file.file_name,
-          context: file.shipment_containers?.container_number ?? "حاوية",
+          context: file.shipment_containers?.container_number ?? ui("حاوية"),
           date: file.uploaded_at,
           path: file.storage_path,
         }))}
-        title="ملفات الحاويات"
+        title={ui("ملفات الحاويات")}
         onDownload={download}
       />
 
@@ -226,7 +228,7 @@ export function ShipmentFiles({
           date: file.uploaded_at,
           path: file.storage_path,
         }))}
-        title="مستندات الشحنة"
+        title={ui("مستندات الشحنة")}
         onDownload={download}
       />
     </div>
@@ -244,33 +246,49 @@ function FilesTable({
   rows: Array<{ id: string; label: string; context: string; date: string; path: string }>;
   onDownload: (path: string) => void;
 }) {
+  const { ui } = useLanguage();
+
   return (
     <section className="card overflow-auto">
       <div className="border-b border-[var(--border)] p-4 font-bold">{title}</div>
       <table className="min-w-full text-sm">
         <thead className="table-head">
           <tr>
-            <th className="p-3 text-right">الملف</th>
-            <th className="p-3 text-right">النوع/الحاوية</th>
-            <th className="p-3 text-right">تاريخ الرفع</th>
-            <th className="p-3 text-right">تحميل</th>
+            <th className="p-3 text-right">{ui("الملف")}</th>
+            <th className="p-3 text-right">{ui("النوع/الحاوية")}</th>
+            <th className="p-3 text-right">{ui("تاريخ الرفع")}</th>
+            <th className="p-3 text-right">{ui("تحميل")}</th>
           </tr>
         </thead>
         <tbody>
-          {loading ? <tr><td className="p-4 text-[var(--muted)]" colSpan={4}>جاري التحميل...</td></tr> : rows.map((row) => (
-            <tr className="border-t border-[var(--border)]" key={row.id}>
-              <td className="p-3 font-semibold">{row.label}</td>
-              <td className="p-3">{row.context}</td>
-              <td className="p-3">{new Date(row.date).toISOString().slice(0, 10)}</td>
-              <td className="p-3">
-                <button className="btn btn-secondary px-2 py-1 text-xs" onClick={() => onDownload(row.path)} type="button">
-                  <Download className="h-4 w-4" />
-                  تحميل
-                </button>
+          {loading ? (
+            <tr>
+              <td className="p-4 text-[var(--muted)]" colSpan={4}>
+                {ui("جاري التحميل...")}
               </td>
             </tr>
-          ))}
-          {!loading && !rows.length ? <tr><td className="p-4 text-[var(--muted)]" colSpan={4}>لا توجد ملفات.</td></tr> : null}
+          ) : (
+            rows.map((row) => (
+              <tr className="border-t border-[var(--border)]" key={row.id}>
+                <td className="p-3 font-semibold">{row.label}</td>
+                <td className="p-3">{row.context}</td>
+                <td className="p-3">{new Date(row.date).toISOString().slice(0, 10)}</td>
+                <td className="p-3">
+                  <button className="btn btn-secondary px-2 py-1 text-xs" onClick={() => onDownload(row.path)} type="button">
+                    <Download className="h-4 w-4" />
+                    {ui("تحميل")}
+                  </button>
+                </td>
+              </tr>
+            ))
+          )}
+          {!loading && !rows.length ? (
+            <tr>
+              <td className="p-4 text-[var(--muted)]" colSpan={4}>
+                {ui("لا توجد ملفات.")}
+              </td>
+            </tr>
+          ) : null}
         </tbody>
       </table>
     </section>

@@ -10,6 +10,7 @@ import { PORT_SELECT_OPTIONS } from "@/lib/port-options";
 import { buildCategorySelectOptions } from "@/lib/category-options";
 import { addDaysToIsoDate, findRouteDuration } from "@/lib/eta";
 import { syncProductQuantityFields, unitFromCartonsAndTotal } from "@/lib/shipment-product-quantity";
+import { useLanguage } from "@/context/language-context";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { fetchAllFromTable } from "@/lib/supabase/fetch-all";
 import { shipmentInvPath } from "@/lib/storage-path";
@@ -147,6 +148,7 @@ export function ShipmentForm({
   onSaved?: () => void;
 }) {
   const router = useRouter();
+  const { ui } = useLanguage();
   const isNew = !shipment;
   const [form, setForm] = useState<ShipmentFormValues>(() => formFromShipment(shipment));
   const [containers, setContainers] = useState<ContainerDraft[]>(() =>
@@ -198,7 +200,7 @@ export function ShipmentForm({
   useEffect(() => {
     async function loadLookups() {
       if (!isSupabaseConfigured()) {
-        setError("اضبط ملف .env.local أولا بقيم Supabase.");
+        setError(ui("اضبط ملف .env.local أولا بقيم Supabase."));
         return;
       }
 
@@ -217,7 +219,7 @@ export function ShipmentForm({
             suppliersResult.error?.message ||
             productsResult.error ||
             categoriesResult.error ||
-            "تعذر تحميل البيانات الأساسية."
+            ui("تعذر تحميل البيانات الأساسية.")
         );
         return;
       }
@@ -286,17 +288,17 @@ export function ShipmentForm({
     setError("");
 
     if (!isSupabaseConfigured()) {
-      setError("اضبط ملف .env.local أولا بقيم Supabase.");
+      setError(ui("اضبط ملف .env.local أولا بقيم Supabase."));
       return;
     }
 
     if (isNew && !invFile) {
-      setError("ارفع ملف INV بصيغة PDF قبل حفظ الشحنة.");
+      setError(ui("ارفع ملف INV بصيغة PDF قبل حفظ الشحنة."));
       return;
     }
 
     if (isNew && invFile && invFile.type !== "application/pdf") {
-      setError("ملف INV يجب أن يكون PDF.");
+      setError(ui("ملف INV يجب أن يكون PDF."));
       return;
     }
 
@@ -309,19 +311,19 @@ export function ShipmentForm({
     });
 
     if (!validContainers.length) {
-      setError("أضف حاوية واحدة على الأقل.");
+      setError(ui("أضف حاوية واحدة على الأقل."));
       return;
     }
 
     if (!validProducts.length) {
-      setError("أضف منتجا واحدا على الأقل مع كرتين ووحدة صحيحة.");
+      setError(ui("أضف منتجا واحدا على الأقل مع كرتين ووحدة صحيحة."));
       return;
     }
 
     const containerNumbers = validContainers.map((container) => container.container_number.trim().toLowerCase());
     const duplicateContainer = containerNumbers.find((number, index) => containerNumbers.indexOf(number) !== index);
     if (duplicateContainer) {
-      setError("رقم الحاوية مكرر داخل نفس الشحنة.");
+      setError(ui("رقم الحاوية مكرر داخل نفس الشحنة."));
       return;
     }
 
@@ -343,7 +345,7 @@ export function ShipmentForm({
     const acidConflict = (acidMatches ?? []).find((row) => row.id !== shipment?.id);
     if (acidConflict) {
       setLoading(false);
-      setError("رقم ACID مستخدم في شحنة أخرى ولا يمكن تكراره.");
+      setError(ui("رقم ACID مستخدم في شحنة أخرى ولا يمكن تكراره."));
       return;
     }
 
@@ -390,7 +392,7 @@ export function ShipmentForm({
 
       if (containersDelete.error || productsDelete.error) {
         setLoading(false);
-        setError(containersDelete.error?.message || productsDelete.error?.message || "تعذر تحديث تفاصيل الشحنة.");
+        setError(containersDelete.error?.message || productsDelete.error?.message || ui("تعذر تحديث تفاصيل الشحنة."));
         return;
       }
     }
@@ -432,7 +434,7 @@ export function ShipmentForm({
         if (invRow.error) throw new Error(invRow.error.message);
       } catch (uploadError) {
         setLoading(false);
-        setError(uploadError instanceof Error ? uploadError.message : "تعذر رفع ملف INV.");
+        setError(uploadError instanceof Error ? uploadError.message : ui("تعذر رفع ملف INV."));
         return;
       }
     }
@@ -455,7 +457,9 @@ export function ShipmentForm({
       const message = productsInsert.error.message;
       if (message.includes("shipment_products_shipment_id_product_id_key")) {
         setError(
-          "قاعدة البيانات لسه تمنع تكرار نفس الصنف في الشحنة. شغّل migration: 20260604000001_allow_duplicate_shipment_products.sql من Supabase SQL Editor ثم حاول الحفظ مرة أخرى (البيانات في النموذج محفوظة)."
+          ui(
+            "قاعدة البيانات لسه تمنع تكرار نفس الصنف في الشحنة. شغّل migration: 20260604000001_allow_duplicate_shipment_products.sql من Supabase SQL Editor ثم حاول الحفظ مرة أخرى (البيانات في النموذج محفوظة)."
+          )
         );
         return;
       }
@@ -497,45 +501,45 @@ export function ShipmentForm({
       <form className="card space-y-6 p-5" onSubmit={readOnly ? (event) => event.preventDefault() : submit}>
         {readOnly ? (
           <p className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 text-sm text-[var(--muted)]">
-            وضع العرض فقط — اضغط «تعديل» أعلاه لتغيير البيانات.
+            {ui("وضع العرض فقط — اضغط «تعديل» أعلاه لتغيير البيانات.")}
           </p>
         ) : null}
         <ErrorMessage message={error} />
 
         <section className="space-y-3">
-          <h2 className="font-bold">البيانات الأساسية</h2>
+          <h2 className="font-bold">{ui("البيانات الأساسية")}</h2>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <label className="label">
-              رقم ACID
+              {ui("رقم ACID")}
               <input className={fieldClass} required readOnly={readOnly} disabled={disabled} value={form.acid} onChange={(event) => setField("acid", event.target.value)} />
             </label>
             <label className="label">
-              الشركة
+              {ui("الشركة")}
               <SearchableSelect
                 options={companyOptions}
                 required
                 disabled={disabled}
-                placeholder="ابحث عن الشركة..."
+                placeholder={ui("ابحث عن الشركة...")}
                 value={form.company_id}
                 onChange={(value) => setField("company_id", value)}
               />
             </label>
             <label className="label">
-              المورد
+              {ui("المورد")}
               <SearchableSelect
                 options={supplierOptions}
                 required
                 disabled={disabled}
-                placeholder="ابحث عن المورد..."
+                placeholder={ui("ابحث عن المورد...")}
                 value={form.supplier_id}
                 onChange={(value) => setField("supplier_id", value)}
               />
             </label>
             <label className="label">
-              نوع / وصف البضاعة
+              {ui("نوع / وصف البضاعة")}
               <input
                 className={fieldClass}
-                placeholder="مثال: خردوات — كشاف"
+                placeholder={ui("مثال: خردوات — كشاف")}
                 required
                 readOnly={readOnly}
                 disabled={disabled}
@@ -544,53 +548,53 @@ export function ShipmentForm({
               />
             </label>
             <label className="label">
-              ميناء الشحن
+              {ui("ميناء الشحن")}
               <SearchableSelect
                 options={PORT_SELECT_OPTIONS}
                 required
                 disabled={readOnly}
                 value={form.shipping_port}
                 onChange={(value) => setField("shipping_port", value)}
-                placeholder="اختر ميناء الشحن"
+                placeholder={ui("اختر ميناء الشحن")}
               />
             </label>
             <label className="label">
-              ميناء الوصول
+              {ui("ميناء الوصول")}
               <SearchableSelect
                 options={PORT_SELECT_OPTIONS}
                 required
                 disabled={readOnly}
                 value={form.arrival_port}
                 onChange={(value) => setField("arrival_port", value)}
-                placeholder="اختر ميناء الوصول"
+                placeholder={ui("اختر ميناء الوصول")}
               />
             </label>
             <label className="label">
-              تاريخ الشحن
+              {ui("تاريخ الشحن")}
               <input className="input" required type="date" value={form.shipped_at} onChange={(event) => setField("shipped_at", event.target.value)} />
             </label>
             <label className="label">
-              تاريخ الوصول المتوقع
+              {ui("تاريخ الوصول المتوقع")}
               <input className="input bg-slate-50" required readOnly type="date" value={form.eta} />
             </label>
             <label className="label">
-              خروج جمرك (بعد 15 يوم)
+              {ui("خروج جمرك (بعد 15 يوم)")}
               <input className="input bg-slate-50" readOnly value={customsExitDate} />
             </label>
             <label className="label">
-              مدة الشحن بالأيام
+              {ui("مدة الشحن بالأيام")}
               <input className="input" min={0} readOnly type="number" value={form.shipping_duration_days} />
             </label>
             <label className="label">
-              وزن الشحنة الكلي (كجم)
+              {ui("وزن الشحنة الكلي (كجم)")}
               <input className="input" min={0} type="number" value={form.total_weight_kg} onChange={(event) => setField("total_weight_kg", event.target.value)} />
             </label>
             <label className="label">
-              إجمالي الكراتين
+              {ui("إجمالي الكراتين")}
               <input className="input" min={0} type="number" value={form.total_cartons} onChange={(event) => setField("total_cartons", event.target.value)} />
             </label>
             <label className="label">
-              قيمة الشحنة (USD)
+              {ui("قيمة الشحنة (USD)")}
               <input
                 className="input"
                 min={0}
@@ -602,25 +606,25 @@ export function ShipmentForm({
               />
             </label>
             <label className="label">
-              عدد الحاويات
+              {ui("عدد الحاويات")}
               <input
                 className="input"
                 min={1}
                 type="number"
                 value={form.containers_count}
                 onChange={(event) => setField("containers_count", event.target.value)}
-                placeholder="يفتح صفوف الحاويات تلقائيا"
+                placeholder={ui("يفتح صفوف الحاويات تلقائيا")}
               />
             </label>
             <label className="label xl:col-span-2">
-              خط السير
+              {ui("خط السير")}
               <input className="input" value={form.route} onChange={(event) => setField("route", event.target.value)} />
             </label>
           </div>
 
           {isNew ? (
             <label className="label block max-w-md">
-              ملف INV (PDF) — إلزامي
+              {ui("ملف INV (PDF) — إلزامي")}
               <input
                 accept="application/pdf,.pdf"
                 className="input"
@@ -632,7 +636,7 @@ export function ShipmentForm({
           ) : null}
 
           <label className="label">
-            ملاحظات
+            {ui("ملاحظات")}
             <textarea className="input min-h-24" value={form.notes} onChange={(event) => setField("notes", event.target.value)} />
           </label>
         </section>
@@ -640,13 +644,13 @@ export function ShipmentForm({
         <section className="space-y-3 border-t border-[var(--border)] pt-5">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="font-bold">الحاويات</h2>
-              <p className="text-sm text-[var(--muted)]">أدخل اسم أو رقم كل حاوية فقط.</p>
+              <h2 className="font-bold">{ui("الحاويات")}</h2>
+              <p className="text-sm text-[var(--muted)]">{ui("أدخل اسم أو رقم كل حاوية فقط.")}</p>
             </div>
             {!readOnly ? (
               <button className="btn btn-secondary text-sm" onClick={() => setContainers((current) => [...current, { ...emptyContainer }])} type="button">
                 <Plus className="h-4 w-4" />
-                حاوية
+                {ui("حاوية")}
               </button>
             ) : null}
           </div>
@@ -656,7 +660,7 @@ export function ShipmentForm({
                 <input
                   className={fieldClass}
                   disabled={disabled}
-                  placeholder="اسم / رقم الحاوية"
+                  placeholder={ui("اسم / رقم الحاوية")}
                   readOnly={readOnly}
                   value={container.container_number}
                   onChange={(event) => updateContainer(index, { ...container, container_number: event.target.value })}
@@ -674,7 +678,7 @@ export function ShipmentForm({
         <section className="space-y-3 border-t border-[var(--border)] pt-5">
           <div className="sticky top-16 z-[15] flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-white/95 px-3 py-3 shadow-sm backdrop-blur-sm">
             <div className="flex flex-wrap items-center gap-3">
-              <h2 className="font-bold">منتجات الشحنة</h2>
+              <h2 className="font-bold">{ui("منتجات الشحنة")}</h2>
               {cartonStats.target != null ? (
                 <span
                   className={`rounded-full px-3 py-1 text-xs font-semibold ${
@@ -685,25 +689,25 @@ export function ShipmentForm({
                         : "bg-amber-100 text-amber-800"
                   }`}
                 >
-                  الكراتين: {cartonStats.entered} / {cartonStats.target}
+                  {ui("الكراتين:")} {cartonStats.entered} / {cartonStats.target}
                 </span>
               ) : cartonStats.entered > 0 ? (
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                  الكراتين المدخلة: {cartonStats.entered}
+                  {ui("الكراتين المدخلة:")} {cartonStats.entered}
                 </span>
               ) : (
-                <span className="text-xs text-[var(--muted)]">حدّد إجمالي الكراتين في بيانات الشحنة</span>
+                <span className="text-xs text-[var(--muted)]">{ui("حدّد إجمالي الكراتين في بيانات الشحنة")}</span>
               )}
             </div>
             {!readOnly ? (
               <div className="flex flex-wrap gap-2">
                 <button className="btn btn-secondary text-sm" onClick={() => setShowProductModal(true)} type="button">
                   <Plus className="h-4 w-4" />
-                  منتج جديد
+                  {ui("منتج جديد")}
                 </button>
                 <button className="btn btn-secondary text-sm" onClick={() => setShipmentProducts((current) => [...current, { ...emptyProduct }])} type="button">
                   <Plus className="h-4 w-4" />
-                  سطر منتج
+                  {ui("سطر منتج")}
                 </button>
               </div>
             ) : null}
@@ -718,12 +722,12 @@ export function ShipmentForm({
                     disabled={readOnly}
                     value={row.product_id}
                     onChange={(value) => updateShipmentProduct(index, { ...row, product_id: value })}
-                    placeholder="ابحث عن المنتج (SKU أو الاسم)"
+                    placeholder={ui("ابحث عن المنتج (SKU أو الاسم)")}
                   />
                   <input
                     className={fieldClass}
                     min={0}
-                    placeholder="الكرتين"
+                    placeholder={ui("الكرتين")}
                     readOnly={readOnly}
                     type="number"
                     value={row.cartons_count}
@@ -737,7 +741,7 @@ export function ShipmentForm({
                   <input
                     className={fieldClass}
                     min={0}
-                    placeholder="الوحدة"
+                    placeholder={ui("الوحدة")}
                     readOnly={readOnly}
                     type="number"
                     value={row.unit_quantity}
@@ -750,7 +754,7 @@ export function ShipmentForm({
                   />
                   <input
                     className="input bg-slate-50 text-[var(--foreground)]"
-                    placeholder="إجمالي القطع"
+                    placeholder={ui("إجمالي القطع")}
                     readOnly
                     tabIndex={-1}
                     type="number"
@@ -766,7 +770,7 @@ export function ShipmentForm({
                         }
                         type="checkbox"
                       />
-                      منتج وارد جديد
+                      {ui("منتج وارد جديد")}
                     </label>
                     <label className="flex items-center gap-2">
                       <input
@@ -775,13 +779,13 @@ export function ShipmentForm({
                         onChange={(event) => updateShipmentProduct(index, { ...row, is_disassembled: event.target.checked })}
                         type="checkbox"
                       />
-                      مفكك
+                      {ui("مفكك")}
                     </label>
                   </div>
                   <button className="btn btn-secondary px-2" disabled={readOnly} onClick={() => setShipmentProducts((current) => current.length === 1 ? [{ ...emptyProduct }] : current.filter((_, rowIndex) => rowIndex !== index))} type="button">
                     <Trash2 className="h-4 w-4" />
                   </button>
-                  {selected ? <input className="input md:col-span-5" placeholder="ملاحظات المنتج" value={row.notes} onChange={(event) => updateShipmentProduct(index, { ...row, notes: event.target.value })} /> : null}
+                  {selected ? <input className="input md:col-span-5" placeholder={ui("ملاحظات المنتج")} value={row.notes} onChange={(event) => updateShipmentProduct(index, { ...row, notes: event.target.value })} /> : null}
                 </div>
               );
             })}
@@ -791,7 +795,7 @@ export function ShipmentForm({
         {!readOnly ? (
           <button className="btn" disabled={loading} type="submit">
             <Save className="h-4 w-4" />
-            {loading ? "جاري الحفظ..." : shipment ? "حفظ الشحنة" : "حفظ الشحنة"}
+            {loading ? ui("جاري الحفظ...") : ui("حفظ الشحنة")}
           </button>
         ) : null}
       </form>
@@ -823,6 +827,7 @@ function QuickProductModal({
   onClose: () => void;
   onCreated: (product: Product) => void;
 }) {
+  const { ui } = useLanguage();
   const categoryOptions = useMemo(() => buildCategorySelectOptions(categories), [categories]);
   const [form, setForm] = useState({ name_ar: "", category_id: "", barcode: "" });
   const [loading, setLoading] = useState(false);
@@ -849,7 +854,7 @@ function QuickProductModal({
     setLoading(false);
 
     if (result.error) {
-      setError(result.error.message.includes("products_barcode_unique_idx") ? "الباركود مستخدم لمنتج آخر." : result.error.message);
+      setError(result.error.message.includes("products_barcode_unique_idx") ? ui("الباركود مستخدم لمنتج آخر.") : result.error.message);
       return;
     }
 
@@ -860,33 +865,33 @@ function QuickProductModal({
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4" onClick={onClose}>
       <form className="card w-full max-w-lg space-y-4 p-5" onClick={(event) => event.stopPropagation()} onSubmit={submit}>
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold">منتج جديد</h2>
+          <h2 className="text-lg font-bold">{ui("منتج جديد")}</h2>
           <button className="btn btn-secondary p-2" onClick={onClose} type="button">
             <X className="h-4 w-4" />
           </button>
         </div>
         <ErrorMessage message={error} />
-        <p className="text-xs text-[var(--muted)]">سيتم توليد SKU تلقائيا من كود الفئة.</p>
+        <p className="text-xs text-[var(--muted)]">{ui("سيتم توليد SKU تلقائيا من كود الفئة.")}</p>
         <label className="label">
-          اسم المنتج
+          {ui("اسم المنتج")}
           <input className="input" required value={form.name_ar} onChange={(event) => setForm({ ...form, name_ar: event.target.value })} />
         </label>
         <label className="label">
-          الفئة
+          {ui("الفئة")}
           <SearchableSelect
             options={categoryOptions}
-            placeholder="ابحث عن الفئة..."
+            placeholder={ui("ابحث عن الفئة...")}
             required
             value={form.category_id}
             onChange={(value) => setForm({ ...form, category_id: value })}
           />
         </label>
         <label className="label">
-          الباركود (اختياري)
+          {ui("الباركود (اختياري)")}
           <input className="input" inputMode="numeric" value={form.barcode} onChange={(event) => setForm({ ...form, barcode: event.target.value })} />
         </label>
         <button className="btn" disabled={loading} type="submit">
-          {loading ? "جاري الحفظ..." : "حفظ المنتج"}
+          {loading ? ui("جاري الحفظ...") : ui("حفظ المنتج")}
         </button>
       </form>
     </div>

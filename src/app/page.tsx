@@ -15,7 +15,8 @@ import {
 } from "lucide-react";
 import { ErrorMessage, PageHeader } from "@/components/ui";
 import { useLanguage } from "@/context/language-context";
-import { SHIPMENT_STATUS_LABELS, SHIPMENT_STATUS_LABELS_EN } from "@/lib/constants";
+import { getStatusLabel, languageToLocale } from "@/lib/i18n";
+import type { AppLanguage } from "@/lib/i18n";
 import { formatUsd, formatDisplayDate } from "@/lib/format";
 import { displayInvoiceNumber, invoiceMapFromDocuments, shipmentInvoiceLabel } from "@/lib/shipment-invoice-number";
 import { fetchSystemSettings, isShipmentDelayed, DEFAULT_SYSTEM_SETTINGS, type SystemSettings } from "@/lib/system-settings";
@@ -38,13 +39,12 @@ function relatedShipmentStatus(row: FlaggedProductRow) {
   return shipment?.status;
 }
 
-function formatDate(iso: string | null | undefined, lang: "ar" | "en") {
+function formatDate(iso: string | null | undefined, lang: AppLanguage) {
   return formatDisplayDate(iso, lang);
 }
 
-function StatusLabel({ status, lang }: { status: Shipment["status"]; lang: "ar" | "en" }) {
-  const label = lang === "ar" ? SHIPMENT_STATUS_LABELS[status] : SHIPMENT_STATUS_LABELS_EN[status];
-  return <span className={`status-badge status-${status}`}>{label}</span>;
+function StatusLabel({ status, lang }: { status: Shipment["status"]; lang: AppLanguage }) {
+  return <span className={`status-badge status-${status}`}>{getStatusLabel(status, lang)}</span>;
 }
 
 function VisualBars({
@@ -251,9 +251,9 @@ export default function DashboardPage() {
       ],
       chartData: {
         shipmentsByStatus: [
-          { label: lang === "ar" ? SHIPMENT_STATUS_LABELS.in_sea : SHIPMENT_STATUS_LABELS_EN.in_sea, value: inSea.length, color: "#2563eb" },
-          { label: lang === "ar" ? SHIPMENT_STATUS_LABELS.customs : SHIPMENT_STATUS_LABELS_EN.customs, value: customs.length, color: "#ea580c" },
-          { label: lang === "ar" ? SHIPMENT_STATUS_LABELS.closed : SHIPMENT_STATUS_LABELS_EN.closed, value: closed.length, color: "#64748b" },
+          { label: getStatusLabel("in_sea", lang), value: inSea.length, color: "#2563eb" },
+          { label: getStatusLabel("customs", lang), value: customs.length, color: "#ea580c" },
+          { label: getStatusLabel("closed", lang), value: closed.length, color: "#64748b" },
         ],
         incoming: [
           { label: t("alerts.incomingContainers"), value: openContainerCount, color: "#059669" },
@@ -327,28 +327,28 @@ export default function DashboardPage() {
                 {t("dashboard.viewAll")}
               </Link>
             </div>
-            <div className="overflow-auto">
-              <table className="table-nowrap min-w-full text-sm">
+            <div className="overflow-x-auto">
+              <table className="shipments-list-table text-xs sm:text-sm">
                 <thead className="table-head">
                   <tr>
-                    <th className="p-3 text-right">{lang === "ar" ? "رقم الشحنة" : "Shipment no."}</th>
-                    <th className="p-3 text-right">{lang === "ar" ? "نوع البضاعة" : "Cargo type"}</th>
-                    <th className="p-3 text-right">{lang === "ar" ? "عدد الكراتين" : "Cartons"}</th>
-                    <th className="p-3 text-right">{lang === "ar" ? "عدد الحاويات" : "Containers"}</th>
-                    <th className="p-3 text-right">{lang === "ar" ? "قيمة الشحنة ($)" : "Value (USD)"}</th>
-                    <th className="p-3 text-right">{lang === "ar" ? "تاريخ الشحن" : "Shipped"}</th>
-                    <th className="p-3 text-right">{lang === "ar" ? "تاريخ الوصول" : "Arrival"}</th>
-                    <th className="p-3 text-right">ACID</th>
-                    <th className="p-3 text-right">{t("shipment.status")}</th>
-                    <th className="p-3 text-right">{t("shipment.company")}</th>
-                    <th className="p-3 text-right">{""}</th>
+                    <th className="col-actions col-actions-sticky text-right">{t("actions.view")}</th>
+                    <th className="col-invoice text-right">{t("shipment.number")}</th>
+                    <th className="col-status text-right">{t("shipment.status")}</th>
+                    <th className="col-company text-right">{t("shipment.company")}</th>
+                    <th className="col-date text-right">{lang === "ar" ? "تاريخ الوصول" : lang === "zh" ? "预计到达" : "ETA"}</th>
+                    <th className="col-date text-right">{lang === "ar" ? "تاريخ الشحن" : lang === "zh" ? "装运日期" : "Shipped"}</th>
+                    <th className="col-num text-right">{lang === "ar" ? "كراتين" : lang === "zh" ? "箱数" : "Cartons"}</th>
+                    <th className="col-num text-right">{lang === "ar" ? "حاويات" : lang === "zh" ? "柜" : "Cont."}</th>
+                    <th className="col-value text-right">{lang === "ar" ? "القيمة" : lang === "zh" ? "价值" : "Value"}</th>
+                    <th className="col-cargo text-right">{lang === "ar" ? "نوع البضاعة" : lang === "zh" ? "货物" : "Cargo"}</th>
+                    <th className="col-acid text-right">ACID</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     <tr>
                       <td className="p-4 text-[var(--muted)]" colSpan={11}>
-                        {lang === "ar" ? "جاري التحميل..." : "Loading..."}
+                        {lang === "ar" ? "جاري التحميل..." : lang === "zh" ? "加载中..." : "Loading..."}
                       </td>
                     </tr>
                   ) : recentShipments.length ? (
@@ -356,26 +356,30 @@ export default function DashboardPage() {
                       const invoiceFile = invoiceByShipmentId.get(shipment.id);
                       return (
                       <tr className="row-hover border-t border-[var(--border)]" key={shipment.id}>
-                        <td className="p-3 font-semibold">
-                          {invoiceFile ? displayInvoiceNumber(invoiceFile) : "-"}
-                        </td>
-                        <td className="p-3">{shipment.shipment_type || "-"}</td>
-                        <td className="p-3">{shipment.total_cartons ?? "-"}</td>
-                        <td className="p-3">{containerCountByShipment.get(shipment.id) ?? 0}</td>
-                        <td className="p-3 font-semibold">{formatUsd(shipment.value_usd)}</td>
-                        <td className="p-3">{formatDate(shipment.shipped_at, lang)}</td>
-                        <td className="p-3">{formatDate(shipment.eta, lang)}</td>
-                        <td className="p-3 font-semibold">
-                          <Link href={`/shipments/${shipment.id}`}>{shipment.acid}</Link>
-                        </td>
-                        <td className="p-3">
-                          <StatusLabel status={shipment.status} lang={lang} />
-                        </td>
-                        <td className="p-3">{shipment.companies?.name_ar ?? "-"}</td>
-                        <td className="p-3">
-                          <Link className="btn btn-secondary text-xs" href={`/shipments/${shipment.id}`}>
+                        <td className="col-actions col-actions-sticky">
+                          <Link className="btn btn-secondary px-2 py-1 text-xs" href={`/shipments/${shipment.id}`}>
                             {t("actions.view")}
                           </Link>
+                        </td>
+                        <td className="col-invoice font-semibold">
+                          {invoiceFile ? displayInvoiceNumber(invoiceFile) : "-"}
+                        </td>
+                        <td className="col-status">
+                          <StatusLabel status={shipment.status} lang={lang} />
+                        </td>
+                        <td className="col-company truncate" title={shipment.companies?.name_ar ?? "-"}>
+                          {shipment.companies?.name_ar ?? "-"}
+                        </td>
+                        <td className="col-date">{formatDate(shipment.eta, lang)}</td>
+                        <td className="col-date">{formatDate(shipment.shipped_at, lang)}</td>
+                        <td className="col-num">{shipment.total_cartons ?? "-"}</td>
+                        <td className="col-num">{containerCountByShipment.get(shipment.id) ?? 0}</td>
+                        <td className="col-value font-semibold">{formatUsd(shipment.value_usd)}</td>
+                        <td className="col-cargo" title={shipment.shipment_type || "-"}>
+                          {shipment.shipment_type || "-"}
+                        </td>
+                        <td className="col-acid font-semibold" title={shipment.acid}>
+                          {shipment.acid}
                         </td>
                       </tr>
                     );
@@ -383,7 +387,7 @@ export default function DashboardPage() {
                   ) : (
                     <tr>
                       <td className="p-4 text-[var(--muted)]" colSpan={11}>
-                        {lang === "ar" ? "لا توجد شحنات بعد." : "No shipments yet."}
+                        {lang === "ar" ? "لا توجد شحنات بعد." : lang === "zh" ? "暂无货运。" : "No shipments yet."}
                       </td>
                     </tr>
                   )}
@@ -391,11 +395,12 @@ export default function DashboardPage() {
                 {recentShipments.length ? (
                   <tfoot className="table-head font-bold">
                     <tr>
-                      <td className="p-3">{lang === "ar" ? "الإجمالي" : "Total"}</td>
-                      <td className="p-3" />
-                      <td className="p-3">{recentTotals.cartons.toLocaleString("ar-EG")}</td>
-                      <td className="p-3">{recentTotals.containers.toLocaleString("ar-EG")}</td>
-                      <td className="p-3" colSpan={7} />
+                      <td />
+                      <td>{lang === "ar" ? "الإجمالي" : lang === "zh" ? "合计" : "Total"}</td>
+                      <td colSpan={4} />
+                      <td className="col-num">{recentTotals.cartons.toLocaleString(languageToLocale(lang))}</td>
+                      <td className="col-num">{recentTotals.containers.toLocaleString(languageToLocale(lang))}</td>
+                      <td colSpan={3} />
                     </tr>
                   </tfoot>
                 ) : null}
