@@ -22,11 +22,9 @@ export function displayUnitPerCarton(cartons: number | null | undefined, total: 
   return unit || "-";
 }
 
-export function syncProductQuantityFields(row: {
-  cartons_count: string;
-  unit_quantity: string;
-  quantity: string;
-}) {
+export function syncProductQuantityFields<T extends { cartons_count: string; unit_quantity: string; quantity: string }>(
+  row: T
+): T {
   const total = totalFromCartonsAndUnit(Number(row.cartons_count), Number(row.unit_quantity));
   return { ...row, quantity: total };
 }
