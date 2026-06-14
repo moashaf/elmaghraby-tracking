@@ -29,7 +29,7 @@ export type ShipmentReportRow = {
 };
 
 export const shipmentSelect =
-  "shipment_number,acid,shipment_type,total_cartons,value_usd,shipping_port,arrival_port,shipped_at,eta,status,closed_at,companies(name_ar),suppliers(name_ar),shipment_containers(count)";
+  "id,shipment_number,acid,shipment_type,total_cartons,value_usd,shipping_port,arrival_port,shipped_at,eta,status,closed_at,companies(name_ar),suppliers(name_ar),shipment_containers(count)";
 
 export function todayIso() {
   return new Date().toISOString().slice(0, 10);

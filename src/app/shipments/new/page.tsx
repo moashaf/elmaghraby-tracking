@@ -11,8 +11,8 @@ export default function NewShipmentPage() {
       <PageHeader
         title={tr("شحنة جديدة", "New shipment")}
         description={tr(
-          "بيانات أساسية فقط في المرحلة الأولى. الحاويات والمنتجات في المرحلة التالية.",
-          "Basic data first. Containers and products come in the next step."
+          "سجّل بيانات الشحنة والحاويات والمنتجات وارفع ملف INV (PDF) في نفس الصفحة.",
+          "Enter shipment data, containers, products, and upload the INV PDF on one page."
         )}
       />
       <ShipmentForm />

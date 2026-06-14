@@ -231,7 +231,13 @@ export default function ProductsPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title={tr("المنتجات", "Products")} />
+      <PageHeader
+        title={tr("المنتجات", "Products")}
+        description={tr(
+          "ابحث بالاسم أو SKU لإضافة أو تعديل صنف.",
+          "Search by name or SKU to add or edit a product."
+        )}
+      />
       <ErrorMessage message={error} />
 
       {canWrite ? (

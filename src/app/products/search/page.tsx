@@ -6,6 +6,7 @@ import { Printer, Search } from "lucide-react";
 import { ErrorMessage, PageHeader } from "@/components/ui";
 import { useLanguage } from "@/context/language-context";
 import { SHIPMENT_STATUS_LABELS, type ShipmentStatus } from "@/lib/constants";
+import { displayInvoiceNumber, invoiceMapFromDocuments, shipmentInvoiceLabel } from "@/lib/shipment-invoice-number";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
 type ProductDetail = {
@@ -67,6 +68,24 @@ export default function ProductSmartSearchPage() {
       .map((item) => (item.shipments as { id?: string } | null)?.id)
       .filter(Boolean) as string[];
 
+    let invoiceByShipmentId = new Map<string, string>();
+    if (shipmentIds.length) {
+      const documentsResult = await createClient()
+        .from("shipment_documents")
+        .select("shipment_id,doc_type,file_name,uploaded_at")
+        .eq("doc_type", "INV")
+        .in("shipment_id", shipmentIds)
+        .order("uploaded_at", { ascending: false });
+      if (documentsResult.error) {
+        setDetailLoading(false);
+        setError(documentsResult.error.message);
+        return;
+      }
+      invoiceByShipmentId = invoiceMapFromDocuments(
+        (documentsResult.data as Array<{ shipment_id: string; doc_type: string; file_name: string }> | null) ?? []
+      );
+    }
+
     const containerCounts = new Map<string, number>();
     if (shipmentIds.length) {
       const containersResult = await createClient().from("shipment_containers").select("shipment_id").in("shipment_id", shipmentIds);
@@ -92,7 +111,7 @@ export default function ProductSmartSearchPage() {
       } | null;
       return {
         shipmentId: shipment?.id ?? "",
-        shipmentNumber: shipment?.shipment_number ?? "-",
+        shipmentNumber: shipment?.id ? shipmentInvoiceLabel(invoiceByShipmentId.get(shipment.id)) : "-",
         eta: shipment?.eta ?? "-",
         status: shipment?.status ?? "in_sea",
         supplier: shipment?.suppliers?.name_ar ?? "-",

@@ -169,8 +169,8 @@ export default function UsersPage() {
       <PageHeader
         title={tr("المستخدمون", "Users")}
         description={tr(
-          "إنشاء حسابات Supabase Auth وتحديد صلاحيات العمل داخل النظام.",
-          "Manage users and roles in Supabase Auth."
+          "إنشاء حسابات الموظفين وتحديد صلاحياتهم (مدير / مشاهدة).",
+          "Create staff accounts and assign roles (manager / view only)."
         )}
         actions={
           <div className="flex flex-wrap gap-2">

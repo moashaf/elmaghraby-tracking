@@ -9,6 +9,7 @@ import { ShipmentForm } from "@/components/shipment-form";
 import { ErrorMessage, PageHeader } from "@/components/ui";
 import { getNextStatusAction, NEXT_ACTION_LABELS, SHIPMENT_STATUS_LABELS } from "@/lib/constants";
 import { useProfile } from "@/context/profile-context";
+import { displayInvoiceNumber } from "@/lib/shipment-invoice-number";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { addDaysToIsoDate } from "@/lib/eta";
 import { displayUnitPerCarton } from "@/lib/shipment-product-quantity";
@@ -24,7 +25,7 @@ const tabs: Array<{ id: Tab; label: string }> = [
   { id: "containers", label: "الحاويات" },
   { id: "products", label: "المنتجات" },
   { id: "files", label: "الملفات" },
-  { id: "timeline", label: "Timeline" },
+  { id: "timeline", label: "السجل" },
   { id: "costs", label: "المصاريف" },
 ];
 
@@ -161,8 +162,8 @@ export default function ShipmentDetailsPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title={`الشحنة ${shipment.shipment_number}`}
-        description={`${shipment.companies?.name_ar ?? "شركة غير محددة"} - ${shipment.suppliers?.name_ar ?? "مورد غير محدد"}`}
+        title={`شحنة ${invDoc ? displayInvoiceNumber(invDoc.file_name) : shipment.shipment_number}`}
+        description={`${shipment.companies?.name_ar ?? "شركة غير محددة"} — ${shipment.suppliers?.name_ar ?? "مورد غير محدد"}`}
         actions={
           <div className="flex flex-wrap gap-2">
             <Link className="btn btn-secondary" href="/shipments">

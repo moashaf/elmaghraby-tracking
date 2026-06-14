@@ -161,7 +161,9 @@ export function ShipmentPrintReport({ shipmentId }: { shipmentId: string }) {
 
       <header className="report-print-section card space-y-2 p-5 text-center">
         <div className="text-sm font-semibold text-[var(--muted)]">Elmaghraby Tracing</div>
-        <h1 className="text-2xl font-bold">تقرير الشحنة {shipment.shipment_number}</h1>
+        <h1 className="text-2xl font-bold">
+          تقرير الشحنة {invDoc ? displayInvoiceNumber(invDoc.file_name) : shipment.shipment_number}
+        </h1>
         <p className="text-sm font-semibold text-[var(--muted)]">
           {shipment.companies?.name_ar ?? "-"} — ACID: {shipment.acid}
         </p>

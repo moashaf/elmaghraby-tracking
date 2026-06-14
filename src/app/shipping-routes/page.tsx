@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Route, Search, Trash2 } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
+import { useProfile } from "@/context/profile-context";
 import { ErrorMessage, PageHeader, StatusPill } from "@/components/ui";
 import { useLanguage } from "@/context/language-context";
 import { PORT_SELECT_OPTIONS } from "@/lib/port-options";
@@ -23,6 +24,7 @@ const emptyForm: RouteForm = {
 
 export default function ShippingRoutesPage() {
   const { tr } = useLanguage();
+  const { canWrite } = useProfile();
   const [rows, setRows] = useState<ShippingRoute[]>([]);
   const [form, setForm] = useState<RouteForm>(emptyForm);
   const [query, setQuery] = useState("");
@@ -120,6 +122,7 @@ export default function ShippingRoutesPage() {
       />
       <ErrorMessage message={error} />
 
+      {canWrite ? (
       <form className="card grid gap-3 p-4 md:grid-cols-[1fr_1fr_140px_120px]" onSubmit={submit}>
         <label className="label">
           ميناء الشحن
@@ -157,6 +160,7 @@ export default function ShippingRoutesPage() {
           {saving ? "..." : "إضافة"}
         </button>
       </form>
+      ) : null}
 
       <div className="card p-4">
         <label className="relative block">

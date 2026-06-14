@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, Edit2, FileSpreadsheet, FolderTree, Plus, Save, Search, Trash2, X } from "lucide-react";
 import { downloadExcelWithOptionalImages } from "@/lib/excel-export";
 import { SearchableSelect } from "@/components/searchable-select";
+import { useProfile } from "@/context/profile-context";
 import { ErrorMessage, PageHeader, StatusPill } from "@/components/ui";
 import { useLanguage } from "@/context/language-context";
 import {
@@ -40,6 +41,7 @@ type ListScope = { type: "all" } | { type: "under"; parentId: string };
 
 export default function CategoriesPage() {
   const { tr } = useLanguage();
+  const { canWrite } = useProfile();
   const [rows, setRows] = useState<ProductCategory[]>([]);
   const [form, setForm] = useState<CategoryForm>(emptyForm);
   const [query, setQuery] = useState("");
@@ -269,6 +271,8 @@ export default function CategoriesPage() {
       />
       <ErrorMessage message={error} />
 
+      {canWrite ? (
+      <>
       <form className="card grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-[1fr_140px_1fr_120px_120px]" onSubmit={submit}>
         <input
           className="input"
@@ -308,6 +312,8 @@ export default function CategoriesPage() {
           <X className="h-4 w-4" />
           إلغاء التعديل
         </button>
+      ) : null}
+      </>
       ) : null}
 
       <div className="card space-y-4 p-4">

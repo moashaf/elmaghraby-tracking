@@ -167,13 +167,37 @@ export default function ReportDetailPage() {
       }
       return copy;
     });
+
+    if (shipmentTotals && columns.length) {
+      const totalRow: Record<string, string | number | null> = {};
+      columns.forEach((column, index) => {
+        if (column === "عدد الكراتين") totalRow[column] = shipmentTotals.cartons;
+        else if (column === "عدد الحاويات") totalRow[column] = shipmentTotals.containers;
+        else totalRow[column] = index === 0 ? "الإجمالي" : "";
+      });
+      exportRows.push(totalRow);
+    }
+
+    if (params.slug === "summary" && statusSummary) {
+      exportRows.push({});
+      exportRows.push({ [columns[0] ?? "ملخص"]: "ملخص حسب الحالة" });
+      const summaryRow: Record<string, string | number | null> = { [columns[0] ?? ""]: "عدد الشحنات" };
+      const containerRow: Record<string, string | number | null> = { [columns[0] ?? ""]: "عدد الحاويات" };
+      SHIPMENT_STATUS_SORT_ORDER.forEach((status) => {
+        const label = SHIPMENT_STATUS_LABELS[status];
+        summaryRow[label] = statusSummary[status].shipments;
+        containerRow[label] = statusSummary[status].containers;
+      });
+      exportRows.push(summaryRow, containerRow);
+    }
+
     const imageUrlList = showImages
       ? dataRows.map((row) => (row._imagePath ? imageUrls.get(row._imagePath) : null))
       : undefined;
 
     await downloadExcelWithOptionalImages({
       filename: `${params.slug}-${todayIso()}.xlsx`,
-      sheetName: "Report",
+      sheetName: report?.title ?? "Report",
       rows: exportRows,
       imageUrls: imageUrlList,
     });

@@ -16,11 +16,13 @@ import {
 import { ErrorMessage, PageHeader } from "@/components/ui";
 import { useLanguage } from "@/context/language-context";
 import { SHIPMENT_STATUS_LABELS, SHIPMENT_STATUS_LABELS_EN } from "@/lib/constants";
-import { formatUsd } from "@/lib/format";
-import { displayInvoiceNumber, invoiceMapFromDocuments } from "@/lib/shipment-invoice-number";
+import { formatUsd, formatDisplayDate } from "@/lib/format";
+import { displayInvoiceNumber, invoiceMapFromDocuments, shipmentInvoiceLabel } from "@/lib/shipment-invoice-number";
+import { fetchSystemSettings, isShipmentDelayed, DEFAULT_SYSTEM_SETTINGS, type SystemSettings } from "@/lib/system-settings";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
 import type { Shipment } from "@/lib/types";
+import { useProfile } from "@/context/profile-context";
 
 type ContainerRow = {
   id: string;
@@ -37,12 +39,7 @@ function relatedShipmentStatus(row: FlaggedProductRow) {
 }
 
 function formatDate(iso: string | null | undefined, lang: "ar" | "en") {
-  if (!iso) return "-";
-  if (lang === "ar") return iso;
-  // ISO date "YYYY-MM-DD" -> "DD/MM/YYYY" for readability
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-  if (!match) return iso;
-  return `${match[3]}/${match[2]}/${match[1]}`;
+  return formatDisplayDate(iso, lang);
 }
 
 function StatusLabel({ status, lang }: { status: Shipment["status"]; lang: "ar" | "en" }) {
@@ -95,9 +92,11 @@ export default function DashboardPage() {
   const [incomingProducts, setIncomingProducts] = useState<FlaggedProductRow[]>([]);
   const [disassembledProducts, setDisassembledProducts] = useState<FlaggedProductRow[]>([]);
   const [invoiceByShipmentId, setInvoiceByShipmentId] = useState<Map<string, string>>(new Map());
+  const [systemSettings, setSystemSettings] = useState<SystemSettings>(DEFAULT_SYSTEM_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const { t, lang } = useLanguage();
+  const { canWrite } = useProfile();
 
   useEffect(() => {
     async function load() {
@@ -150,6 +149,7 @@ export default function DashboardPage() {
             (documentsResult.data as Array<{ shipment_id: string; doc_type: string; file_name: string }> | null) ?? []
           )
         );
+        setSystemSettings(await fetchSystemSettings());
       } catch (loadError) {
         setError(getSupabaseErrorMessage(loadError));
       } finally {
@@ -178,7 +178,7 @@ export default function DashboardPage() {
     const inSea = shipments.filter((shipment) => shipment.status === "in_sea");
     const customs = shipments.filter((shipment) => shipment.status === "customs");
     const closed = shipments.filter((shipment) => shipment.status === "closed");
-    const overdue = shipments.filter((shipment) => shipment.status !== "closed" && shipment.eta < today);
+    const overdue = shipments.filter((shipment) => isShipmentDelayed(shipment.eta, shipment.status, systemSettings, today));
     const etaSoon = shipments.filter(
       (shipment) => shipment.status !== "closed" && shipment.eta >= today && shipment.eta <= in7Days
     );
@@ -212,7 +212,7 @@ export default function DashboardPage() {
           label: "alerts.overdue",
           value: overdue.length,
           helper: `الحاويات: ${countContainers(overdue.map((shipment) => shipment.id))}`,
-          href: "/shipments",
+          href: "/reports/delayed",
           icon: AlertTriangle,
           tone: "bg-red-50 text-red-700 border-red-200",
         },
@@ -262,7 +262,7 @@ export default function DashboardPage() {
         ],
       },
     };
-  }, [containers, disassembledProducts, incomingProducts, shipments, lang, t]);
+  }, [containers, disassembledProducts, incomingProducts, shipments, systemSettings, lang, t]);
 
   const recentTotals = useMemo(
     () => ({
@@ -281,10 +281,12 @@ export default function DashboardPage() {
         title={t("dashboard.title")}
         description={t("dashboard.subtitle")}
         actions={
-          <Link className="btn" href="/shipments/new">
-            <Plus className="h-4 w-4" />
-            {t("actions.newShipment")}
-          </Link>
+          canWrite ? (
+            <Link className="btn" href="/shipments/new">
+              <Plus className="h-4 w-4" />
+              {t("actions.newShipment")}
+            </Link>
+          ) : null
         }
       />
 
@@ -389,7 +391,7 @@ export default function DashboardPage() {
                 {recentShipments.length ? (
                   <tfoot className="table-head font-bold">
                     <tr>
-                      <td className="p-3">الإجمالي</td>
+                      <td className="p-3">{lang === "ar" ? "الإجمالي" : "Total"}</td>
                       <td className="p-3" />
                       <td className="p-3">{recentTotals.cartons.toLocaleString("ar-EG")}</td>
                       <td className="p-3">{recentTotals.containers.toLocaleString("ar-EG")}</td>
@@ -435,7 +437,9 @@ export default function DashboardPage() {
                         href={`/shipments/${shipment.id}`}
                         key={shipment.id}
                       >
-                        <span className="font-semibold">{shipment.shipment_number}</span>
+                        <span className="font-semibold">
+                          {shipmentInvoiceLabel(invoiceByShipmentId.get(shipment.id))}
+                        </span>
                         <span className="text-red-700">{formatDate(shipment.eta, lang)}</span>
                       </Link>
                     ))
@@ -462,7 +466,9 @@ export default function DashboardPage() {
                         href={`/shipments/${shipment.id}`}
                         key={shipment.id}
                       >
-                        <span className="font-semibold">{shipment.shipment_number}</span>
+                        <span className="font-semibold">
+                          {shipmentInvoiceLabel(invoiceByShipmentId.get(shipment.id))}
+                        </span>
                         <span className="text-[#0f766e]">{formatDate(shipment.eta, lang)}</span>
                       </Link>
                     ))

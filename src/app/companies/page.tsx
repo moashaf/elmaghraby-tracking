@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Edit2, Plus, Save, Search } from "lucide-react";
+import { useProfile } from "@/context/profile-context";
 import { ErrorMessage, PageHeader } from "@/components/ui";
 import { useLanguage } from "@/context/language-context";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
@@ -24,6 +25,7 @@ const emptyForm: CompanyForm = {
 
 export default function CompaniesPage() {
   const { tr } = useLanguage();
+  const { canWrite } = useProfile();
   const [rows, setRows] = useState<Company[]>([]);
   const [form, setForm] = useState<CompanyForm>(emptyForm);
   const [query, setQuery] = useState("");
@@ -100,6 +102,7 @@ export default function CompaniesPage() {
       />
       <ErrorMessage message={error} />
 
+      {canWrite ? (
       <form className="card grid gap-3 p-4 md:grid-cols-[1fr_1fr_120px_120px]" onSubmit={submit}>
         <input className="input" placeholder="اسم الشركة" required value={form.name_ar} onChange={(event) => setForm({ ...form, name_ar: event.target.value })} />
         <input className="input" placeholder="اسم إنجليزي" value={form.name_en} onChange={(event) => setForm({ ...form, name_en: event.target.value })} />
@@ -119,6 +122,7 @@ export default function CompaniesPage() {
           </button>
         </div>
       </form>
+      ) : null}
 
       <div className="card p-4">
         <label className="relative block">

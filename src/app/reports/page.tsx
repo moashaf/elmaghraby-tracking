@@ -12,7 +12,7 @@ export default function ReportsPage() {
     <div className="space-y-5">
       <PageHeader
         title={tr("التقارير", "Reports")}
-        description={tr("تقارير تشغيلية قابلة للتصدير Excel والطباعة PDF من المتصفح.", "Operational reports (Excel export & PDF printing).")}
+        description={tr("تقارير تشغيلية قابلة للتصدير Excel والطباعة.", "Operational reports with Excel export and printing.")}
       />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {REPORTS.map((report) => (

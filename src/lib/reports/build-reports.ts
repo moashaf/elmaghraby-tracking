@@ -1,12 +1,13 @@
 import { createClient } from "@/lib/supabase/client";
 import { fetchAllFromTable } from "@/lib/supabase/fetch-all";
 import { SHIPMENT_STATUS_LABELS } from "@/lib/constants";
-import { formatUsd } from "@/lib/format";
+import { formatUsd, formatDisplayDate } from "@/lib/format";
 import {
   computeShipmentStatusSummary,
   type ShipmentStatusSummary,
 } from "@/lib/shipment-container-count";
-import { compareShipmentsByInvoiceNumber, displayInvoiceNumber } from "@/lib/shipment-invoice-number";
+import { compareShipmentsByInvoiceNumber, displayInvoiceNumber, shipmentInvoiceLabel } from "@/lib/shipment-invoice-number";
+import { fetchSystemSettings, isShipmentDelayed } from "@/lib/system-settings";
 import { collectDescendantCategoryIds } from "@/lib/category-tree";
 import type { ProductCategory } from "@/lib/types";
 import type { ProductKindFilter } from "@/lib/reports/constants";
@@ -79,8 +80,8 @@ function shipmentToReportRow(row: ShipmentReportRow): ReportRow {
     "عدد الكراتين": row.total_cartons ?? "-",
     "عدد الحاويات": row.containers_count,
     "قيمة الشحنة ($)": formatUsd(row.value_usd),
-    "تاريخ الشحن": row.shipped_at || "-",
-    "تاريخ الوصول": row.eta || "-",
+    "تاريخ الشحن": formatDisplayDate(row.shipped_at),
+    "تاريخ الوصول": formatDisplayDate(row.eta),
     الحالة: SHIPMENT_STATUS_LABELS[row.status],
     "نوع البضاعة": row.shipment_type || "-",
     _status: row.status,
@@ -122,7 +123,7 @@ function normalizeShipmentJoin(value: ShipmentReportRow | ShipmentReportRow[] | 
   return normalizeShipment(row as unknown as Record<string, unknown>);
 }
 
-function toProductLine(row: ShipmentProductJoin): ProductLine | null {
+function toProductLine(row: ShipmentProductJoin, invoiceMap: Map<string, string>): ProductLine | null {
   const shipment = normalizeShipmentJoin(row.shipments);
   if (!row.products || !shipment) return null;
   return {
@@ -135,7 +136,9 @@ function toProductLine(row: ShipmentProductJoin): ProductLine | null {
     quantity: row.quantity,
     eta: shipment.eta,
     acid: shipment.acid,
+    shipment_id: shipment.id,
     shipment_number: shipment.shipment_number,
+    invoice_file_name: invoiceMap.get(shipment.id) ?? null,
     is_disassembled: row.is_disassembled,
     is_new: row.is_new_incoming_product,
     status: statusLabel(shipment.status),
@@ -180,6 +183,7 @@ export async function buildReport(
   if (result.error) return { error: result.error.message };
 
   const invoiceMap = await fetchInvoiceFileNamesByShipmentId();
+  const systemSettings = slug === "delayed" ? await fetchSystemSettings() : null;
   const shipments = attachInvoiceNumbers(
     ((result.data ?? []) as Array<Record<string, unknown>>).map(normalizeShipment),
     invoiceMap
@@ -193,21 +197,31 @@ export async function buildReport(
   if (slug === "in-sea") filtered = filtered.filter((row) => row.status === "in_sea");
   if (slug === "customs" || slug === "ready-to-close") filtered = filtered.filter((row) => row.status === "customs");
   if (slug === "closed") filtered = filtered.filter((row) => row.status === "closed");
-  if (slug === "delayed") filtered = filtered.filter((row) => row.status !== "closed" && row.eta < today);
-  if (slug === "arriving-10" || slug === "arriving-30") {
+  if (slug === "delayed") {
+    filtered = filtered.filter((row) => isShipmentDelayed(row.eta, row.status, systemSettings ?? { delayed_after_eta_days: 0, require_costs_before_close: true, require_customs_document: false }));
+  }
+  if (slug === "arriving-10") {
     filtered = filtered.filter((row) => row.status !== "closed" && row.eta >= today && row.eta <= next10Iso);
   }
 
   if (slug === "suppliers") {
     const grouped = new Map<string, number>();
     shipments.forEach((row) => grouped.set(row.supplier, (grouped.get(row.supplier) ?? 0) + 1));
-    return { rows: Array.from(grouped.entries()).map(([supplier, count]) => ({ المورد: supplier, "عدد الشحنات": count })) };
+    return {
+      rows: Array.from(grouped.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([supplier, count]) => ({ المورد: supplier, "عدد الشحنات": count })),
+    };
   }
 
   if (slug === "companies") {
     const grouped = new Map<string, number>();
     shipments.forEach((row) => grouped.set(row.company, (grouped.get(row.company) ?? 0) + 1));
-    return { rows: Array.from(grouped.entries()).map(([company, count]) => ({ الشركة: company, "عدد الشحنات": count })) };
+    return {
+      rows: Array.from(grouped.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([company, count]) => ({ الشركة: company, "عدد الشحنات": count })),
+    };
   }
 
   if (slug === "summary") {
@@ -264,6 +278,8 @@ async function productsReport(
 
   if (result.error) return { error: result.error };
 
+  const invoiceMap = await fetchInvoiceFileNamesByShipmentId();
+
   let joins = (result.data as unknown as ShipmentProductJoin[])
     .map((row) => ({ ...row, shipments: normalizeShipmentJoin(row.shipments) }))
     .filter((row) => row.shipments && filterShipmentByDate(row.shipments!, from, to, "eta"));
@@ -272,13 +288,15 @@ async function productsReport(
   if (slug === "disassembled-products") joins = joins.filter((row) => row.is_disassembled);
 
   if (slug === "duplicate-products") {
-    const openCounts = new Map<string, number>();
+    const openShipmentsBySku = new Map<string, Set<string>>();
     joins.forEach((row) => {
-      if (row.shipments?.status !== "closed" && row.products?.sku) {
-        openCounts.set(row.products.sku, (openCounts.get(row.products.sku) ?? 0) + 1);
+      if (row.shipments?.status !== "closed" && row.products?.sku && row.shipments?.id) {
+        const set = openShipmentsBySku.get(row.products.sku) ?? new Set<string>();
+        set.add(row.shipments.id);
+        openShipmentsBySku.set(row.products.sku, set);
       }
     });
-    joins = joins.filter((row) => row.products?.sku && (openCounts.get(row.products.sku) ?? 0) > 1);
+    joins = joins.filter((row) => row.products?.sku && (openShipmentsBySku.get(row.products.sku)?.size ?? 0) > 1);
   }
 
   let categoryIds: Set<string> | undefined;
@@ -292,20 +310,23 @@ async function productsReport(
     categoryIds = collectDescendantCategoryIds(categoriesResult.data, options.categoryId);
   }
 
-  const lines = joins.map(toProductLine).filter((line): line is ProductLine => line !== null);
+  const lines = joins.map((row) => toProductLine(row, invoiceMap)).filter((line): line is ProductLine => line !== null);
 
   if (slug === "product-history") {
-    const grouped = new Map<string, { name: string; quantity: number; shipments: number; lastSeen: string; image_path: string | null }>();
+    const grouped = new Map<
+      string,
+      { name: string; quantity: number; shipmentIds: Set<string>; lastSeen: string; image_path: string | null }
+    >();
     lines.forEach((line) => {
       const current = grouped.get(line.sku) ?? {
         name: line.name,
         quantity: 0,
-        shipments: 0,
+        shipmentIds: new Set<string>(),
         lastSeen: "",
         image_path: line.image_path,
       };
       current.quantity += Number(line.quantity ?? 0);
-      current.shipments += 1;
+      if (line.shipment_id) current.shipmentIds.add(line.shipment_id);
       current.lastSeen = current.lastSeen > line.eta ? current.lastSeen : line.eta;
       if (!current.image_path && line.image_path) current.image_path = line.image_path;
       grouped.set(line.sku, current);
@@ -315,8 +336,8 @@ async function productsReport(
         SKU: sku,
         المنتج: value.name,
         "إجمالي الكمية": value.quantity,
-        "مرات الاستيراد": value.shipments,
-        "آخر ETA": value.lastSeen,
+        "مرات الاستيراد": value.shipmentIds.size,
+        "آخر وصول": value.lastSeen,
         ...(value.image_path ? { _imagePath: value.image_path } : {}),
       })),
     };
@@ -335,6 +356,7 @@ async function productsReport(
 }
 
 async function containersReport(from: string, to: string): Promise<{ rows: ReportRow[] } | { error: string }> {
+  const invoiceMap = await fetchInvoiceFileNamesByShipmentId();
   const result = await fetchAllFromTable(
     createClient(),
     "shipment_containers",
@@ -345,20 +367,29 @@ async function containersReport(from: string, to: string): Promise<{ rows: Repor
     .map((row) => ({ ...row, shipments: normalizeShipmentJoin(row.shipments) }))
     .filter((row) => row.shipments && filterShipmentByDate(row.shipments, from, to, "eta"));
   return {
-    rows: rows.map((row) => ({
-      "رقم الحاوية": row.container_number,
-      الوزن: row.weight_kg,
-      الكرتين: row.cartons_count,
-      "رقم الشحنة": row.shipments?.shipment_number ?? "-",
-      الشركة: row.shipments?.company ?? "-",
-      المورد: row.shipments?.supplier ?? "-",
-      ETA: row.shipments?.eta ?? "-",
-      الحالة: row.shipments ? SHIPMENT_STATUS_LABELS[row.shipments.status] : "-",
-    })),
+    rows: sortShipmentsByInvoiceNumber(
+      rows.map((row) => ({
+        ...row.shipments!,
+        invoice_file_name: invoiceMap.get(row.shipments!.id) ?? null,
+      }))
+    ).flatMap((shipment) => {
+      const containerRows = rows.filter((r) => r.shipments?.id === shipment.id);
+      return containerRows.map((row) => ({
+        "رقم الحاوية": row.container_number,
+        الوزن: row.weight_kg,
+        الكرتين: row.cartons_count,
+        "رقم الشحنة": shipmentInvoiceLabel(shipment.invoice_file_name),
+        الشركة: row.shipments?.company ?? "-",
+        المورد: row.shipments?.supplier ?? "-",
+        "تاريخ الوصول": row.shipments?.eta ?? "-",
+        الحالة: row.shipments ? SHIPMENT_STATUS_LABELS[row.shipments.status] : "-",
+      }));
+    }),
   };
 }
 
 async function containerFilesReport(): Promise<{ rows: ReportRow[] } | { error: string }> {
+  const invoiceMap = await fetchInvoiceFileNamesByShipmentId();
   const result = await fetchAllFromTable(
     createClient(),
     "container_files",
@@ -372,12 +403,13 @@ async function containerFilesReport(): Promise<{ rows: ReportRow[] } | { error: 
     rows: rows.map((row) => {
       const shipment = normalizeShipmentJoin(row.shipment_containers?.shipments ?? null);
       return {
-        "رقم الشحنة": shipment?.shipment_number ?? "-",
+        "رقم الشحنة": shipmentInvoiceLabel(shipment?.id ? invoiceMap.get(shipment.id) ?? null : null),
         ACID: shipment?.acid ?? "-",
         الحاوية: row.shipment_containers?.container_number ?? "-",
         الملف: row.file_name,
+        "حجم الملف (بايت)": row.size_bytes ?? "-",
         "تاريخ الرفع": row.uploaded_at.slice(0, 10),
-        ETA: shipment?.eta ?? "-",
+        "تاريخ الوصول": shipment?.eta ?? "-",
         _downloadPath: row.storage_path,
       };
     }),
@@ -385,6 +417,7 @@ async function containerFilesReport(): Promise<{ rows: ReportRow[] } | { error: 
 }
 
 async function costsReport(from: string, to: string): Promise<{ rows: ReportRow[] } | { error: string }> {
+  const invoiceMap = await fetchInvoiceFileNamesByShipmentId();
   const result = await fetchAllFromTable(
     createClient(),
     "shipment_costs",
@@ -394,11 +427,24 @@ async function costsReport(from: string, to: string): Promise<{ rows: ReportRow[
   const rows = (result.data as unknown as CostJoin[])
     .map((row) => ({ ...row, shipments: normalizeShipmentJoin(row.shipments) }))
     .filter((row) => row.shipments && filterShipmentByDate(row.shipments, from, to, "closed"));
+  const enriched = rows
+    .map((row) => ({
+      row,
+      shipment: row.shipments!,
+      invoice: invoiceMap.get(row.shipments!.id) ?? null,
+    }))
+    .sort((a, b) => compareShipmentsByInvoiceNumber(
+      { invoice_file_name: a.invoice },
+      { invoice_file_name: b.invoice }
+    ));
+
   return {
-    rows: rows.map((row) => ({
-      "رقم الشحنة": row.shipments?.shipment_number ?? "-",
-      الشركة: row.shipments?.company ?? "-",
-      المورد: row.shipments?.supplier ?? "-",
+    rows: enriched.map(({ row, shipment, invoice }) => ({
+      "رقم الشحنة": shipmentInvoiceLabel(invoice),
+      ACID: shipment.acid,
+      الشركة: shipment.company,
+      المورد: shipment.supplier,
+      "تاريخ الإغلاق": shipment.closed_at ?? "-",
       جمارك: row.customs_cost,
       شحن: row.shipping_cost,
       تخليص: row.clearance_cost,
@@ -412,10 +458,11 @@ async function costsReport(from: string, to: string): Promise<{ rows: ReportRow[
 
 export async function fetchCategoryShippedProducts(categoryId: string, categories: ProductCategory[]) {
   const categoryIds = collectDescendantCategoryIds(categories, categoryId);
+  const invoiceMap = await fetchInvoiceFileNamesByShipmentId();
   const result = await fetchAllFromTable(
     createClient(),
     "shipment_products",
-    `quantity,cartons_count,is_disassembled,products(sku,name_ar,category_id,category,image_url),shipments(shipment_number,eta,acid,status,companies(name_ar))`
+    `quantity,cartons_count,is_disassembled,is_new_incoming_product,products(sku,name_ar,category_id,category,image_url),shipments(${shipmentSelect})`
   );
   if (result.error) return { error: result.error, rows: [] as ReportRow[] };
 
@@ -423,7 +470,7 @@ export async function fetchCategoryShippedProducts(categoryId: string, categorie
   for (const raw of result.data as unknown as ShipmentProductJoin[]) {
     const product = raw.products;
     if (!product?.category_id || !categoryIds.has(product.category_id)) continue;
-    const line = toProductLine({ ...raw, shipments: normalizeShipmentJoin(raw.shipments) });
+    const line = toProductLine({ ...raw, shipments: normalizeShipmentJoin(raw.shipments) }, invoiceMap);
     if (line) lines.push(line);
   }
 

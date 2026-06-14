@@ -1,3 +1,4 @@
+import { displayInvoiceNumber } from "@/lib/shipment-invoice-number";
 import { SHIPMENT_STATUS_LABELS } from "@/lib/constants";
 import type { ProductKindFilter } from "@/lib/reports/constants";
 import type { ReportRow } from "@/lib/reports/shipment-helpers";
@@ -12,7 +13,9 @@ export type ProductLine = {
   quantity: number;
   eta: string;
   acid: string;
+  shipment_id: string;
   shipment_number: string;
+  invoice_file_name: string | null;
   is_disassembled: boolean;
   is_new: boolean;
   status: string;
@@ -139,9 +142,9 @@ export function productLinesToDetailRows(lines: ProductLine[], withImagePath = f
     الكرتين: row.cartons_count,
     "منتج جديد": row.is_new ? "نعم" : "لا",
     مفكك: row.is_disassembled ? "نعم" : "لا",
-    "رقم الشحنة": row.shipment_number,
+    "رقم الشحنة": row.invoice_file_name ? displayInvoiceNumber(row.invoice_file_name) : "-",
     ACID: row.acid,
-    ETA: row.eta,
+    "تاريخ الوصول": row.eta,
     الحالة: row.status,
     ...(withImagePath && row.image_path ? { _imagePath: row.image_path } : {}),
   }));

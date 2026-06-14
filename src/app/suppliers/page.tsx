@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Edit2, Plus, Save, Search } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
+import { useProfile } from "@/context/profile-context";
 import { ErrorMessage, PageHeader } from "@/components/ui";
 import { useLanguage } from "@/context/language-context";
 import { ALL_COUNTRIES } from "@/lib/data/countries";
@@ -30,6 +31,7 @@ const countryOptions = ALL_COUNTRIES.map((country) => ({ value: country, label: 
 
 export default function SuppliersPage() {
   const { tr } = useLanguage();
+  const { canWrite } = useProfile();
   const [rows, setRows] = useState<Supplier[]>([]);
   const [form, setForm] = useState<SupplierForm>(emptyForm);
   const [query, setQuery] = useState("");
@@ -114,6 +116,7 @@ export default function SuppliersPage() {
       />
       <ErrorMessage message={error} />
 
+      {canWrite ? (
       <form className="card grid gap-3 p-4 md:grid-cols-[1fr_1fr_1fr_120px_120px]" onSubmit={submit}>
         <input className="input" placeholder="اسم المورد" required value={form.name_ar} onChange={(event) => setForm({ ...form, name_ar: event.target.value })} />
         {form.id ? (
@@ -139,6 +142,7 @@ export default function SuppliersPage() {
           </button>
         </div>
       </form>
+      ) : null}
 
       <div className="card p-4">
         <label className="relative block">

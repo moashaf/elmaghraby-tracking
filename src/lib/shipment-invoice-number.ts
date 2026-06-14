@@ -31,3 +31,10 @@ export function invoiceMapFromDocuments(
   }
   return map;
 }
+
+export function shipmentInvoiceLabel(
+  invoiceFileName: string | null | undefined,
+  fallback = "-"
+): string {
+  return invoiceFileName ? displayInvoiceNumber(invoiceFileName) : fallback;
+}

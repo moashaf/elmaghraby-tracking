@@ -16,9 +16,9 @@ import {
 import { downloadExcelWithOptionalImages } from "@/lib/excel-export";
 import { useProfile } from "@/context/profile-context";
 import { useLanguage } from "@/context/language-context";
-import { formatUsd } from "@/lib/format";
+import { formatUsd, formatDisplayDate } from "@/lib/format";
 import { readEmbeddedContainerCount } from "@/lib/shipment-container-count";
-import { displayInvoiceNumber, invoiceMapFromDocuments } from "@/lib/shipment-invoice-number";
+import { displayInvoiceNumber, invoiceMapFromDocuments, shipmentInvoiceLabel } from "@/lib/shipment-invoice-number";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
 import type { Shipment } from "@/lib/types";
@@ -58,7 +58,6 @@ export default function ShipmentsPage() {
         .order("created_at", { ascending: false });
 
       if (status) request = request.eq("status", status);
-      if (query.trim()) request = request.or(`shipment_number.ilike.%${query.trim()}%,acid.ilike.%${query.trim()}%`);
 
       const [result, documentsResult] = await Promise.all([
         request,
@@ -96,6 +95,20 @@ export default function ShipmentsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
+  const filteredShipments = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return shipments;
+    return shipments.filter((shipment) => {
+      const invoice = invoiceByShipmentId.get(shipment.id);
+      const invoiceLabel = invoice ? displayInvoiceNumber(invoice).toLowerCase() : "";
+      return (
+        shipment.acid.toLowerCase().includes(term) ||
+        shipment.shipment_number.toLowerCase().includes(term) ||
+        invoiceLabel.includes(term)
+      );
+    });
+  }, [shipments, query, invoiceByShipmentId]);
+
   const counts = useMemo(
     () =>
       SHIPMENT_STATUSES.map((item) => ({
@@ -107,13 +120,13 @@ export default function ShipmentsPage() {
 
   const listTotals = useMemo(
     () => ({
-      cartons: shipments.reduce((sum, shipment) => sum + Number(shipment.total_cartons ?? 0), 0),
-      containers: shipments.reduce(
+      cartons: filteredShipments.reduce((sum, shipment) => sum + Number(shipment.total_cartons ?? 0), 0),
+      containers: filteredShipments.reduce(
         (sum, shipment) => sum + readEmbeddedContainerCount((shipment as Shipment & { shipment_containers?: unknown }).shipment_containers),
         0
       ),
     }),
-    [shipments]
+    [filteredShipments]
   );
 
   const statusLabels = lang === "ar" ? SHIPMENT_STATUS_LABELS : SHIPMENT_STATUS_LABELS_EN;
@@ -148,7 +161,7 @@ export default function ShipmentsPage() {
   }
 
   async function removeShipment(shipment: Shipment) {
-    if (!window.confirm(`حذف الشحنة ${shipment.shipment_number} نهائيا؟`)) return;
+    if (!window.confirm(`حذف الشحنة ${shipmentInvoiceLabel(invoiceByShipmentId.get(shipment.id))} نهائيا؟`)) return;
 
     setDeleteLoading(shipment.id);
     const result = await createClient().rpc("delete_shipment", { p_shipment_id: shipment.id });
@@ -163,7 +176,7 @@ export default function ShipmentsPage() {
   }
 
   async function exportExcel() {
-    const rows = shipments.map((shipment) => {
+    const rows = filteredShipments.map((shipment) => {
       const invoiceFile = invoiceByShipmentId.get(shipment.id);
       return {
         [tr("رقم الشحنة", "Shipment no.")]: invoiceFile ? displayInvoiceNumber(invoiceFile) : "-",
@@ -174,11 +187,24 @@ export default function ShipmentsPage() {
         (shipment as Shipment & { shipment_containers?: unknown }).shipment_containers
       ),
       [tr("القيمة ($)", "Value (USD)")]: shipment.value_usd ?? "",
-      [tr("تاريخ الشحن", "Shipped")]: shipment.shipped_at || "-",
-      [tr("تاريخ الوصول", "ETA")]: shipment.eta || "-",
+      [tr("تاريخ الشحن", "Shipped")]: formatDisplayDate(shipment.shipped_at, lang),
+      [tr("تاريخ الوصول", "ETA")]: formatDisplayDate(shipment.eta, lang),
       [tr("الحالة", "Status")]: statusLabels[shipment.status],
       [tr("نوع البضاعة", "Cargo type")]: shipment.shipment_type || "-",
       };
+    });
+
+    rows.push({
+      [tr("رقم الشحنة", "Shipment no.")]: tr("الإجمالي", "Total"),
+      ACID: "",
+      [tr("الشركة", "Company")]: "",
+      [tr("عدد الكراتين", "Cartons")]: listTotals.cartons,
+      [tr("عدد الحاويات", "Containers")]: listTotals.containers,
+      [tr("القيمة ($)", "Value (USD)")]: "",
+      [tr("تاريخ الشحن", "Shipped")]: "",
+      [tr("تاريخ الوصول", "ETA")]: "",
+      [tr("الحالة", "Status")]: "",
+      [tr("نوع البضاعة", "Cargo type")]: "",
     });
 
     await downloadExcelWithOptionalImages({
@@ -197,8 +223,8 @@ export default function ShipmentsPage() {
         <PageHeader
           title={tr("الشحنات", "Shipments")}
           description={tr(
-            "قائمة الشحنات مع فلترة الحالة وزر التالي بجانب كل حالة.",
-            "Shipments list with status filters and next-action shortcuts."
+            "قائمة الشحنات مع فلترة الحالة وإجراءات سريعة لكل شحنة.",
+            "Shipments list with status filters and quick actions."
           )}
           actions={
             <div className="flex flex-wrap gap-2">
@@ -240,7 +266,7 @@ export default function ShipmentsPage() {
       </div>
 
       <div className="card grid gap-3 p-4 md:grid-cols-[1fr_220px_auto] print:hidden">
-        <input className="input" placeholder="بحث برقم الشحنة أو ACID" value={query} onChange={(event) => setQuery(event.target.value)} />
+        <input className="input" placeholder="بحث برقم الفاتورة أو ACID" value={query} onChange={(event) => setQuery(event.target.value)} />
         <select className="input" value={status} onChange={(event) => setStatus(event.target.value as ShipmentStatus | "")}>
           <option value="">كل الحالات</option>
           {SHIPMENT_STATUSES.map((item) => (
@@ -278,8 +304,8 @@ export default function ShipmentsPage() {
                 <tr>
                   <td className="p-4 text-[var(--muted)]" colSpan={11}>جاري التحميل...</td>
                 </tr>
-              ) : shipments.length ? (
-                shipments.map((shipment) => {
+              ) : filteredShipments.length ? (
+                filteredShipments.map((shipment) => {
                   const action = getNextStatusAction(shipment.status);
                   const invoiceFile = invoiceByShipmentId.get(shipment.id);
                   return (
@@ -295,8 +321,8 @@ export default function ShipmentsPage() {
                         )}
                       </td>
                       <td className="p-3 font-semibold">{formatUsd(shipment.value_usd)}</td>
-                      <td className="p-3">{shipment.shipped_at || "-"}</td>
-                      <td className="p-3">{shipment.eta || "-"}</td>
+                      <td className="p-3">{formatDisplayDate(shipment.shipped_at, lang)}</td>
+                      <td className="p-3">{formatDisplayDate(shipment.eta, lang)}</td>
                       <td className="p-3 font-semibold">{shipment.acid}</td>
                       <td className="p-3">
                         <span className={`status-badge status-${shipment.status}`}>{statusLabels[shipment.status]}</span>
@@ -339,7 +365,7 @@ export default function ShipmentsPage() {
                 </tr>
             )}
           </tbody>
-          {!loading && shipments.length ? (
+          {!loading && filteredShipments.length ? (
             <tfoot className="table-head font-bold">
               <tr>
                 <td className="p-3">الإجمالي</td>

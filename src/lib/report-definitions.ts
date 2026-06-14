@@ -28,7 +28,7 @@ export const REPORTS: Array<{
   dateFilter: ReportDateFilter;
   dateHint?: string;
 }> = [
-  { slug: "summary", title: "ملخص الشحنات", description: "جميع الشحنات مرتبة برقم الشحنة.", dateFilter: "eta", dateHint: "فلترة حسب تاريخ الوصول المتوقع (ETA)" },
+  { slug: "summary", title: "ملخص الشحنات", description: "جميع الشحنات مرتبة برقم الفاتورة (ملف INV).", dateFilter: "eta", dateHint: "فلترة حسب تاريخ الوصول المتوقع (ETA)" },
   { slug: "in-sea", title: "الشحنات في البحر", description: "الشحنات الحالية قبل الجمارك.", dateFilter: "eta", dateHint: "فلترة حسب ETA" },
   { slug: "customs", title: "الشحنات في الجمارك", description: "شحنات جاهزة للمراجعة أو الإغلاق.", dateFilter: "eta", dateHint: "فلترة حسب ETA" },
   { slug: "delayed", title: "الشحنات المتأخرة", description: "شحنات تجاوزت ETA ولم تُغلق بعد.", dateFilter: "none" },
