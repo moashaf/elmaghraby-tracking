@@ -17,6 +17,7 @@ import { downloadExcelWithOptionalImages } from "@/lib/excel-export";
 import { useProfile } from "@/context/profile-context";
 import { useLanguage } from "@/context/language-context";
 import { formatUsd } from "@/lib/format";
+import { readEmbeddedContainerCount } from "@/lib/shipment-container-count";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
 import type { Shipment } from "@/lib/types";
@@ -51,7 +52,7 @@ export default function ShipmentsPage() {
       await supabase.rpc("auto_move_shipments_to_customs");
       let request = supabase
         .from("shipments")
-        .select("*,companies(name_ar),suppliers(name_ar)")
+        .select("*,companies(name_ar),suppliers(name_ar),shipment_containers(count)")
         .order("created_at", { ascending: false });
 
       if (status) request = request.eq("status", status);
@@ -83,6 +84,17 @@ export default function ShipmentsPage() {
         status: item,
         count: shipments.filter((shipment) => shipment.status === item).length,
       })),
+    [shipments]
+  );
+
+  const listTotals = useMemo(
+    () => ({
+      cartons: shipments.reduce((sum, shipment) => sum + Number(shipment.total_cartons ?? 0), 0),
+      containers: shipments.reduce(
+        (sum, shipment) => sum + readEmbeddedContainerCount((shipment as Shipment & { shipment_containers?: unknown }).shipment_containers),
+        0
+      ),
+    }),
     [shipments]
   );
 
@@ -137,6 +149,9 @@ export default function ShipmentsPage() {
       ACID: shipment.acid,
       [tr("الشركة", "Company")]: shipment.companies?.name_ar ?? "-",
       [tr("عدد الكراتين", "Cartons")]: shipment.total_cartons ?? "",
+      [tr("عدد الحاويات", "Containers")]: readEmbeddedContainerCount(
+        (shipment as Shipment & { shipment_containers?: unknown }).shipment_containers
+      ),
       [tr("القيمة ($)", "Value (USD)")]: shipment.value_usd ?? "",
       [tr("تاريخ الشحن", "Shipped")]: shipment.shipped_at || "-",
       [tr("تاريخ الوصول", "ETA")]: shipment.eta || "-",
@@ -221,6 +236,7 @@ export default function ShipmentsPage() {
               <tr>
                 <th className="p-3 text-right">نوع البضاعة</th>
                 <th className="p-3 text-right">عدد الكراتين</th>
+                <th className="p-3 text-right">عدد الحاويات</th>
                 <th className="p-3 text-right">قيمة الشحنة ($)</th>
                 <th className="p-3 text-right">تاريخ الشحن</th>
                 <th className="p-3 text-right">تاريخ الوصول</th>
@@ -233,7 +249,7 @@ export default function ShipmentsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="p-4 text-[var(--muted)]" colSpan={9}>جاري التحميل...</td>
+                  <td className="p-4 text-[var(--muted)]" colSpan={10}>جاري التحميل...</td>
                 </tr>
               ) : shipments.length ? (
                 shipments.map((shipment) => {
@@ -242,6 +258,11 @@ export default function ShipmentsPage() {
                     <tr className="row-hover border-t border-[var(--border)]" key={shipment.id}>
                       <td className="p-3">{shipment.shipment_type || "-"}</td>
                       <td className="p-3">{shipment.total_cartons ?? "-"}</td>
+                      <td className="p-3">
+                        {readEmbeddedContainerCount(
+                          (shipment as Shipment & { shipment_containers?: unknown }).shipment_containers
+                        )}
+                      </td>
                       <td className="p-3 font-semibold">{formatUsd(shipment.value_usd)}</td>
                       <td className="p-3">{shipment.shipped_at || "-"}</td>
                       <td className="p-3">{shipment.eta || "-"}</td>
@@ -283,11 +304,21 @@ export default function ShipmentsPage() {
                 })
               ) : (
                 <tr>
-                  <td className="p-4 text-[var(--muted)]" colSpan={9}>لا توجد شحنات مطابقة.</td>
+                  <td className="p-4 text-[var(--muted)]" colSpan={10}>لا توجد شحنات مطابقة.</td>
                 </tr>
-              )}
-            </tbody>
-          </table>
+            )}
+          </tbody>
+          {!loading && shipments.length ? (
+            <tfoot className="table-head font-bold">
+              <tr>
+                <td className="p-3">الإجمالي</td>
+                <td className="p-3">{listTotals.cartons.toLocaleString("ar-EG")}</td>
+                <td className="p-3">{listTotals.containers.toLocaleString("ar-EG")}</td>
+                <td className="p-3" colSpan={7} />
+              </tr>
+            </tfoot>
+          ) : null}
+        </table>
         </div>
       </div>
     </div>

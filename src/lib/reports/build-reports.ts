@@ -2,6 +2,11 @@ import { createClient } from "@/lib/supabase/client";
 import { fetchAllFromTable } from "@/lib/supabase/fetch-all";
 import { SHIPMENT_STATUS_LABELS } from "@/lib/constants";
 import { formatUsd } from "@/lib/format";
+import {
+  computeShipmentStatusSummary,
+  SHIPMENT_STATUS_SORT_ORDER,
+  type ShipmentStatusSummary,
+} from "@/lib/shipment-container-count";
 import { collectDescendantCategoryIds } from "@/lib/category-tree";
 import type { ProductCategory } from "@/lib/types";
 import type { ProductKindFilter } from "@/lib/reports/constants";
@@ -71,13 +76,29 @@ function shipmentToReportRow(row: ShipmentReportRow): ReportRow {
     ACID: row.acid,
     الشركة: row.company,
     "عدد الكراتين": row.total_cartons ?? "-",
+    "عدد الحاويات": row.containers_count,
     "قيمة الشحنة ($)": formatUsd(row.value_usd),
     "تاريخ الشحن": row.shipped_at || "-",
     "تاريخ الوصول": row.eta || "-",
     الحالة: SHIPMENT_STATUS_LABELS[row.status],
     "نوع البضاعة": row.shipment_type || "-",
+    _status: row.status,
     ...(row.id ? { _shipmentId: row.id } : {}),
   };
+}
+
+function buildGroupedSummaryRows(filtered: ShipmentReportRow[]): ReportRow[] {
+  const rows: ReportRow[] = [];
+
+  for (const status of SHIPMENT_STATUS_SORT_ORDER) {
+    const group = filtered.filter((row) => row.status === status);
+    if (!group.length) continue;
+
+    rows.push({ _sectionHeader: SHIPMENT_STATUS_LABELS[status] });
+    rows.push(...group.map(shipmentToReportRow));
+  }
+
+  return rows;
 }
 
 function normalizeShipmentJoin(value: ShipmentReportRow | ShipmentReportRow[] | null): ShipmentReportRow | null {
@@ -116,7 +137,7 @@ export async function buildReport(
   from: string,
   to: string,
   options: BuildReportOptions = {}
-): Promise<{ rows: ReportRow[] } | { error: string }> {
+): Promise<{ rows: ReportRow[]; statusSummary?: ShipmentStatusSummary } | { error: string }> {
   const supabase = createClient();
 
   if (slug === "all-products") return allProductsReport();
@@ -168,6 +189,13 @@ export async function buildReport(
     const grouped = new Map<string, number>();
     shipments.forEach((row) => grouped.set(row.company, (grouped.get(row.company) ?? 0) + 1));
     return { rows: Array.from(grouped.entries()).map(([company, count]) => ({ الشركة: company, "عدد الشحنات": count })) };
+  }
+
+  if (slug === "summary") {
+    return {
+      rows: buildGroupedSummaryRows(filtered),
+      statusSummary: computeShipmentStatusSummary(filtered),
+    };
   }
 
   return { rows: filtered.map(shipmentToReportRow) };

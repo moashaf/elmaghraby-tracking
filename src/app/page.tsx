@@ -144,7 +144,7 @@ export default function DashboardPage() {
     load();
   }, []);
 
-  const { stats, recentShipments, overdueShipments, etaSoonShipments, chartData } = useMemo(() => {
+  const { stats, recentShipments, overdueShipments, etaSoonShipments, chartData, containerCountByShipment } = useMemo(() => {
     const baseDate = new Date();
     const today = baseDate.toISOString().slice(0, 10);
     const in7DaysDate = new Date(baseDate);
@@ -171,6 +171,7 @@ export default function DashboardPage() {
     const disassembledCount = disassembledProducts.filter((row) => relatedShipmentStatus(row) !== "closed").length;
 
     return {
+      containerCountByShipment,
       recentShipments: shipments.slice(0, 8),
       overdueShipments: overdue.slice(0, 5),
       etaSoonShipments: etaSoon.slice(0, 5),
@@ -247,6 +248,17 @@ export default function DashboardPage() {
     };
   }, [containers, disassembledProducts, incomingProducts, shipments, lang, t]);
 
+  const recentTotals = useMemo(
+    () => ({
+      cartons: recentShipments.reduce((sum, shipment) => sum + Number(shipment.total_cartons ?? 0), 0),
+      containers: recentShipments.reduce(
+        (sum, shipment) => sum + (containerCountByShipment.get(shipment.id) ?? 0),
+        0
+      ),
+    }),
+    [recentShipments, containerCountByShipment]
+  );
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -303,6 +315,7 @@ export default function DashboardPage() {
                   <tr>
                     <th className="p-3 text-right">{lang === "ar" ? "نوع البضاعة" : "Cargo type"}</th>
                     <th className="p-3 text-right">{lang === "ar" ? "عدد الكراتين" : "Cartons"}</th>
+                    <th className="p-3 text-right">{lang === "ar" ? "عدد الحاويات" : "Containers"}</th>
                     <th className="p-3 text-right">{lang === "ar" ? "قيمة الشحنة ($)" : "Value (USD)"}</th>
                     <th className="p-3 text-right">{lang === "ar" ? "تاريخ الشحن" : "Shipped"}</th>
                     <th className="p-3 text-right">{lang === "ar" ? "تاريخ الوصول" : "Arrival"}</th>
@@ -315,7 +328,7 @@ export default function DashboardPage() {
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td className="p-4 text-[var(--muted)]" colSpan={9}>
+                      <td className="p-4 text-[var(--muted)]" colSpan={10}>
                         {lang === "ar" ? "جاري التحميل..." : "Loading..."}
                       </td>
                     </tr>
@@ -324,6 +337,7 @@ export default function DashboardPage() {
                       <tr className="row-hover border-t border-[var(--border)]" key={shipment.id}>
                         <td className="p-3">{shipment.shipment_type || "-"}</td>
                         <td className="p-3">{shipment.total_cartons ?? "-"}</td>
+                        <td className="p-3">{containerCountByShipment.get(shipment.id) ?? 0}</td>
                         <td className="p-3 font-semibold">{formatUsd(shipment.value_usd)}</td>
                         <td className="p-3">{formatDate(shipment.shipped_at, lang)}</td>
                         <td className="p-3">{formatDate(shipment.eta, lang)}</td>
@@ -343,12 +357,22 @@ export default function DashboardPage() {
                     ))
                   ) : (
                     <tr>
-                      <td className="p-4 text-[var(--muted)]" colSpan={9}>
+                      <td className="p-4 text-[var(--muted)]" colSpan={10}>
                         {lang === "ar" ? "لا توجد شحنات بعد." : "No shipments yet."}
                       </td>
                     </tr>
                   )}
                 </tbody>
+                {recentShipments.length ? (
+                  <tfoot className="table-head font-bold">
+                    <tr>
+                      <td className="p-3">الإجمالي</td>
+                      <td className="p-3">{recentTotals.cartons.toLocaleString("ar-EG")}</td>
+                      <td className="p-3">{recentTotals.containers.toLocaleString("ar-EG")}</td>
+                      <td className="p-3" colSpan={7} />
+                    </tr>
+                  </tfoot>
+                ) : null}
               </table>
             </div>
           </div>

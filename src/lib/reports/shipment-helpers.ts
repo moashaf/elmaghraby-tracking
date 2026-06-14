@@ -1,9 +1,12 @@
 import type { ShipmentStatus } from "@/lib/constants";
+import { readEmbeddedContainerCount } from "@/lib/shipment-container-count";
 
 export type ReportRow = Record<string, string | number | null> & {
   _downloadPath?: string;
   _imagePath?: string;
   _shipmentId?: string;
+  _status?: ShipmentStatus;
+  _sectionHeader?: string;
 };
 
 export type ShipmentReportRow = {
@@ -21,10 +24,11 @@ export type ShipmentReportRow = {
   shipment_type: string;
   total_cartons: number | null;
   value_usd: number | null;
+  containers_count: number;
 };
 
 export const shipmentSelect =
-  "shipment_number,acid,shipment_type,total_cartons,value_usd,shipping_port,arrival_port,shipped_at,eta,status,closed_at,companies(name_ar),suppliers(name_ar)";
+  "shipment_number,acid,shipment_type,total_cartons,value_usd,shipping_port,arrival_port,shipped_at,eta,status,closed_at,companies(name_ar),suppliers(name_ar),shipment_containers(count)";
 
 export function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -62,6 +66,7 @@ export function normalizeShipment(row: Record<string, unknown>): ShipmentReportR
     shipment_type: String(row.shipment_type ?? ""),
     total_cartons: row.total_cartons == null ? null : Number(row.total_cartons),
     value_usd: row.value_usd == null ? null : Number(row.value_usd),
+    containers_count: readEmbeddedContainerCount(row.shipment_containers),
   };
 }
 

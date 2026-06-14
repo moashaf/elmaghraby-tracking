@@ -14,6 +14,8 @@ import { buildReport } from "@/lib/reports/build-reports";
 import type { ProductKindFilter } from "@/lib/reports/constants";
 import { supportsIncomingFilters, supportsProductImages, hasShipmentLinks } from "@/lib/reports/constants";
 import { todayIso, type ReportRow } from "@/lib/reports/shipment-helpers";
+import { SHIPMENT_STATUS_LABELS } from "@/lib/constants";
+import { sumReportColumn, type ShipmentStatusSummary } from "@/lib/shipment-container-count";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { fetchAllFromTable } from "@/lib/supabase/fetch-all";
 import type { ProductCategory } from "@/lib/types";
@@ -30,6 +32,7 @@ export default function ReportDetailPage() {
   const params = useParams<{ slug: string }>();
   const report = getReport(params.slug);
   const [rows, setRows] = useState<ReportRow[]>([]);
+  const [statusSummary, setStatusSummary] = useState<ShipmentStatusSummary | null>(null);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [query, setQuery] = useState("");
@@ -75,11 +78,13 @@ export default function ReportDetailPage() {
     if ("error" in result) {
       setError(result.error);
       setRows([]);
+      setStatusSummary(null);
       setImageUrls(new Map());
       return;
     }
 
     setRows(result.rows);
+    setStatusSummary(result.statusSummary ?? null);
 
     if (withImages && supportsProductImages(params.slug)) {
       const paths = result.rows.map((row) => row._imagePath).filter((path): path is string => Boolean(path));
@@ -116,16 +121,28 @@ export default function ReportDetailPage() {
   const filteredRows = useMemo(() => {
     const term = query.trim().toLowerCase();
     if (!term) return rows;
-    return rows.filter((row) =>
-      Object.entries(row)
+    return rows.filter((row) => {
+      if (row._sectionHeader) return true;
+      return Object.entries(row)
         .filter(([key]) => !key.startsWith("_"))
-        .some(([, value]) => String(value ?? "").toLowerCase().includes(term))
-    );
+        .some(([, value]) => String(value ?? "").toLowerCase().includes(term));
+    });
   }, [query, rows]);
 
-  const columns = filteredRows[0]
-    ? Object.keys(filteredRows[0]).filter((key) => !key.startsWith("_"))
-    : [];
+  const dataRows = useMemo(() => filteredRows.filter((row) => !row._sectionHeader), [filteredRows]);
+
+  const columns = useMemo(() => {
+    const sample = dataRows[0] ?? filteredRows.find((row) => !row._sectionHeader);
+    return sample ? Object.keys(sample).filter((key) => !key.startsWith("_")) : [];
+  }, [dataRows, filteredRows]);
+
+  const shipmentTotals = useMemo(() => {
+    if (!hasShipmentLinks(params.slug) || !dataRows.length) return null;
+    return {
+      cartons: sumReportColumn(dataRows, "عدد الكراتين"),
+      containers: sumReportColumn(dataRows, "عدد الحاويات"),
+    };
+  }, [dataRows, params.slug]);
 
   const categoryOptions = useMemo(() => buildCategorySelectOptions(categories), [categories]);
 
@@ -139,7 +156,7 @@ export default function ReportDetailPage() {
   }
 
   async function exportExcel() {
-    const exportRows = filteredRows.map((row) => {
+    const exportRows = dataRows.map((row) => {
       const copy: Record<string, string | number | null> = {};
       for (const [key, value] of Object.entries(row)) {
         if (key.startsWith("_")) continue;
@@ -148,7 +165,7 @@ export default function ReportDetailPage() {
       return copy;
     });
     const imageUrlList = showImages
-      ? filteredRows.map((row) => (row._imagePath ? imageUrls.get(row._imagePath) : null))
+      ? dataRows.map((row) => (row._imagePath ? imageUrls.get(row._imagePath) : null))
       : undefined;
 
     await downloadExcelWithOptionalImages({
@@ -272,54 +289,62 @@ export default function ReportDetailPage() {
                 </td>
               </tr>
             ) : filteredRows.length ? (
-              filteredRows.map((row, index) => (
-                <tr className="border-t border-[var(--border)]" key={index}>
-                  {showImages ? (
-                    <td className="p-2">
-                      {row._imagePath && imageUrls.get(row._imagePath) ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          alt=""
-                          className="h-12 w-12 rounded object-cover print:h-10 print:w-10"
-                          src={imageUrls.get(row._imagePath)}
-                        />
-                      ) : (
-                        <span className="text-[var(--muted)]">-</span>
-                      )}
+              filteredRows.map((row, index) =>
+                row._sectionHeader ? (
+                  <tr className="bg-slate-100 font-bold print:bg-slate-100" key={`section-${index}`}>
+                    <td className="p-3" colSpan={Math.max(columns.length, 1) + extraColumns}>
+                      {row._sectionHeader}
                     </td>
-                  ) : null}
-                  {columns.map((column) => (
-                    <td className="p-3" key={column}>
-                      {row[column] ?? "-"}
-                    </td>
-                  ))}
-                  {params.slug === "container-files" && row._downloadPath ? (
-                    <td className="p-3">
-                      <button
-                        className="btn btn-secondary px-2 py-1 text-xs"
-                        onClick={() => downloadFile(String(row._downloadPath))}
-                        type="button"
-                      >
-                        <Download className="h-4 w-4" />
-                        Excel
-                      </button>
-                    </td>
-                  ) : params.slug === "container-files" ? (
-                    <td className="p-3 text-[var(--muted)]">-</td>
-                  ) : null}
-                  {showShipmentLinks ? (
-                    <td className="p-3 print:hidden">
-                      {row._shipmentId ? (
-                        <Link className="btn btn-secondary px-2 py-1 text-xs whitespace-nowrap" href={`/shipments/${row._shipmentId}`}>
-                          عرض الشحنة
-                        </Link>
-                      ) : (
-                        <span className="text-[var(--muted)]">-</span>
-                      )}
-                    </td>
-                  ) : null}
-                </tr>
-              ))
+                  </tr>
+                ) : (
+                  <tr className="border-t border-[var(--border)]" key={index}>
+                    {showImages ? (
+                      <td className="p-2">
+                        {row._imagePath && imageUrls.get(row._imagePath) ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            alt=""
+                            className="h-12 w-12 rounded object-cover print:h-10 print:w-10"
+                            src={imageUrls.get(row._imagePath)}
+                          />
+                        ) : (
+                          <span className="text-[var(--muted)]">-</span>
+                        )}
+                      </td>
+                    ) : null}
+                    {columns.map((column) => (
+                      <td className="p-3" key={column}>
+                        {row[column] ?? "-"}
+                      </td>
+                    ))}
+                    {params.slug === "container-files" && row._downloadPath ? (
+                      <td className="p-3">
+                        <button
+                          className="btn btn-secondary px-2 py-1 text-xs"
+                          onClick={() => downloadFile(String(row._downloadPath))}
+                          type="button"
+                        >
+                          <Download className="h-4 w-4" />
+                          Excel
+                        </button>
+                      </td>
+                    ) : params.slug === "container-files" ? (
+                      <td className="p-3 text-[var(--muted)]">-</td>
+                    ) : null}
+                    {showShipmentLinks ? (
+                      <td className="p-3 print:hidden">
+                        {row._shipmentId ? (
+                          <Link className="btn btn-secondary px-2 py-1 text-xs whitespace-nowrap" href={`/shipments/${row._shipmentId}`}>
+                            عرض الشحنة
+                          </Link>
+                        ) : (
+                          <span className="text-[var(--muted)]">-</span>
+                        )}
+                      </td>
+                    ) : null}
+                  </tr>
+                )
+              )
             ) : (
               <tr>
                 <td className="p-4 text-[var(--muted)]" colSpan={Math.max(columns.length, 1) + extraColumns}>
@@ -328,8 +353,52 @@ export default function ReportDetailPage() {
               </tr>
             )}
           </tbody>
+          {shipmentTotals ? (
+            <tfoot className="table-head font-bold">
+              <tr>
+                {showImages ? <td className="p-3" /> : null}
+                {columns.map((column, index) => {
+                  if (column === "عدد الكراتين") {
+                    return (
+                      <td className="p-3" key={column}>
+                        {shipmentTotals.cartons.toLocaleString("ar-EG")}
+                      </td>
+                    );
+                  }
+                  if (column === "عدد الحاويات") {
+                    return (
+                      <td className="p-3" key={column}>
+                        {shipmentTotals.containers.toLocaleString("ar-EG")}
+                      </td>
+                    );
+                  }
+                  return (
+                    <td className="p-3" key={column}>
+                      {index === 0 ? "الإجمالي" : ""}
+                    </td>
+                  );
+                })}
+                {params.slug === "container-files" ? <td className="p-3" /> : null}
+                {showShipmentLinks ? <td className="p-3 print:hidden" /> : null}
+              </tr>
+            </tfoot>
+          ) : null}
         </table>
       </div>
+
+      {params.slug === "summary" && statusSummary ? (
+        <div className="grid gap-4 md:grid-cols-3 print:grid-cols-3">
+          {(["in_sea", "customs", "closed"] as const).map((status) => (
+            <div className="card p-4 text-center" key={status}>
+              <div className="text-sm font-semibold text-[var(--muted)]">{SHIPMENT_STATUS_LABELS[status]}</div>
+              <div className="mt-2 text-3xl font-bold">{statusSummary[status].shipments}</div>
+              <div className="text-xs text-[var(--muted)]">شحنة</div>
+              <div className="mt-3 text-2xl font-bold text-[#0f766e]">{statusSummary[status].containers}</div>
+              <div className="text-xs text-[var(--muted)]">حاوية</div>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
