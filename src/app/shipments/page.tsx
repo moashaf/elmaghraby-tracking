@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Eye, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Eye, FileSpreadsheet, Pencil, Plus, Printer, RefreshCw, Trash2 } from "lucide-react";
 import { ErrorMessage, PageHeader } from "@/components/ui";
 import {
   getNextStatusAction,
@@ -13,6 +13,7 @@ import {
   SHIPMENT_STATUSES,
   type ShipmentStatus,
 } from "@/lib/constants";
+import { downloadExcelWithOptionalImages } from "@/lib/excel-export";
 import { useProfile } from "@/context/profile-context";
 import { useLanguage } from "@/context/language-context";
 import { formatUsd } from "@/lib/format";
@@ -131,8 +132,30 @@ export default function ShipmentsPage() {
     await load();
   }
 
+  async function exportExcel() {
+    const rows = shipments.map((shipment) => ({
+      ACID: shipment.acid,
+      [tr("الشركة", "Company")]: shipment.companies?.name_ar ?? "-",
+      [tr("عدد الكراتين", "Cartons")]: shipment.total_cartons ?? "",
+      [tr("القيمة ($)", "Value (USD)")]: shipment.value_usd ?? "",
+      [tr("تاريخ الشحن", "Shipped")]: shipment.shipped_at || "-",
+      [tr("تاريخ الوصول", "ETA")]: shipment.eta || "-",
+      [tr("الحالة", "Status")]: statusLabels[shipment.status],
+      [tr("نوع البضاعة", "Cargo type")]: shipment.shipment_type || "-",
+    }));
+
+    await downloadExcelWithOptionalImages({
+      filename: `shipments-${new Date().toISOString().slice(0, 10)}.xlsx`,
+      sheetName: tr("الشحنات", "Shipments"),
+      rows,
+    });
+  }
+
   return (
-    <div className="space-y-5">
+    <div className="shipments-print-root space-y-5">
+      <div className="shipments-print-title hidden">
+        {tr("الشحنات", "Shipments")} — {new Date().toLocaleDateString(lang === "ar" ? "ar-EG" : "en-GB")}
+      </div>
       <PageHeader
         title={tr("الشحنات", "Shipments")}
         description={tr(
@@ -140,18 +163,28 @@ export default function ShipmentsPage() {
           "Shipments list with status filters and next-action shortcuts."
         )}
         actions={
-          canWrite ? (
-            <Link className="btn" href="/shipments/new">
-              <Plus className="h-4 w-4" />
-              {tr("شحنة جديدة", "New shipment")}
-            </Link>
-          ) : null
+          <div className="flex flex-wrap gap-2 print:hidden">
+            <button className="btn btn-secondary" onClick={() => void exportExcel()} type="button">
+              <FileSpreadsheet className="h-4 w-4" />
+              Excel
+            </button>
+            <button className="btn btn-secondary" onClick={() => window.print()} type="button">
+              <Printer className="h-4 w-4" />
+              {tr("طباعة", "Print")}
+            </button>
+            {canWrite ? (
+              <Link className="btn" href="/shipments/new">
+                <Plus className="h-4 w-4" />
+                {tr("شحنة جديدة", "New shipment")}
+              </Link>
+            ) : null}
+          </div>
         }
       />
 
       <ErrorMessage message={error} />
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3 print:hidden">
         {counts.map((item) => (
           <button
             className={`card p-4 text-right transition hover:border-[#0f766e] ${status === item.status ? "border-[#0f766e]" : ""}`}
@@ -165,7 +198,7 @@ export default function ShipmentsPage() {
         ))}
       </div>
 
-      <div className="card grid gap-3 p-4 md:grid-cols-[1fr_220px_auto]">
+      <div className="card grid gap-3 p-4 md:grid-cols-[1fr_220px_auto] print:hidden">
         <input className="input" placeholder="بحث برقم الشحنة أو ACID" value={query} onChange={(event) => setQuery(event.target.value)} />
         <select className="input" value={status} onChange={(event) => setStatus(event.target.value as ShipmentStatus | "")}>
           <option value="">كل الحالات</option>
@@ -194,7 +227,7 @@ export default function ShipmentsPage() {
                 <th className="p-3 text-right">ACID</th>
                 <th className="p-3 text-right">الحالة</th>
                 <th className="p-3 text-right">الشركة</th>
-                <th className="p-3 text-right">إجراءات</th>
+                <th className="p-3 text-right print:hidden">إجراءات</th>
               </tr>
             </thead>
             <tbody>
@@ -217,7 +250,7 @@ export default function ShipmentsPage() {
                         <span className={`status-badge status-${shipment.status}`}>{statusLabels[shipment.status]}</span>
                       </td>
                       <td className="p-3">{shipment.companies?.name_ar ?? "-"}</td>
-                      <td className="p-3">
+                      <td className="p-3 print:hidden">
                         <div className="flex flex-wrap gap-2">
                           <Link className="btn btn-secondary px-2 py-1 text-xs" href={`/shipments/${shipment.id}/report`} title="تقرير للطباعة">
                             <Eye className="h-4 w-4" />

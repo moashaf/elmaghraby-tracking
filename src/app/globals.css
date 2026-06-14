@@ -170,6 +170,13 @@ html.dark .table-head {
     font-weight: 700;
   }
 
+  .shipments-print-title {
+    display: block !important;
+    margin-bottom: 12px;
+    font-size: 18px;
+    font-weight: 700;
+  }
+
   table {
     font-size: 11px;
   }
