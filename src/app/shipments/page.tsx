@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Eye, FileSpreadsheet, Pencil, Plus, Printer, RefreshCw, Trash2 } from "lucide-react";
+import { Eye, FileSpreadsheet, Pencil, Plus, Printer, RefreshCw, Trash2 } from "lucide-react";
 import { ErrorMessage, PageHeader } from "@/components/ui";
 import {
   getNextStatusAction,
@@ -280,21 +280,21 @@ export default function ShipmentsPage() {
       </div>
 
       <div className="card overflow-hidden report-print-table-wrap">
-        <div className="overflow-x-auto">
-          <table className="report-print-table shipments-list-table text-xs sm:text-sm">
+        <div className="overflow-auto">
+          <table className="report-print-table table-nowrap table-compact w-full text-sm">
             <thead className="table-head">
               <tr>
-                <th className="col-actions col-actions-sticky text-right print:hidden">{ui("إجراءات")}</th>
-                <th className="col-invoice text-right">{ui("رقم الشحنة")}</th>
-                <th className="col-status text-right">{ui("الحالة")}</th>
-                <th className="col-company text-right">{ui("الشركة")}</th>
-                <th className="col-date text-right">{ui("تاريخ الوصول")}</th>
-                <th className="col-date text-right">{ui("تاريخ الشحن")}</th>
-                <th className="col-num text-right">{ui("عدد الكراتين")}</th>
-                <th className="col-num text-right">{ui("عدد الحاويات")}</th>
-                <th className="col-value text-right">{ui("قيمة الشحنة (USD)")}</th>
-                <th className="col-cargo text-right">{ui("نوع البضاعة")}</th>
-                <th className="col-acid text-right">ACID</th>
+                <th className="text-right">{ui("رقم الشحنة")}</th>
+                <th className="text-right">{ui("نوع البضاعة")}</th>
+                <th className="text-right">{ui("عدد الكراتين")}</th>
+                <th className="text-right">{ui("عدد الحاويات")}</th>
+                <th className="text-right">{ui("قيمة الشحنة (USD)")}</th>
+                <th className="text-right">{ui("تاريخ الشحن")}</th>
+                <th className="text-right">{ui("تاريخ الوصول")}</th>
+                <th className="text-right">ACID</th>
+                <th className="text-right">{ui("الحالة")}</th>
+                <th className="text-right">{ui("الشركة")}</th>
+                <th className="text-right print:hidden">{ui("إجراءات")}</th>
               </tr>
             </thead>
             <tbody>
@@ -308,63 +308,51 @@ export default function ShipmentsPage() {
                   const invoiceFile = invoiceByShipmentId.get(shipment.id);
                   return (
                     <tr className="row-hover border-t border-[var(--border)]" key={shipment.id}>
-                      <td className="col-actions col-actions-sticky print:hidden">
-                        <div className="col-actions-inner">
-                          <Link className="btn btn-secondary px-1.5 py-1" href={`/shipments/${shipment.id}/report`} title={ui("تقرير / PDF")}>
-                            <Eye className="h-3.5 w-3.5" />
+                      <td className="font-semibold">
+                        {invoiceFile ? displayInvoiceNumber(invoiceFile) : "-"}
+                      </td>
+                      <td>{shipment.shipment_type || "-"}</td>
+                      <td>{shipment.total_cartons ?? "-"}</td>
+                      <td>
+                        {readEmbeddedContainerCount(
+                          (shipment as Shipment & { shipment_containers?: unknown }).shipment_containers
+                        )}
+                      </td>
+                      <td className="font-semibold">{formatUsd(shipment.value_usd)}</td>
+                      <td>{formatDisplayDate(shipment.shipped_at, lang)}</td>
+                      <td>{formatDisplayDate(shipment.eta, lang)}</td>
+                      <td className="font-semibold">{shipment.acid}</td>
+                      <td>
+                        <span className={`status-badge status-${shipment.status}`}>{statusLabel(shipment.status)}</span>
+                      </td>
+                      <td>{shipment.companies?.name_ar ?? "-"}</td>
+                      <td className="print:hidden">
+                        <div className="flex flex-wrap gap-1.5">
+                          <Link className="btn btn-secondary px-2 py-1 text-xs" href={`/shipments/${shipment.id}/report`} title={ui("تقرير / PDF")}>
+                            <Eye className="h-4 w-4" />
                           </Link>
                           {isAdmin ? (
                             <>
-                              <Link className="btn btn-secondary px-1.5 py-1" href={`/shipments/${shipment.id}?edit=1`} title={ui("تعديل")}>
-                                <Pencil className="h-3.5 w-3.5" />
+                              <Link className="btn btn-secondary px-2 py-1 text-xs" href={`/shipments/${shipment.id}?edit=1`} title={ui("تعديل")}>
+                                <Pencil className="h-4 w-4" />
                               </Link>
                               <button
-                                className="btn btn-secondary px-1.5 py-1 text-red-700"
+                                className="btn btn-secondary px-2 py-1 text-xs text-red-700"
                                 disabled={deleteLoading === shipment.id}
                                 onClick={() => removeShipment(shipment)}
                                 title={ui("حذف")}
                                 type="button"
                               >
-                                <Trash2 className="h-3.5 w-3.5" />
+                                <Trash2 className="h-4 w-4" />
                               </button>
                             </>
                           ) : null}
                           {action && canWrite ? (
-                            <button
-                              className="btn px-1.5 py-1"
-                              disabled={actionLoading === shipment.id}
-                              onClick={() => transition(shipment)}
-                              title={getNextActionLabel(action, lang)}
-                              type="button"
-                            >
-                              {actionLoading === shipment.id ? "…" : <ArrowLeft className="h-3.5 w-3.5" />}
+                            <button className="btn px-2 py-1 text-xs" disabled={actionLoading === shipment.id} onClick={() => transition(shipment)} type="button">
+                              {actionLoading === shipment.id ? "..." : getNextActionLabel(action, lang)}
                             </button>
                           ) : null}
                         </div>
-                      </td>
-                      <td className="col-invoice font-semibold">
-                        {invoiceFile ? displayInvoiceNumber(invoiceFile) : "-"}
-                      </td>
-                      <td className="col-status">
-                        <span className={`status-badge status-${shipment.status}`}>{statusLabel(shipment.status)}</span>
-                      </td>
-                      <td className="col-company truncate" title={shipment.companies?.name_ar ?? "-"}>
-                        {shipment.companies?.name_ar ?? "-"}
-                      </td>
-                      <td className="col-date">{formatDisplayDate(shipment.eta, lang)}</td>
-                      <td className="col-date">{formatDisplayDate(shipment.shipped_at, lang)}</td>
-                      <td className="col-num">{shipment.total_cartons ?? "-"}</td>
-                      <td className="col-num">
-                        {readEmbeddedContainerCount(
-                          (shipment as Shipment & { shipment_containers?: unknown }).shipment_containers
-                        )}
-                      </td>
-                      <td className="col-value font-semibold">{formatUsd(shipment.value_usd)}</td>
-                      <td className="col-cargo" title={shipment.shipment_type || "-"}>
-                        {shipment.shipment_type || "-"}
-                      </td>
-                      <td className="col-acid font-semibold" title={shipment.acid}>
-                        {shipment.acid}
                       </td>
                     </tr>
                   );
@@ -378,12 +366,11 @@ export default function ShipmentsPage() {
           {!loading && filteredShipments.length ? (
             <tfoot className="table-head font-bold">
               <tr>
-                <td className="print:hidden" />
-                <td className="p-2">{ui("الإجمالي")}</td>
-                <td colSpan={4} />
-                <td className="col-num">{listTotals.cartons.toLocaleString(languageToLocale(lang))}</td>
-                <td className="col-num">{listTotals.containers.toLocaleString(languageToLocale(lang))}</td>
-                <td colSpan={3} />
+                <td>{ui("الإجمالي")}</td>
+                <td />
+                <td>{listTotals.cartons.toLocaleString(languageToLocale(lang))}</td>
+                <td>{listTotals.containers.toLocaleString(languageToLocale(lang))}</td>
+                <td colSpan={7} />
               </tr>
             </tfoot>
           ) : null}

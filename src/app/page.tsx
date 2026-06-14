@@ -95,7 +95,7 @@ export default function DashboardPage() {
   const [systemSettings, setSystemSettings] = useState<SystemSettings>(DEFAULT_SYSTEM_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const { t, lang } = useLanguage();
+  const { t, lang, ui } = useLanguage();
   const { canWrite } = useProfile();
 
   useEffect(() => {
@@ -327,28 +327,28 @@ export default function DashboardPage() {
                 {t("dashboard.viewAll")}
               </Link>
             </div>
-            <div className="overflow-x-auto">
-              <table className="shipments-list-table text-xs sm:text-sm">
+            <div className="overflow-auto">
+              <table className="table-nowrap table-compact w-full text-sm">
                 <thead className="table-head">
                   <tr>
-                    <th className="col-actions col-actions-sticky text-right">{t("actions.view")}</th>
-                    <th className="col-invoice text-right">{t("shipment.number")}</th>
-                    <th className="col-status text-right">{t("shipment.status")}</th>
-                    <th className="col-company text-right">{t("shipment.company")}</th>
-                    <th className="col-date text-right">{lang === "ar" ? "تاريخ الوصول" : lang === "zh" ? "预计到达" : "ETA"}</th>
-                    <th className="col-date text-right">{lang === "ar" ? "تاريخ الشحن" : lang === "zh" ? "装运日期" : "Shipped"}</th>
-                    <th className="col-num text-right">{lang === "ar" ? "كراتين" : lang === "zh" ? "箱数" : "Cartons"}</th>
-                    <th className="col-num text-right">{lang === "ar" ? "حاويات" : lang === "zh" ? "柜" : "Cont."}</th>
-                    <th className="col-value text-right">{lang === "ar" ? "القيمة" : lang === "zh" ? "价值" : "Value"}</th>
-                    <th className="col-cargo text-right">{lang === "ar" ? "نوع البضاعة" : lang === "zh" ? "货物" : "Cargo"}</th>
-                    <th className="col-acid text-right">ACID</th>
+                    <th className="text-right">{t("shipment.number")}</th>
+                    <th className="text-right">{ui("نوع البضاعة")}</th>
+                    <th className="text-right">{ui("عدد الكراتين")}</th>
+                    <th className="text-right">{ui("عدد الحاويات")}</th>
+                    <th className="text-right">{ui("قيمة الشحنة (USD)")}</th>
+                    <th className="text-right">{ui("تاريخ الشحن")}</th>
+                    <th className="text-right">{ui("تاريخ الوصول")}</th>
+                    <th className="text-right">ACID</th>
+                    <th className="text-right">{t("shipment.status")}</th>
+                    <th className="text-right">{t("shipment.company")}</th>
+                    <th className="text-right">{t("actions.view")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     <tr>
                       <td className="p-4 text-[var(--muted)]" colSpan={11}>
-                        {lang === "ar" ? "جاري التحميل..." : lang === "zh" ? "加载中..." : "Loading..."}
+                        {ui("جاري التحميل...")}
                       </td>
                     </tr>
                   ) : recentShipments.length ? (
@@ -356,30 +356,26 @@ export default function DashboardPage() {
                       const invoiceFile = invoiceByShipmentId.get(shipment.id);
                       return (
                       <tr className="row-hover border-t border-[var(--border)]" key={shipment.id}>
-                        <td className="col-actions col-actions-sticky">
-                          <Link className="btn btn-secondary px-2 py-1 text-xs" href={`/shipments/${shipment.id}`}>
-                            {t("actions.view")}
-                          </Link>
-                        </td>
-                        <td className="col-invoice font-semibold">
+                        <td className="font-semibold">
                           {invoiceFile ? displayInvoiceNumber(invoiceFile) : "-"}
                         </td>
-                        <td className="col-status">
+                        <td>{shipment.shipment_type || "-"}</td>
+                        <td>{shipment.total_cartons ?? "-"}</td>
+                        <td>{containerCountByShipment.get(shipment.id) ?? 0}</td>
+                        <td className="font-semibold">{formatUsd(shipment.value_usd)}</td>
+                        <td>{formatDate(shipment.shipped_at, lang)}</td>
+                        <td>{formatDate(shipment.eta, lang)}</td>
+                        <td className="font-semibold">
+                          <Link href={`/shipments/${shipment.id}`}>{shipment.acid}</Link>
+                        </td>
+                        <td>
                           <StatusLabel status={shipment.status} lang={lang} />
                         </td>
-                        <td className="col-company truncate" title={shipment.companies?.name_ar ?? "-"}>
-                          {shipment.companies?.name_ar ?? "-"}
-                        </td>
-                        <td className="col-date">{formatDate(shipment.eta, lang)}</td>
-                        <td className="col-date">{formatDate(shipment.shipped_at, lang)}</td>
-                        <td className="col-num">{shipment.total_cartons ?? "-"}</td>
-                        <td className="col-num">{containerCountByShipment.get(shipment.id) ?? 0}</td>
-                        <td className="col-value font-semibold">{formatUsd(shipment.value_usd)}</td>
-                        <td className="col-cargo" title={shipment.shipment_type || "-"}>
-                          {shipment.shipment_type || "-"}
-                        </td>
-                        <td className="col-acid font-semibold" title={shipment.acid}>
-                          {shipment.acid}
+                        <td>{shipment.companies?.name_ar ?? "-"}</td>
+                        <td>
+                          <Link className="btn btn-secondary text-xs" href={`/shipments/${shipment.id}`}>
+                            {t("actions.view")}
+                          </Link>
                         </td>
                       </tr>
                     );
@@ -395,12 +391,11 @@ export default function DashboardPage() {
                 {recentShipments.length ? (
                   <tfoot className="table-head font-bold">
                     <tr>
-                      <td />
                       <td>{lang === "ar" ? "الإجمالي" : lang === "zh" ? "合计" : "Total"}</td>
-                      <td colSpan={4} />
-                      <td className="col-num">{recentTotals.cartons.toLocaleString(languageToLocale(lang))}</td>
-                      <td className="col-num">{recentTotals.containers.toLocaleString(languageToLocale(lang))}</td>
-                      <td colSpan={3} />
+                      <td />
+                      <td>{recentTotals.cartons.toLocaleString(languageToLocale(lang))}</td>
+                      <td>{recentTotals.containers.toLocaleString(languageToLocale(lang))}</td>
+                      <td colSpan={7} />
                     </tr>
                   </tfoot>
                 ) : null}
