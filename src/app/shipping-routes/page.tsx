@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Route, Search, Trash2 } from "lucide-react";
+import { Edit2, Plus, Route, Save, Search, Trash2 } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { useProfile } from "@/context/profile-context";
 import { ErrorMessage, PageHeader, StatusPill } from "@/components/ui";
@@ -11,6 +11,7 @@ import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import type { ShippingRoute } from "@/lib/types";
 
 type RouteForm = {
+  id?: string;
   shipping_port: string;
   arrival_port: string;
   duration_days: string;
@@ -23,7 +24,7 @@ const emptyForm: RouteForm = {
 };
 
 export default function ShippingRoutesPage() {
-  const { tr } = useLanguage();
+  const { tr, ui } = useLanguage();
   const { canWrite } = useProfile();
   const [rows, setRows] = useState<ShippingRoute[]>([]);
   const [form, setForm] = useState<RouteForm>(emptyForm);
@@ -80,11 +81,15 @@ export default function ShippingRoutesPage() {
     }
 
     setSaving(true);
-    const result = await createClient().from("shipping_routes").insert({
+    const payload = {
       shipping_port: form.shipping_port,
       arrival_port: form.arrival_port,
       duration_days: days,
-    });
+    };
+
+    const result = form.id
+      ? await createClient().from("shipping_routes").update(payload).eq("id", form.id)
+      : await createClient().from("shipping_routes").insert(payload);
     setSaving(false);
 
     if (result.error) {
@@ -156,8 +161,8 @@ export default function ShippingRoutesPage() {
           />
         </label>
         <button className="btn self-end" disabled={saving} type="submit">
-          <Plus className="h-4 w-4" />
-          {saving ? "..." : "إضافة"}
+          {form.id ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+          {saving ? "..." : form.id ? ui("حفظ") : ui("إضافة")}
         </button>
       </form>
       ) : null}
@@ -198,10 +203,31 @@ export default function ShippingRoutesPage() {
                   <td className="p-3">{row.arrival_port}</td>
                   <td className="p-3 font-semibold">{row.duration_days}</td>
                   <td className="p-3">
-                    <button className="btn btn-danger px-2 py-1 text-xs" onClick={() => void removeRoute(row.id)} type="button">
-                      <Trash2 className="h-4 w-4" />
-                      حذف
-                    </button>
+                    {canWrite ? (
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          className="btn btn-secondary px-2 py-1 text-xs"
+                          onClick={() =>
+                            setForm({
+                              id: row.id,
+                              shipping_port: row.shipping_port,
+                              arrival_port: row.arrival_port,
+                              duration_days: String(row.duration_days),
+                            })
+                          }
+                          type="button"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                          {ui("تعديل")}
+                        </button>
+                        <button className="btn btn-danger px-2 py-1 text-xs" onClick={() => void removeRoute(row.id)} type="button">
+                          <Trash2 className="h-4 w-4" />
+                          {ui("حذف")}
+                        </button>
+                      </div>
+                    ) : (
+                      "-"
+                    )}
                   </td>
                 </tr>
               ))
