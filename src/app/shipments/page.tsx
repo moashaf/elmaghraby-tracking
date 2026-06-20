@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, FileSpreadsheet, Pencil, Plus, Printer, RefreshCw, Trash2 } from "lucide-react";
@@ -19,6 +19,7 @@ import { readEmbeddedContainerCount } from "@/lib/shipment-container-count";
 import { displayInvoiceNumber, invoiceMapFromDocuments, shipmentInvoiceLabel } from "@/lib/shipment-invoice-number";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
+import { useSupabaseRealtimeReload } from "@/lib/supabase/use-realtime-reload";
 import type { Shipment } from "@/lib/types";
 
 export default function ShipmentsPage() {
@@ -38,7 +39,7 @@ export default function ShipmentsPage() {
   const [invoiceByShipmentId, setInvoiceByShipmentId] = useState<Map<string, string>>(new Map());
   const [error, setError] = useState("");
 
-  async function load() {
+  async function load(options?: { silent?: boolean }) {
     setError("");
     if (!isSupabaseConfigured()) {
       setLoading(false);
@@ -46,7 +47,7 @@ export default function ShipmentsPage() {
       return;
     }
 
-    setLoading(true);
+    if (!options?.silent) setLoading(true);
     try {
       const supabase = createClient();
       await supabase.rpc("auto_move_shipments_to_customs");
@@ -84,14 +85,18 @@ export default function ShipmentsPage() {
     } catch (loadError) {
       setError(getSupabaseErrorMessage(loadError));
     } finally {
-      setLoading(false);
+      if (!options?.silent) setLoading(false);
     }
   }
 
+  const reloadSilently = useCallback(() => load({ silent: true }), [status, ui]);
+
   useEffect(() => {
-    void Promise.resolve().then(load);
+    void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
+
+  useSupabaseRealtimeReload(reloadSilently, [{ table: "shipments" }, { table: "shipment_documents" }]);
 
   const filteredShipments = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -273,7 +278,7 @@ export default function ShipmentsPage() {
             </option>
           ))}
         </select>
-        <button className="btn btn-secondary" onClick={load} type="button">
+        <button className="btn btn-secondary" onClick={() => void load()} type="button">
           <RefreshCw className="h-4 w-4" />
           تحديث
         </button>

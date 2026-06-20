@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { ArrowRight, Coins, Download, Pencil, RefreshCw, X } from "lucide-react";
@@ -13,6 +13,7 @@ import { getNextActionLabel, getStatusLabel } from "@/lib/i18n";
 import { useProfile } from "@/context/profile-context";
 import { displayInvoiceNumber } from "@/lib/shipment-invoice-number";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { useSupabaseRealtimeReload } from "@/lib/supabase/use-realtime-reload";
 import { addDaysToIsoDate } from "@/lib/eta";
 import { CUSTOMS_RELEASE_DOC_TYPE, shipmentCustomsReleasePath } from "@/lib/storage-path";
 import { displayUnitPerCarton } from "@/lib/shipment-product-quantity";
@@ -53,15 +54,17 @@ export default function ShipmentDetailsPage() {
     [ui]
   );
 
-  async function load() {
+  async function load(options?: { silent?: boolean }) {
     if (!isSupabaseConfigured()) {
       setLoading(false);
       setError(ui("اضبط ملف .env.local أولا بقيم Supabase."));
       return;
     }
 
-    setLoading(true);
-    setError("");
+    if (!options?.silent) {
+      setLoading(true);
+      setError("");
+    }
     const supabase = createClient();
     const [shipmentResult, containersResult, productsResult, costResult, timelineResult, documentsResult] = await Promise.all([
       supabase.from("shipments").select("*,companies(name_ar),suppliers(name_ar)").eq("id", params.id).single(),
@@ -71,7 +74,7 @@ export default function ShipmentDetailsPage() {
       supabase.from("shipment_timeline_events").select("id,shipment_id,event_type,title_ar,description_ar,created_at").eq("shipment_id", params.id).order("created_at", { ascending: false }),
       supabase.from("shipment_documents").select("*").eq("shipment_id", params.id).order("uploaded_at", { ascending: false }),
     ]);
-    setLoading(false);
+    if (!options?.silent) setLoading(false);
 
     if (shipmentResult.error) {
       setError(shipmentResult.error.message);
@@ -89,10 +92,27 @@ export default function ShipmentDetailsPage() {
     if (firstRelatedError) setError(firstRelatedError.message);
   }
 
+  const reloadSilently = useCallback(() => load({ silent: true }), [params.id, ui]);
+
+  const shipmentRealtimeTables = useMemo(
+    () => [
+      { table: "shipments", filter: `id=eq.${params.id}` },
+      { table: "shipment_containers", filter: `shipment_id=eq.${params.id}` },
+      { table: "shipment_products", filter: `shipment_id=eq.${params.id}` },
+      { table: "shipment_timeline_events", filter: `shipment_id=eq.${params.id}` },
+      { table: "shipment_documents", filter: `shipment_id=eq.${params.id}` },
+      { table: "shipment_costs", filter: `shipment_id=eq.${params.id}` },
+      { table: "container_files" },
+    ],
+    [params.id]
+  );
+
   useEffect(() => {
-    void Promise.resolve().then(load);
+    void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id]);
+
+  useSupabaseRealtimeReload(reloadSilently, shipmentRealtimeTables);
 
   useEffect(() => {
     if (searchParams.get("edit") === "1" && canWrite) {
@@ -215,7 +235,7 @@ export default function ShipmentDetailsPage() {
                 {ui("إلغاء التعديل")}
               </button>
             ) : null}
-            <button className="btn btn-secondary" onClick={load} type="button">
+            <button className="btn btn-secondary" onClick={() => void load()} type="button">
               <RefreshCw className="h-4 w-4" />
               {ui("تحديث")}
             </button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -22,6 +22,7 @@ import { displayInvoiceNumber, invoiceMapFromDocuments, shipmentInvoiceLabel } f
 import { fetchSystemSettings, isShipmentDelayed, DEFAULT_SYSTEM_SETTINGS, type SystemSettings } from "@/lib/system-settings";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
+import { useSupabaseRealtimeReload } from "@/lib/supabase/use-realtime-reload";
 import type { Shipment } from "@/lib/types";
 import { useProfile } from "@/context/profile-context";
 
@@ -98,67 +99,79 @@ export default function DashboardPage() {
   const { t, lang, ui } = useLanguage();
   const { canWrite } = useProfile();
 
-  useEffect(() => {
-    async function load() {
-      if (!isSupabaseConfigured()) {
-        setLoading(false);
+  const load = useCallback(async (options?: { silent?: boolean }) => {
+    if (!isSupabaseConfigured()) {
+      setLoading(false);
+      return;
+    }
+
+    if (!options?.silent) setLoading(true);
+
+    try {
+      const supabase = createClient();
+      await supabase.rpc("auto_move_shipments_to_customs");
+      const [shipmentsResult, containersResult, newProductsResult, disassembledResult, documentsResult] = await Promise.all([
+        supabase
+          .from("shipments")
+          .select("*,companies(name_ar),suppliers(name_ar)")
+          .order("created_at", { ascending: false }),
+        supabase.from("shipment_containers").select("id,shipment_id"),
+        supabase
+          .from("shipment_products")
+          .select("shipments(status)")
+          .eq("is_new_incoming_product", true),
+        supabase
+          .from("shipment_products")
+          .select("shipments(status)")
+          .eq("is_disassembled", true),
+        supabase
+          .from("shipment_documents")
+          .select("shipment_id,doc_type,file_name,uploaded_at")
+          .eq("doc_type", "INV")
+          .order("uploaded_at", { ascending: false }),
+      ]);
+
+      const firstError =
+        shipmentsResult.error ||
+        containersResult.error ||
+        newProductsResult.error ||
+        disassembledResult.error ||
+        documentsResult.error;
+      if (firstError) {
+        setError(getSupabaseErrorMessage(firstError));
         return;
       }
 
-      try {
-        const supabase = createClient();
-        await supabase.rpc("auto_move_shipments_to_customs");
-        const [shipmentsResult, containersResult, newProductsResult, disassembledResult, documentsResult] = await Promise.all([
-          supabase
-            .from("shipments")
-            .select("*,companies(name_ar),suppliers(name_ar)")
-            .order("created_at", { ascending: false }),
-          supabase.from("shipment_containers").select("id,shipment_id"),
-          supabase
-            .from("shipment_products")
-            .select("shipments(status)")
-            .eq("is_new_incoming_product", true),
-          supabase
-            .from("shipment_products")
-            .select("shipments(status)")
-            .eq("is_disassembled", true),
-          supabase
-            .from("shipment_documents")
-            .select("shipment_id,doc_type,file_name,uploaded_at")
-            .eq("doc_type", "INV")
-            .order("uploaded_at", { ascending: false }),
-        ]);
-
-        const firstError =
-          shipmentsResult.error ||
-          containersResult.error ||
-          newProductsResult.error ||
-          disassembledResult.error ||
-          documentsResult.error;
-        if (firstError) {
-          setError(getSupabaseErrorMessage(firstError));
-          return;
-        }
-
-        setShipments((shipmentsResult.data as Shipment[] | null) ?? []);
-        setContainers((containersResult.data as ContainerRow[] | null) ?? []);
-        setIncomingProducts((newProductsResult.data as unknown as FlaggedProductRow[] | null) ?? []);
-        setDisassembledProducts((disassembledResult.data as unknown as FlaggedProductRow[] | null) ?? []);
-        setInvoiceByShipmentId(
-          invoiceMapFromDocuments(
-            (documentsResult.data as Array<{ shipment_id: string; doc_type: string; file_name: string }> | null) ?? []
-          )
-        );
-        setSystemSettings(await fetchSystemSettings());
-      } catch (loadError) {
-        setError(getSupabaseErrorMessage(loadError));
-      } finally {
-        setLoading(false);
-      }
+      setShipments((shipmentsResult.data as Shipment[] | null) ?? []);
+      setContainers((containersResult.data as ContainerRow[] | null) ?? []);
+      setIncomingProducts((newProductsResult.data as unknown as FlaggedProductRow[] | null) ?? []);
+      setDisassembledProducts((disassembledResult.data as unknown as FlaggedProductRow[] | null) ?? []);
+      setInvoiceByShipmentId(
+        invoiceMapFromDocuments(
+          (documentsResult.data as Array<{ shipment_id: string; doc_type: string; file_name: string }> | null) ?? []
+        )
+      );
+      setSystemSettings(await fetchSystemSettings());
+    } catch (loadError) {
+      setError(getSupabaseErrorMessage(loadError));
+    } finally {
+      if (!options?.silent) setLoading(false);
     }
-
-    load();
   }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useSupabaseRealtimeReload(
+    () => load({ silent: true }),
+    [
+      { table: "shipments" },
+      { table: "shipment_containers" },
+      { table: "shipment_products" },
+      { table: "shipment_documents" },
+    ]
+  );
 
   const { stats, recentShipments, overdueShipments, etaSoonShipments, chartData, containerCountByShipment } = useMemo(() => {
     const baseDate = new Date();

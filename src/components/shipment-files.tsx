@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Download, FileUp, Upload } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage } from "@/components/ui";
 import { useLanguage } from "@/context/language-context";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { useSupabaseRealtimeReload } from "@/lib/supabase/use-realtime-reload";
 import { shipmentContainerFilePath, shipmentDocumentPath } from "@/lib/storage-path";
 import type { ContainerFile, ShipmentContainer, ShipmentDocument } from "@/lib/types";
 
@@ -50,7 +51,7 @@ export function ShipmentFiles({
     [ui]
   );
 
-  async function load() {
+  async function load(options?: { silent?: boolean }) {
     setError("");
     if (!isSupabaseConfigured()) {
       setLoading(false);
@@ -58,7 +59,7 @@ export function ShipmentFiles({
       return;
     }
 
-    setLoading(true);
+    if (!options?.silent) setLoading(true);
     const supabase = createClient();
     const [filesResult, documentsResult] = await Promise.all([
       supabase
@@ -72,7 +73,7 @@ export function ShipmentFiles({
         .eq("shipment_id", shipmentId)
         .order("uploaded_at", { ascending: false }),
     ]);
-    setLoading(false);
+    if (!options?.silent) setLoading(false);
 
     if (filesResult.error || documentsResult.error) {
       setError(filesResult.error?.message || documentsResult.error?.message || ui("تعذر تحميل الملفات."));
@@ -83,10 +84,21 @@ export function ShipmentFiles({
     setDocuments((documentsResult.data ?? []) as ShipmentDocument[]);
   }
 
+  const reloadSilently = useCallback(() => load({ silent: true }), [shipmentId, containers, ui]);
+
   useEffect(() => {
-    void Promise.resolve().then(load);
+    void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shipmentId, containers.length]);
+
+  useSupabaseRealtimeReload(
+    reloadSilently,
+    [
+      { table: "shipment_documents", filter: `shipment_id=eq.${shipmentId}` },
+      { table: "container_files" },
+    ],
+    containers.length > 0
+  );
 
   async function uploadContainerFile(file: File | null) {
     if (!file || !effectiveContainerId) return;
