@@ -141,13 +141,37 @@ export default function ShipmentDetailsPage() {
   async function revertToInSea() {
     if (!shipment) return;
     if (!window.confirm(ui("إرجاع الشحنة إلى «في البحر»؟"))) return;
-    setSaving(true);
-    const result = await createClient().rpc("revert_shipment_to_in_sea", { p_shipment_id: shipment.id });
-    setSaving(false);
-    if (result.error) {
-      setError(result.error.message);
+
+    const supabase = createClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      setError(ui("سجل الدخول أولا."));
       return;
     }
+
+    setSaving(true);
+    let response: Response;
+    let payload: { error?: string };
+    try {
+      response = await fetch(`/api/shipments/${shipment.id}/revert-to-sea`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      payload = await response.json();
+    } catch (networkError) {
+      setSaving(false);
+      setError(networkError instanceof Error ? networkError.message : ui("تعذر إرجاع الشحنة."));
+      return;
+    }
+    setSaving(false);
+
+    if (!response.ok) {
+      setError(payload.error ?? ui("تعذر إرجاع الشحنة."));
+      return;
+    }
+
     await load();
   }
 
