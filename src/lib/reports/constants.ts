@@ -44,3 +44,13 @@ export function hasShipmentLinks(slug: string) {
 export function supportsIncomingFilters(slug: string) {
   return slug === INCOMING_FILTER_SLUG;
 }
+
+export const DOCUMENT_DOWNLOAD_REPORT_SLUGS = [
+  "container-files",
+  "customs-releases",
+  "shipment-invoices",
+] as const;
+
+export function hasDocumentDownload(slug: string) {
+  return DOCUMENT_DOWNLOAD_REPORT_SLUGS.includes(slug as (typeof DOCUMENT_DOWNLOAD_REPORT_SLUGS)[number]);
+}

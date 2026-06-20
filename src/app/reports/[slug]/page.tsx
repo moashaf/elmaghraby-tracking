@@ -13,7 +13,7 @@ import { findLocalizedReport, getStatusLabel, languageToLocale, localizeReportCe
 import { signedProductImageUrls } from "@/lib/product-images";
 import { buildReport } from "@/lib/reports/build-reports";
 import type { ProductKindFilter } from "@/lib/reports/constants";
-import { supportsIncomingFilters, supportsProductImages, hasShipmentLinks } from "@/lib/reports/constants";
+import { supportsIncomingFilters, supportsProductImages, hasShipmentLinks, hasDocumentDownload } from "@/lib/reports/constants";
 import { todayIso, type ReportRow } from "@/lib/reports/shipment-helpers";
 import { sumReportColumn, SHIPMENT_STATUS_SORT_ORDER, type ShipmentStatusSummary } from "@/lib/shipment-container-count";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
@@ -50,8 +50,8 @@ export default function ReportDetailPage() {
   const showImages = withImages && supportsProductImages(params.slug);
   const showIncomingFilters = supportsIncomingFilters(params.slug);
   const showShipmentLinks = hasShipmentLinks(params.slug);
-
-  const extraColumns = (showImages ? 1 : 0) + (params.slug === "container-files" ? 1 : 0) + (showShipmentLinks ? 1 : 0);
+  const showDocumentLinks = params.slug === "customs-releases" || params.slug === "shipment-invoices";
+  const showDocumentDownload = hasDocumentDownload(params.slug) && params.slug === "container-files";
 
   useEffect(() => {
     if (!showIncomingFilters) return;
@@ -148,7 +148,7 @@ export default function ReportDetailPage() {
   }, [dataRows, params.slug]);
 
   const printableExtraColumns =
-    (showImages ? 1 : 0) + (params.slug === "container-files" ? 1 : 0);
+    (showImages ? 1 : 0) + (showDocumentDownload ? 1 : 0);
 
   const categoryOptions = useMemo(() => buildCategorySelectOptions(categories), [categories]);
 
@@ -170,6 +170,18 @@ export default function ReportDetailPage() {
       }
       return copy;
     });
+
+    let linkUrls: Array<string | null> | undefined;
+    if (showDocumentLinks) {
+      linkUrls = await Promise.all(
+        dataRows.map(async (row) => {
+          const path = row._downloadPath;
+          if (!path) return null;
+          const result = await createClient().storage.from(bucket).createSignedUrl(String(path), 3600);
+          return result.error ? null : result.data.signedUrl;
+        })
+      );
+    }
 
     if (shipmentTotals && columns.length) {
       const totalRow: Record<string, string | number | null> = {};
@@ -203,6 +215,9 @@ export default function ReportDetailPage() {
       sheetName: report?.title ?? "Report",
       rows: exportRows,
       imageUrls: imageUrlList,
+      linkColumn: showDocumentLinks ? "الرابط" : undefined,
+      linkUrls,
+      linkLabel: ui("فتح الملف"),
     });
   }
 
@@ -252,7 +267,12 @@ export default function ReportDetailPage() {
       <div className="card space-y-3 p-4 print:hidden">
         {report.dateFilter !== "none" ? (
           <p className="text-xs text-[var(--muted)]">
-            {report.dateHint ?? (report.dateFilter === "closed" ? ui("فلترة حسب تاريخ الإغلاق") : ui("فلترة حسب ETA"))}
+            {report.dateHint ??
+              (report.dateFilter === "closed"
+                ? ui("فلترة حسب تاريخ الإغلاق")
+                : report.dateFilter === "uploaded"
+                  ? ui("فلترة حسب تاريخ رفع الملف")
+                  : ui("فلترة حسب ETA"))}
           </p>
         ) : null}
 
@@ -311,7 +331,7 @@ export default function ReportDetailPage() {
                   {tc(column)}
                 </th>
               ))}
-              {params.slug === "container-files" ? <th className="p-3 text-right">{ui("تحميل")}</th> : null}
+              {showDocumentDownload ? <th className="p-3 text-right">{ui("تحميل")}</th> : null}
               {showShipmentLinks ? <th className="p-3 text-right print:hidden">{ui("فتح الشحنة")}</th> : null}
             </tr>
           </thead>
@@ -348,10 +368,20 @@ export default function ReportDetailPage() {
                     ) : null}
                     {columns.map((column) => (
                       <td className="p-3" key={column}>
-                        {localizeReportCell(column, row[column], lang, row)}
+                        {column === "الرابط" && row._downloadPath ? (
+                          <button
+                            className="text-[#0f766e] underline hover:opacity-80 print:text-inherit print:no-underline"
+                            onClick={() => downloadFile(String(row._downloadPath))}
+                            type="button"
+                          >
+                            {ui("فتح الملف")}
+                          </button>
+                        ) : (
+                          localizeReportCell(column, row[column], lang, row)
+                        )}
                       </td>
                     ))}
-                    {params.slug === "container-files" && row._downloadPath ? (
+                    {showDocumentDownload && row._downloadPath ? (
                       <td className="p-3">
                         <button
                           className="btn btn-secondary px-2 py-1 text-xs"
@@ -362,7 +392,7 @@ export default function ReportDetailPage() {
                           Excel
                         </button>
                       </td>
-                    ) : params.slug === "container-files" ? (
+                    ) : showDocumentDownload ? (
                       <td className="p-3 text-[var(--muted)]">-</td>
                     ) : null}
                     {showShipmentLinks ? (
@@ -412,7 +442,7 @@ export default function ReportDetailPage() {
                     </td>
                   );
                 })}
-                {params.slug === "container-files" ? <td className="p-3" /> : null}
+                {showDocumentDownload ? <td className="p-3" /> : null}
                 {showShipmentLinks ? <td className="p-3 print:hidden" /> : null}
               </tr>
             </tfoot>

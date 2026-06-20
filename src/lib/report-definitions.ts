@@ -17,9 +17,11 @@ export type ReportSlug =
   | "product-history"
   | "suppliers"
   | "companies"
-  | "all-products";
+  | "all-products"
+  | "customs-releases"
+  | "shipment-invoices";
 
-export type ReportDateFilter = "none" | "eta" | "closed";
+export type ReportDateFilter = "none" | "eta" | "closed" | "uploaded";
 
 export const REPORTS: Array<{
   slug: ReportSlug;
@@ -57,6 +59,20 @@ export const REPORTS: Array<{
     title: "الأصناف",
     description: "كل المنتجات على النظام: الاسم، الكود (SKU)، والباركود — مع تصدير Excel.",
     dateFilter: "none",
+  },
+  {
+    slug: "customs-releases",
+    title: "الافراجات الجمركية",
+    description: "ملفات PDF للإفراج الجمركي مع تاريخ الإغلاق وروابط التحميل.",
+    dateFilter: "closed",
+    dateHint: "فلترة حسب تاريخ إغلاق الشحنة",
+  },
+  {
+    slug: "shipment-invoices",
+    title: "فواتير INV",
+    description: "ملفات INV المرفوعة عند إنشاء الشحنات مع تاريخ الرفع وروابط التحميل.",
+    dateFilter: "uploaded",
+    dateHint: "فلترة حسب تاريخ رفع الملف",
   },
 ];
 

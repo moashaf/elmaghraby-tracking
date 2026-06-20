@@ -44,6 +44,7 @@ export function ShipmentFiles({
       { value: "packing_list", label: "Packing list" },
       { value: "bill_of_lading", label: "Bill of lading" },
       { value: "INV", label: "INV" },
+      { value: "CUSTOMS_RELEASE", label: ui("الافراج الجمركي") },
       { value: "other", label: ui("أخرى") },
     ],
     [ui]

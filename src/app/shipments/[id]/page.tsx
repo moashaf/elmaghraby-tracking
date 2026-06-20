@@ -14,6 +14,7 @@ import { useProfile } from "@/context/profile-context";
 import { displayInvoiceNumber } from "@/lib/shipment-invoice-number";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { addDaysToIsoDate } from "@/lib/eta";
+import { CUSTOMS_RELEASE_DOC_TYPE, shipmentCustomsReleasePath } from "@/lib/storage-path";
 import { displayUnitPerCarton } from "@/lib/shipment-product-quantity";
 import type { Shipment, ShipmentContainer, ShipmentCost, ShipmentDocument, ShipmentProduct, TimelineEvent } from "@/lib/types";
 
@@ -472,32 +473,98 @@ function CostsDialog({
     other_expenses: cost?.other_expenses?.toString() ?? "0",
     closing_notes: cost?.closing_notes ?? "",
   });
+  const [customsReleaseFile, setCustomsReleaseFile] = useState<File | null>(null);
+  const [existingCustomsRelease, setExistingCustomsRelease] = useState<ShipmentDocument | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+    void createClient()
+      .from("shipment_documents")
+      .select("*")
+      .eq("shipment_id", shipmentId)
+      .eq("doc_type", CUSTOMS_RELEASE_DOC_TYPE)
+      .order("uploaded_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        setExistingCustomsRelease((data as ShipmentDocument | null) ?? null);
+      });
+  }, [shipmentId]);
+
+  async function uploadCustomsRelease(file: File) {
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const path = shipmentCustomsReleasePath(shipmentId, file.name);
+    const uploadResult = await supabase.storage.from(bucket).upload(path, file, { upsert: false });
+    if (uploadResult.error) throw new Error(uploadResult.error.message);
+
+    const insertResult = await supabase
+      .from("shipment_documents")
+      .insert({
+        shipment_id: shipmentId,
+        doc_type: CUSTOMS_RELEASE_DOC_TYPE,
+        file_name: file.name,
+        storage_path: uploadResult.data.path,
+        mime_type: file.type || "application/pdf",
+        size_bytes: file.size,
+        uploaded_by: user?.id ?? null,
+      })
+      .select("*")
+      .single();
+    if (insertResult.error) throw new Error(insertResult.error.message);
+    setExistingCustomsRelease(insertResult.data as ShipmentDocument);
+    setCustomsReleaseFile(null);
+  }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
-    setLoading(true);
 
-    const result = await createClient().rpc("close_shipment_with_costs", {
-      shipment_id: shipmentId,
-      customs_cost: Number(form.customs_cost) || 0,
-      shipping_cost: Number(form.shipping_cost) || 0,
-      clearance_cost: Number(form.clearance_cost) || 0,
-      local_transport_cost: Number(form.local_transport_cost) || 0,
-      other_expenses: Number(form.other_expenses) || 0,
-      closing_notes: form.closing_notes.trim() || null,
-    });
-
-    setLoading(false);
-
-    if (result.error) {
-      setError(result.error.message);
+    if (!isClosed && !existingCustomsRelease && !customsReleaseFile) {
+      setError(ui("ارفع ملف PDF للإفراج الجمركي قبل الإغلاق."));
       return;
     }
 
-    onSaved();
+    if (customsReleaseFile) {
+      const isPdf =
+        customsReleaseFile.type === "application/pdf" || customsReleaseFile.name.toLowerCase().endsWith(".pdf");
+      if (!isPdf) {
+        setError(ui("يجب أن يكون ملف PDF."));
+        return;
+      }
+    }
+
+    setLoading(true);
+    try {
+      if (customsReleaseFile) {
+        await uploadCustomsRelease(customsReleaseFile);
+      }
+
+      const result = await createClient().rpc("close_shipment_with_costs", {
+        shipment_id: shipmentId,
+        customs_cost: Number(form.customs_cost) || 0,
+        shipping_cost: Number(form.shipping_cost) || 0,
+        clearance_cost: Number(form.clearance_cost) || 0,
+        local_transport_cost: Number(form.local_transport_cost) || 0,
+        other_expenses: Number(form.other_expenses) || 0,
+        closing_notes: form.closing_notes.trim() || null,
+      });
+
+      if (result.error) {
+        setError(result.error.message);
+        return;
+      }
+
+      onSaved();
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : ui("تعذر رفع ملف INV."));
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -518,6 +585,20 @@ function CostsDialog({
         <label className="label">
           {ui("ملاحظات الإغلاق")}
           <textarea className="input min-h-24" value={form.closing_notes} onChange={(event) => setForm({ ...form, closing_notes: event.target.value })} />
+        </label>
+        <label className="label">
+          {ui("الافراج الجمركي")} (PDF)
+          {existingCustomsRelease ? (
+            <p className="mb-2 text-sm text-[var(--muted)]">
+              {ui("مرفوع:")} {existingCustomsRelease.file_name}
+            </p>
+          ) : null}
+          <input
+            accept="application/pdf,.pdf"
+            className="input"
+            onChange={(event) => setCustomsReleaseFile(event.target.files?.[0] ?? null)}
+            type="file"
+          />
         </label>
         <button className="btn" disabled={loading} type="submit">
           {loading ? ui("جاري الحفظ...") : isClosed ? ui("حفظ المصاريف") : ui("حفظ وإغلاق")}

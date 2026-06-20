@@ -47,6 +47,9 @@ export const COLUMN_TRANSLATIONS: Record<string, Col> = {
   مفكك: { en: "Disassembled", zh: "拆散件" },
   "عدد الشحنات": { en: "Shipments", zh: "货运数量" },
   "ملخص حسب الحالة": { en: "Summary by status", zh: "按状态汇总" },
+  التاريخ: { en: "Date", zh: "日期" },
+  "اسم الملف": { en: "File name", zh: "文件名" },
+  الرابط: { en: "Link", zh: "链接" },
 };
 
 export function translateColumn(key: string, lang: AppLanguage): string {

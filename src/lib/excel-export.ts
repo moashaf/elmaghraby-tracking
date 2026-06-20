@@ -49,11 +49,24 @@ export async function downloadExcelWithOptionalImages(options: {
   rows: Record<string, string | number | null>[];
   imageUrls?: Array<string | null | undefined>;
   imageColumnLabel?: string;
+  linkColumn?: string;
+  linkUrls?: Array<string | null | undefined>;
+  linkLabel?: string;
 }) {
-  const { filename, sheetName, rows, imageUrls, imageColumnLabel = "صورة" } = options;
+  const {
+    filename,
+    sheetName,
+    rows,
+    imageUrls,
+    imageColumnLabel = "صورة",
+    linkColumn,
+    linkUrls,
+    linkLabel = "فتح الملف",
+  } = options;
   const hasImages = Boolean(imageUrls?.some((url) => url));
+  const hasLinks = Boolean(linkColumn && linkUrls?.some((url) => url));
 
-  if (!hasImages) {
+  if (!hasImages && !hasLinks) {
     const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
@@ -64,16 +77,26 @@ export async function downloadExcelWithOptionalImages(options: {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet(sheetName);
   const columns = rows.length ? Object.keys(rows[0]) : [];
-  const headers = [...columns, imageColumnLabel];
+  const headers = hasImages ? [...columns, imageColumnLabel] : columns;
 
   worksheet.addRow(headers);
   worksheet.getRow(1).font = { bold: true };
-  worksheet.getColumn(columns.length + 1).width = 14;
+  if (hasImages) worksheet.getColumn(columns.length + 1).width = 14;
 
   for (let index = 0; index < rows.length; index += 1) {
     const values = columns.map((column) => rows[index][column] ?? "");
-    values.push("");
-    worksheet.addRow(values);
+    if (hasImages) values.push("");
+    const rowNumber = worksheet.addRow(values).number;
+
+    if (linkColumn) {
+      const linkIndex = columns.indexOf(linkColumn);
+      const url = linkUrls?.[index];
+      if (linkIndex >= 0 && url) {
+        const cell = worksheet.getCell(rowNumber, linkIndex + 1);
+        cell.value = { text: linkLabel, hyperlink: url };
+        cell.font = { color: { argb: "FF0563C1" }, underline: true };
+      }
+    }
 
     const imageUrl = imageUrls?.[index];
     if (!imageUrl) continue;
@@ -81,7 +104,6 @@ export async function downloadExcelWithOptionalImages(options: {
     const image = await fetchImageBase64(imageUrl);
     if (!image) continue;
 
-    const rowNumber = index + 2;
     worksheet.getRow(rowNumber).height = 54;
 
     const imageId = workbook.addImage({

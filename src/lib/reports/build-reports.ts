@@ -7,6 +7,7 @@ import {
   type ShipmentStatusSummary,
 } from "@/lib/shipment-container-count";
 import { compareShipmentsByInvoiceNumber, displayInvoiceNumber, shipmentInvoiceLabel } from "@/lib/shipment-invoice-number";
+import { CUSTOMS_RELEASE_DOC_TYPE } from "@/lib/storage-path";
 import { fetchSystemSettings, isShipmentDelayed } from "@/lib/system-settings";
 import { collectDescendantCategoryIds } from "@/lib/category-tree";
 import type { ProductCategory } from "@/lib/types";
@@ -19,6 +20,7 @@ import {
   type ProductLine,
 } from "@/lib/reports/group-products";
 import {
+  inRange,
   filterShipmentByDate,
   normalizeShipment,
   shipmentSelect,
@@ -60,6 +62,36 @@ type ContainerFileJoin = {
     shipments: ShipmentReportRow | ShipmentReportRow[] | null;
   } | null;
 };
+
+type ShipmentDocumentJoin = {
+  file_name: string;
+  storage_path: string;
+  uploaded_at: string;
+  shipments: ShipmentReportRow | ShipmentReportRow[] | null;
+};
+
+function documentReportRow(dateIso: string | null | undefined, fileName: string, storagePath: string): ReportRow {
+  return {
+    التاريخ: dateIso ? formatDisplayDate(dateIso.slice(0, 10)) : "-",
+    "اسم الملف": fileName,
+    الرابط: "فتح الملف",
+    _downloadPath: storagePath,
+  };
+}
+
+function filterDocumentByDate(
+  row: ShipmentDocumentJoin,
+  from: string,
+  to: string,
+  mode: "closed" | "uploaded"
+) {
+  const shipment = normalizeShipmentJoin(row.shipments);
+  const date =
+    mode === "closed"
+      ? shipment?.closed_at ?? row.uploaded_at.slice(0, 10)
+      : row.uploaded_at.slice(0, 10);
+  return inRange(date, from, to);
+}
 
 type CostJoin = {
   customs_cost: number;
@@ -159,6 +191,9 @@ export async function buildReport(
   const supabase = createClient();
 
   if (slug === "all-products") return allProductsReport();
+
+  if (slug === "customs-releases") return customsReleasesReport(from, to);
+  if (slug === "shipment-invoices") return shipmentInvoicesReport(from, to);
 
   if (
     [
@@ -385,6 +420,55 @@ async function containersReport(from: string, to: string): Promise<{ rows: Repor
         الحالة: row.shipments ? SHIPMENT_STATUS_LABELS[row.shipments.status] : "-",
       }));
     }),
+  };
+}
+
+async function fetchShipmentDocuments(docType: string): Promise<{ rows: ShipmentDocumentJoin[]; error: string | null }> {
+  const result = await fetchAllFromTable(
+    createClient(),
+    "shipment_documents",
+    `file_name,storage_path,uploaded_at,doc_type,shipments(${shipmentSelect})`,
+    { column: "uploaded_at", ascending: false }
+  );
+  if (result.error) return { rows: [], error: result.error };
+
+  const rows = (result.data as unknown as Array<ShipmentDocumentJoin & { doc_type: string }>).filter(
+    (row) => row.doc_type?.toUpperCase() === docType.toUpperCase()
+  );
+  return { rows, error: null };
+}
+
+async function customsReleasesReport(from: string, to: string): Promise<{ rows: ReportRow[] } | { error: string }> {
+  const { rows, error } = await fetchShipmentDocuments(CUSTOMS_RELEASE_DOC_TYPE);
+  if (error) return { error };
+
+  const filtered = rows
+    .filter((row) => filterDocumentByDate(row, from, to, "closed"))
+    .sort((a, b) => {
+      const dateA = normalizeShipmentJoin(a.shipments)?.closed_at ?? a.uploaded_at;
+      const dateB = normalizeShipmentJoin(b.shipments)?.closed_at ?? b.uploaded_at;
+      return dateB.localeCompare(dateA);
+    });
+
+  return {
+    rows: filtered.map((row) => {
+      const shipment = normalizeShipmentJoin(row.shipments);
+      const closedAt = shipment?.closed_at ?? row.uploaded_at.slice(0, 10);
+      return documentReportRow(closedAt, row.file_name, row.storage_path);
+    }),
+  };
+}
+
+async function shipmentInvoicesReport(from: string, to: string): Promise<{ rows: ReportRow[] } | { error: string }> {
+  const { rows, error } = await fetchShipmentDocuments("INV");
+  if (error) return { error };
+
+  const filtered = rows
+    .filter((row) => filterDocumentByDate(row, from, to, "uploaded"))
+    .sort((a, b) => b.uploaded_at.localeCompare(a.uploaded_at));
+
+  return {
+    rows: filtered.map((row) => documentReportRow(row.uploaded_at.slice(0, 10), row.file_name, row.storage_path)),
   };
 }
 

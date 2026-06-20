@@ -25,6 +25,12 @@ export function shipmentInvPath(shipmentId: string, fileName: string) {
   return shipmentDocumentPath(shipmentId, "inv", fileName);
 }
 
+export function shipmentCustomsReleasePath(shipmentId: string, fileName: string) {
+  return shipmentDocumentPath(shipmentId, "customs_release", fileName);
+}
+
+export const CUSTOMS_RELEASE_DOC_TYPE = "CUSTOMS_RELEASE";
+
 export function shipmentContainerFilePath(shipmentId: string, containerId: string, fileName: string) {
   return `${shipmentId}/containers/${containerId}/${safeStorageFileName(fileName)}`;
 }

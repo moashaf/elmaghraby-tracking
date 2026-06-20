@@ -477,6 +477,14 @@ export const INLINE_TRANSLATIONS: Record<string, InlineEntry> = {
     "en": "Filter by closing date",
     "zh": "按结案日期筛选"
   },
+  "فلترة حسب تاريخ رفع الملف": {
+    "en": "Filter by file upload date",
+    "zh": "按文件上传日期筛选"
+  },
+  "فتح الملف": {
+    "en": "Open file",
+    "zh": "打开文件"
+  },
   "فلترة حسب ETA": {
     "en": "Filter by ETA",
     "zh": "按 ETA 筛选"
@@ -1024,5 +1032,21 @@ export const INLINE_TRANSLATIONS: Record<string, InlineEntry> = {
   "نظام عربي RTL": {
     "en": "English UI (LTR)",
     "zh": "英语界面（LTR）"
+  },
+  "الافراج الجمركي": {
+    "en": "Customs release",
+    "zh": "海关放行"
+  },
+  "ارفع ملف PDF للإفراج الجمركي قبل الإغلاق.": {
+    "en": "Upload a customs release PDF before closing.",
+    "zh": "结案前请上传海关放行 PDF。"
+  },
+  "يجب أن يكون ملف PDF.": {
+    "en": "File must be a PDF.",
+    "zh": "文件必须是 PDF。"
+  },
+  "مرفوع:": {
+    "en": "Uploaded:",
+    "zh": "已上传："
   }
 };

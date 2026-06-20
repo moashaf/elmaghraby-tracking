@@ -227,6 +227,34 @@ const REPORT_META: Record<ReportSlug, ReportMeta> = {
     },
     dateFilter: "none",
   },
+  "customs-releases": {
+    title: { ar: "الافراجات الجمركية", en: "Customs releases", zh: "海关放行" },
+    description: {
+      ar: "ملفات PDF للإفراج الجمركي مع تاريخ الإغلاق وروابط التحميل.",
+      en: "Customs release PDFs with closing date and download links.",
+      zh: "海关放行 PDF，含结案日期与下载链接。",
+    },
+    dateFilter: "closed",
+    dateHint: {
+      ar: "فلترة حسب تاريخ إغلاق الشحنة",
+      en: "Filter by shipment closing date",
+      zh: "按货运结案日期筛选",
+    },
+  },
+  "shipment-invoices": {
+    title: { ar: "فواتير INV", en: "INV invoices", zh: "INV 发票" },
+    description: {
+      ar: "ملفات INV المرفوعة عند إنشاء الشحنات مع تاريخ الرفع وروابط التحميل.",
+      en: "INV files uploaded when creating shipments, with upload date and links.",
+      zh: "创建货运时上传的 INV 文件，含上传日期与链接。",
+    },
+    dateFilter: "uploaded",
+    dateHint: {
+      ar: "فلترة حسب تاريخ رفع الملف",
+      en: "Filter by file upload date",
+      zh: "按文件上传日期筛选",
+    },
+  },
 };
 
 function pick(entry: { ar: string; en: string; zh: string }, lang: AppLanguage) {
