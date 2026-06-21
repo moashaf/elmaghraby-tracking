@@ -485,6 +485,14 @@ export const INLINE_TRANSLATIONS: Record<string, InlineEntry> = {
     "en": "Open file",
     "zh": "打开文件"
   },
+  "السابق": {
+    "en": "Previous",
+    "zh": "上一页"
+  },
+  "التالي": {
+    "en": "Next",
+    "zh": "下一页"
+  },
   "فلترة حسب ETA": {
     "en": "Filter by ETA",
     "zh": "按 ETA 筛选"

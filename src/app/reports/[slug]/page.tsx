@@ -13,7 +13,7 @@ import { findLocalizedReport, getStatusLabel, languageToLocale, localizeReportCe
 import { signedProductImageUrls } from "@/lib/product-images";
 import { buildReport } from "@/lib/reports/build-reports";
 import type { ProductKindFilter } from "@/lib/reports/constants";
-import { supportsIncomingFilters, supportsProductImages, hasShipmentLinks, hasDocumentDownload } from "@/lib/reports/constants";
+import { supportsIncomingFilters, supportsProductImages, hasShipmentLinks, hasDocumentDownload, supportsReportPagination, INCOMING_PRODUCTS_PAGE_SIZE } from "@/lib/reports/constants";
 import { todayIso, type ReportRow } from "@/lib/reports/shipment-helpers";
 import { sumReportColumn, SHIPMENT_STATUS_SORT_ORDER, type ShipmentStatusSummary } from "@/lib/shipment-container-count";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
@@ -21,6 +21,15 @@ import { fetchAllFromTable } from "@/lib/supabase/fetch-all";
 import type { ProductCategory } from "@/lib/types";
 
 const bucket = "container-files";
+
+function printColumnClass(column: string) {
+  if (column === "SKU") return "report-print-col-sku";
+  if (column === "المنتج") return "report-print-col-product";
+  if (column === "التصنيف") return "report-print-col-category";
+  if (column === "إجمالي الكرتين" || column === "إجمالي القطع") return "report-print-col-total";
+  if (/^\d{2}-\d{2}-\d{4}$/.test(column)) return "report-print-col-eta";
+  return "";
+}
 
 export default function ReportDetailPage() {
   const params = useParams<{ slug: string }>();
@@ -46,6 +55,12 @@ export default function ReportDetailPage() {
   const [imageUrls, setImageUrls] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalRows, setTotalRows] = useState(0);
+  const [printSnapshot, setPrintSnapshot] = useState<ReportRow[] | null>(null);
+  const [printImageUrls, setPrintImageUrls] = useState<Map<string, string>>(new Map());
+
+  const paginatedReport = supportsReportPagination(params.slug);
 
   const showImages = withImages && supportsProductImages(params.slug);
   const showIncomingFilters = supportsIncomingFilters(params.slug);
@@ -62,7 +77,7 @@ export default function ReportDetailPage() {
     });
   }, [showIncomingFilters]);
 
-  async function load() {
+  async function load(targetPage = page, exportAll = false) {
     if (!report) return;
     setError("");
     if (!isSupabaseConfigured()) {
@@ -75,6 +90,9 @@ export default function ReportDetailPage() {
     const result = await buildReport(params.slug, from, to, {
       categoryId: categoryId || undefined,
       productKind: showIncomingFilters ? productKind : undefined,
+      page: paginatedReport && !exportAll ? targetPage : undefined,
+      pageSize: paginatedReport && !exportAll ? INCOMING_PRODUCTS_PAGE_SIZE : undefined,
+      exportAll: paginatedReport && exportAll,
     });
     setLoading(false);
 
@@ -83,29 +101,48 @@ export default function ReportDetailPage() {
       setRows([]);
       setStatusSummary(null);
       setImageUrls(new Map());
-      return;
+      setTotalRows(0);
+      return result;
     }
 
-    setRows(result.rows);
-    setStatusSummary(result.statusSummary ?? null);
+    if (!exportAll) {
+      setRows(result.rows);
+      setStatusSummary(result.statusSummary ?? null);
+      setTotalRows(result.totalRows ?? result.rows.length);
+      if (result.page) setPage(result.page);
 
-    if (withImages && supportsProductImages(params.slug)) {
-      const paths = result.rows.map((row) => row._imagePath).filter((path): path is string => Boolean(path));
-      const urls = await signedProductImageUrls(paths);
-      setImageUrls(urls);
-    } else {
-      setImageUrls(new Map());
+      if (withImages && supportsProductImages(params.slug)) {
+        const paths = result.rows.map((row) => row._imagePath).filter((path): path is string => Boolean(path));
+        const urls = await signedProductImageUrls(paths);
+        setImageUrls(urls);
+      } else {
+        setImageUrls(new Map());
+      }
     }
+
+    return result;
+  }
+
+  function applyFilters() {
+    setPage(1);
+    void load(1);
+  }
+
+  function goToPage(nextPage: number) {
+    setPage(nextPage);
+    void load(nextPage);
   }
 
   useEffect(() => {
-    void Promise.resolve().then(load);
+    setPage(1);
+    void load(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.slug]);
 
   useEffect(() => {
     if (!showIncomingFilters) return;
-    void load();
+    setPage(1);
+    void load(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productKind, categoryId]);
 
@@ -132,12 +169,19 @@ export default function ReportDetailPage() {
     });
   }, [query, rows]);
 
-  const dataRows = useMemo(() => filteredRows.filter((row) => !row._sectionHeader), [filteredRows]);
+  const tableRows = printSnapshot ?? filteredRows;
+  const tableImageUrls = printSnapshot ? printImageUrls : imageUrls;
+  const tableShowImages = printSnapshot ? printSnapshot.some((row) => row._imagePath) : showImages;
+
+  const dataRows = useMemo(() => tableRows.filter((row) => !row._sectionHeader), [tableRows]);
 
   const columns = useMemo(() => {
-    const sample = dataRows[0] ?? filteredRows.find((row) => !row._sectionHeader);
+    const sample = dataRows[0] ?? tableRows.find((row) => !row._sectionHeader);
     return sample ? Object.keys(sample).filter((key) => !key.startsWith("_")) : [];
-  }, [dataRows, filteredRows]);
+  }, [dataRows, tableRows]);
+
+  const printableExtraColumns =
+    (tableShowImages ? 1 : 0) + (showDocumentDownload ? 1 : 0);
 
   const shipmentTotals = useMemo(() => {
     if (!hasShipmentLinks(params.slug) || !dataRows.length) return null;
@@ -147,10 +191,48 @@ export default function ReportDetailPage() {
     };
   }, [dataRows, params.slug]);
 
-  const printableExtraColumns =
-    (showImages ? 1 : 0) + (showDocumentDownload ? 1 : 0);
+  const totalPages = Math.max(1, Math.ceil(totalRows / INCOMING_PRODUCTS_PAGE_SIZE));
+  const pageStart = totalRows ? (page - 1) * INCOMING_PRODUCTS_PAGE_SIZE + 1 : 0;
+  const pageEnd = Math.min(page * INCOMING_PRODUCTS_PAGE_SIZE, totalRows);
 
   const categoryOptions = useMemo(() => buildCategorySelectOptions(categories), [categories]);
+
+  useEffect(() => {
+    const restore = () => {
+      setPrintSnapshot(null);
+      setPrintImageUrls(new Map());
+    };
+    window.addEventListener("afterprint", restore);
+    return () => window.removeEventListener("afterprint", restore);
+  }, []);
+
+  async function handlePrint() {
+    let rowsForPrint = dataRows;
+
+    if (paginatedReport) {
+      const result = await load(page, true);
+      if (result && !("error" in result)) {
+        rowsForPrint = result.rows.filter((row) => !row._sectionHeader);
+        setPrintSnapshot(result.rows);
+      }
+    }
+
+    if (supportsProductImages(params.slug)) {
+      const paths = rowsForPrint.map((row) => row._imagePath).filter((path): path is string => Boolean(path));
+      if (paths.length) {
+        const urls = await signedProductImageUrls(paths);
+        if (paginatedReport) {
+          setPrintImageUrls(urls);
+        } else {
+          if (!withImages) setWithImages(true);
+          setImageUrls(urls);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 400));
+      }
+    }
+
+    window.print();
+  }
 
   async function downloadFile(path: string) {
     const result = await createClient().storage.from(bucket).createSignedUrl(path, 120);
@@ -162,7 +244,16 @@ export default function ReportDetailPage() {
   }
 
   async function exportExcel() {
-    const exportRows = dataRows.map((row) => {
+    const exportResult = paginatedReport
+      ? await load(page, true)
+      : null;
+
+    const sourceRows =
+      exportResult && !("error" in exportResult)
+        ? exportResult.rows.filter((row) => !row._sectionHeader)
+        : dataRows;
+
+    const exportRows = sourceRows.map((row) => {
       const copy: Record<string, string | number | null> = {};
       for (const [key, value] of Object.entries(row)) {
         if (key.startsWith("_")) continue;
@@ -206,9 +297,15 @@ export default function ReportDetailPage() {
       exportRows.push(summaryRow, containerRow);
     }
 
-    const imageUrlList = showImages
-      ? dataRows.map((row) => (row._imagePath ? imageUrls.get(row._imagePath) : null))
-      : undefined;
+    let imageUrlList: Array<string | null | undefined> | undefined;
+    if (showImages) {
+      const paths = sourceRows.map((row) => row._imagePath).filter((path): path is string => Boolean(path));
+      const urlMap =
+        paginatedReport && exportResult && !("error" in exportResult)
+          ? await signedProductImageUrls(paths)
+          : imageUrls;
+      imageUrlList = sourceRows.map((row) => (row._imagePath ? urlMap.get(row._imagePath) : null));
+    }
 
     await downloadExcelWithOptionalImages({
       filename: `${params.slug}-${todayIso()}.xlsx`,
@@ -236,7 +333,7 @@ export default function ReportDetailPage() {
           <ArrowRight className="h-4 w-4" />
           {ui("رجوع للتقارير")}
         </Link>
-        <button className="btn btn-secondary" onClick={load} type="button">
+        <button className="btn btn-secondary" onClick={() => void load(page)} type="button">
           <RefreshCw className="h-4 w-4" />
           {ui("تحديث")}
         </button>
@@ -244,7 +341,7 @@ export default function ReportDetailPage() {
           <FileSpreadsheet className="h-4 w-4" />
           Excel
         </button>
-        <button className="btn" onClick={() => window.print()} type="button">
+        <button className="btn" onClick={() => void handlePrint()} type="button">
           <Printer className="h-4 w-4" />
           {ui("طباعة PDF")}
         </button>
@@ -314,7 +411,7 @@ export default function ReportDetailPage() {
           ) : null}
           <input className="input" placeholder={ui("بحث داخل التقرير")} value={query} onChange={(event) => setQuery(event.target.value)} />
           {report.dateFilter !== "none" || showIncomingFilters ? (
-            <button className="btn" onClick={load} type="button">
+            <button className="btn" onClick={applyFilters} type="button">
               {ui("تطبيق")}
             </button>
           ) : null}
@@ -325,9 +422,9 @@ export default function ReportDetailPage() {
         <table className="report-print-table table-nowrap min-w-full text-sm">
           <thead className="table-head">
             <tr>
-              {showImages ? <th className="p-3 text-right w-16">{ui("صورة")}</th> : null}
+              {tableShowImages ? <th className="report-print-image-col p-3 text-center">{ui("صورة")}</th> : null}
               {columns.map((column) => (
-                <th className="p-3 text-right" key={column}>
+                <th className={`p-3 text-right ${printColumnClass(column)}`} key={column}>
                   {tc(column)}
                 </th>
               ))}
@@ -342,8 +439,8 @@ export default function ReportDetailPage() {
                   {ui("جاري التحميل...")}
                 </td>
               </tr>
-            ) : filteredRows.length ? (
-              filteredRows.map((row, index) =>
+            ) : tableRows.length ? (
+              tableRows.map((row, index) =>
                 row._sectionHeader ? (
                   <tr className="report-section-row bg-slate-100 font-bold print:bg-slate-100" key={`section-${index}`}>
                     <td className="p-3" colSpan={Math.max(columns.length, 1) + printableExtraColumns + (showShipmentLinks ? 1 : 0)}>
@@ -352,14 +449,14 @@ export default function ReportDetailPage() {
                   </tr>
                 ) : (
                   <tr className="border-t border-[var(--border)]" key={index}>
-                    {showImages ? (
-                      <td className="p-2">
-                        {row._imagePath && imageUrls.get(row._imagePath) ? (
+                    {tableShowImages ? (
+                      <td className="report-print-image-col p-2 text-center">
+                        {row._imagePath && tableImageUrls.get(row._imagePath) ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             alt=""
-                            className="h-12 w-12 rounded object-cover print:h-10 print:w-10"
-                            src={imageUrls.get(row._imagePath)}
+                            className="report-print-product-img"
+                            src={tableImageUrls.get(row._imagePath)}
                           />
                         ) : (
                           <span className="text-[var(--muted)]">-</span>
@@ -367,7 +464,7 @@ export default function ReportDetailPage() {
                       </td>
                     ) : null}
                     {columns.map((column) => (
-                      <td className="p-3" key={column}>
+                      <td className={`p-3 ${printColumnClass(column)}`} key={column}>
                         {column === "الرابط" && row._downloadPath ? (
                           <button
                             className="text-[#0f766e] underline hover:opacity-80 print:text-inherit print:no-underline"
@@ -420,7 +517,7 @@ export default function ReportDetailPage() {
           {shipmentTotals ? (
             <tfoot className="table-head font-bold">
               <tr>
-                {showImages ? <td className="p-3" /> : null}
+                {tableShowImages ? <td className="p-3" /> : null}
                 {columns.map((column, index) => {
                   if (column === "عدد الكراتين") {
                     return (
@@ -448,6 +545,38 @@ export default function ReportDetailPage() {
             </tfoot>
           ) : null}
         </table>
+
+        {paginatedReport && totalRows > 0 && !printSnapshot ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] p-3 print:hidden">
+            <p className="text-sm text-[var(--muted)]">
+              {tr(
+                `عرض ${pageStart.toLocaleString(languageToLocale(lang))}–${pageEnd.toLocaleString(languageToLocale(lang))} من ${totalRows.toLocaleString(languageToLocale(lang))} صنف`,
+                `Showing ${pageStart}–${pageEnd} of ${totalRows} products`
+              )}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                className="btn btn-secondary px-3 py-1 text-sm"
+                disabled={page <= 1 || loading}
+                onClick={() => goToPage(page - 1)}
+                type="button"
+              >
+                {ui("السابق")}
+              </button>
+              <span className="text-sm font-semibold">
+                {tr(`صفحة ${page} من ${totalPages}`, `Page ${page} of ${totalPages}`)}
+              </span>
+              <button
+                className="btn btn-secondary px-3 py-1 text-sm"
+                disabled={page >= totalPages || loading}
+                onClick={() => goToPage(page + 1)}
+                type="button"
+              >
+                {ui("التالي")}
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {params.slug === "summary" && statusSummary ? (

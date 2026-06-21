@@ -57,8 +57,8 @@ function collectDateColumns(grouped: GroupedSku[]) {
   return Array.from(dates).sort();
 }
 
-function rowsToReportRows(grouped: GroupedSku[]): ReportRow[] {
-  const dateColumns = collectDateColumns(grouped);
+function rowsToReportRows(grouped: GroupedSku[], fixedDateColumns?: string[]): ReportRow[] {
+  const dateColumns = fixedDateColumns?.length ? fixedDateColumns : collectDateColumns(grouped);
 
   return grouped
     .sort((a, b) => a.name.localeCompare(b.name, "ar"))
@@ -89,6 +89,7 @@ export function groupProductLines(
   options: {
     productKind?: ProductKindFilter;
     categoryIds?: Set<string>;
+    dateColumns?: string[];
   } = {}
 ): ReportRow[] {
   let filtered = lines;
@@ -130,7 +131,7 @@ export function groupProductLines(
     grouped.set(line.sku, current);
   }
 
-  return rowsToReportRows(Array.from(grouped.values()));
+  return rowsToReportRows(Array.from(grouped.values()), options.dateColumns);
 }
 
 export function productLinesToDetailRows(lines: ProductLine[], withImagePath = false): ReportRow[] {

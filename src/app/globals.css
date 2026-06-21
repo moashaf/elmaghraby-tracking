@@ -243,6 +243,78 @@ html.dark .table-head {
     margin-top: 14px;
   }
 
+  .report-print-table-wrap {
+    overflow: visible !important;
+  }
+
+  .report-print-table.table-nowrap th,
+  .report-print-table.table-nowrap td {
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  .report-print-image-col {
+    width: 34mm !important;
+    min-width: 34mm !important;
+    max-width: 34mm !important;
+    text-align: center !important;
+    padding: 4px !important;
+  }
+
+  .report-print-product-img {
+    width: 30mm !important;
+    height: 30mm !important;
+    max-width: 30mm !important;
+    max-height: 30mm !important;
+    object-fit: contain !important;
+    display: block;
+    margin-inline: auto;
+    border-radius: 4px;
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .report-print-col-sku {
+    width: 24mm;
+    min-width: 24mm;
+    font-size: 11px !important;
+  }
+
+  .report-print-col-product {
+    min-width: 42mm;
+    max-width: 52mm;
+    font-size: 12px !important;
+    line-height: 1.35;
+  }
+
+  .report-print-col-category {
+    width: 22mm;
+    min-width: 22mm;
+    font-size: 11px !important;
+  }
+
+  .report-print-col-eta {
+    width: 28mm;
+    min-width: 28mm;
+    max-width: 32mm;
+    font-size: 10px !important;
+    line-height: 1.35;
+  }
+
+  .report-print-col-total {
+    width: 16mm;
+    min-width: 16mm;
+    text-align: center !important;
+    font-size: 11px !important;
+  }
+
+  .report-print-table tbody tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
   .status-badge {
     font-weight: 700;
     -webkit-print-color-adjust: exact;
@@ -440,4 +512,13 @@ html.dark .table-head {
 .table-compact th,
 .table-compact td {
   padding: 0.5rem 0.625rem;
+}
+
+.report-print-product-img {
+  height: 4rem;
+  width: 4rem;
+  object-fit: contain;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border);
+  background: #fff;
 }

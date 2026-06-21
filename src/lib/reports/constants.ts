@@ -23,6 +23,12 @@ export const GROUPED_PRODUCT_REPORT_SLUGS: ReportSlug[] = [
 
 export const INCOMING_FILTER_SLUG = "incoming-products" as const;
 
+export const INCOMING_PRODUCTS_PAGE_SIZE = 50;
+
+export function supportsReportPagination(slug: string) {
+  return slug === INCOMING_FILTER_SLUG;
+}
+
 export function supportsProductImages(slug: string) {
   return PRODUCT_IMAGE_REPORT_SLUGS.includes(slug as ReportSlug);
 }

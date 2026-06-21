@@ -23,6 +23,32 @@ export async function fetchAllRows<T>(
   return { data: all, error: null };
 }
 
+const IN_CHUNK_SIZE = 100;
+
+/** Fetch rows where `column` is in `values`, paging each chunk to avoid PostgREST limits. */
+export async function fetchAllWhereIn<T extends Record<string, unknown>>(
+  supabase: SupabaseClient,
+  table: string,
+  select: string,
+  column: string,
+  values: string[]
+): Promise<{ data: T[]; error: string | null }> {
+  if (!values.length) return { data: [], error: null };
+
+  const all: T[] = [];
+  for (let index = 0; index < values.length; index += IN_CHUNK_SIZE) {
+    const chunk = values.slice(index, index + IN_CHUNK_SIZE);
+    const result = await fetchAllRows<T>(async (from, to) => {
+      const { data, error } = await supabase.from(table).select(select).in(column, chunk).range(from, to);
+      return { data: data as T[] | null, error };
+    });
+    if (result.error) return { data: all, error: result.error };
+    all.push(...result.data);
+  }
+
+  return { data: all, error: null };
+}
+
 export async function fetchAllFromTable<T extends Record<string, unknown>>(
   supabase: SupabaseClient,
   table: string,

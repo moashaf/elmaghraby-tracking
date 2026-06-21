@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
-import { fetchAllFromTable } from "@/lib/supabase/fetch-all";
+import { fetchAllFromTable, fetchAllWhereIn } from "@/lib/supabase/fetch-all";
 import { SHIPMENT_STATUS_LABELS } from "@/lib/constants";
 import { formatUsd, formatDisplayDate } from "@/lib/format";
 import {
@@ -12,7 +12,7 @@ import { fetchSystemSettings, isShipmentDelayed } from "@/lib/system-settings";
 import { collectDescendantCategoryIds } from "@/lib/category-tree";
 import type { ProductCategory } from "@/lib/types";
 import type { ProductKindFilter } from "@/lib/reports/constants";
-import { GROUPED_PRODUCT_REPORT_SLUGS } from "@/lib/reports/constants";
+import { GROUPED_PRODUCT_REPORT_SLUGS, INCOMING_PRODUCTS_PAGE_SIZE } from "@/lib/reports/constants";
 import {
   groupProductLines,
   productLinesToDetailRows,
@@ -180,6 +180,18 @@ function toProductLine(row: ShipmentProductJoin, invoiceMap: Map<string, string>
 export type BuildReportOptions = {
   categoryId?: string;
   productKind?: ProductKindFilter;
+  page?: number;
+  pageSize?: number;
+  /** When true, return all matching rows (e.g. Excel export) instead of one page. */
+  exportAll?: boolean;
+};
+
+export type BuildReportResult = {
+  rows: ReportRow[];
+  statusSummary?: ShipmentStatusSummary;
+  totalRows?: number;
+  page?: number;
+  pageSize?: number;
 };
 
 export async function buildReport(
@@ -187,7 +199,7 @@ export async function buildReport(
   from: string,
   to: string,
   options: BuildReportOptions = {}
-): Promise<{ rows: ReportRow[]; statusSummary?: ShipmentStatusSummary } | { error: string }> {
+): Promise<BuildReportResult | { error: string }> {
   const supabase = createClient();
 
   if (slug === "all-products") return allProductsReport();
@@ -299,12 +311,178 @@ async function allProductsReport(): Promise<{ rows: ReportRow[] } | { error: str
   };
 }
 
+type ShipmentProductLightRow = {
+  product_id: string;
+  shipment_id: string;
+  quantity: number;
+  cartons_count: number | null;
+  is_new_incoming_product: boolean;
+  is_disassembled: boolean;
+};
+
+type ProductMeta = {
+  id: string;
+  sku: string;
+  name_ar: string;
+  category_id: string | null;
+  category: string | null;
+  image_url: string | null;
+};
+
+async function resolveReportCategoryIds(categoryId?: string): Promise<{ categoryIds?: Set<string>; error?: string }> {
+  if (!categoryId) return {};
+
+  const categoriesResult = await fetchAllFromTable<ProductCategory>(
+    createClient(),
+    "product_categories",
+    "id,name_ar,parent_id,is_active"
+  );
+  if (categoriesResult.error) return { error: categoriesResult.error };
+  return { categoryIds: collectDescendantCategoryIds(categoriesResult.data, categoryId) };
+}
+
+function filterLightRowsByKind(rows: ShipmentProductLightRow[], productKind?: ProductKindFilter) {
+  if (productKind === "disassembled") return rows.filter((row) => row.is_disassembled);
+  if (productKind === "complete") return rows.filter((row) => !row.is_disassembled);
+  return rows;
+}
+
+function lightRowsToProductLines(
+  rows: ShipmentProductLightRow[],
+  productById: Map<string, ProductMeta>,
+  shipmentById: Map<string, ShipmentReportRow>,
+  invoiceMap: Map<string, string>
+): ProductLine[] {
+  const lines: ProductLine[] = [];
+
+  for (const row of rows) {
+    const product = productById.get(row.product_id);
+    const shipment = shipmentById.get(row.shipment_id);
+    if (!product || !shipment) continue;
+
+    lines.push({
+      sku: product.sku,
+      name: product.name_ar,
+      category_id: product.category_id,
+      category_name: product.category,
+      image_path: product.image_url,
+      cartons_count: row.cartons_count,
+      quantity: Number(row.quantity ?? 0),
+      eta: shipment.eta,
+      acid: shipment.acid,
+      shipment_id: shipment.id,
+      shipment_number: shipment.shipment_number,
+      invoice_file_name: invoiceMap.get(shipment.id) ?? null,
+      is_disassembled: row.is_disassembled,
+      is_new: row.is_new_incoming_product,
+      status: statusLabel(shipment.status),
+    });
+  }
+
+  return lines;
+}
+
+async function incomingProductsReport(
+  from: string,
+  to: string,
+  options: BuildReportOptions
+): Promise<BuildReportResult | { error: string }> {
+  const pageSize = options.pageSize ?? INCOMING_PRODUCTS_PAGE_SIZE;
+  const page = Math.max(1, options.page ?? 1);
+  const paginate = !options.exportAll;
+
+  const shipmentsResult = await fetchAllFromTable(
+    createClient(),
+    "shipments",
+    `id,${shipmentSelect}`,
+    { column: "created_at", ascending: false }
+  );
+  if (shipmentsResult.error) return { error: shipmentsResult.error };
+
+  const shipments = (shipmentsResult.data as Array<Record<string, unknown>>)
+    .map(normalizeShipment)
+    .filter((row) => filterShipmentByDate(row, from, to, "eta"));
+
+  const shipmentById = new Map(shipments.map((row) => [row.id, row]));
+  const shipmentIds = shipments.map((row) => row.id);
+  const dateColumns = [...new Set(shipments.map((row) => row.eta).filter(Boolean))].sort();
+
+  if (!shipmentIds.length) {
+    return { rows: [], totalRows: 0, page, pageSize };
+  }
+
+  const categoryResult = await resolveReportCategoryIds(options.categoryId);
+  if (categoryResult.error) return { error: categoryResult.error };
+  const categoryIds = categoryResult.categoryIds;
+
+  const lightResult = await fetchAllWhereIn<ShipmentProductLightRow>(
+    createClient(),
+    "shipment_products",
+    "product_id,shipment_id,quantity,cartons_count,is_new_incoming_product,is_disassembled",
+    "shipment_id",
+    shipmentIds
+  );
+  if (lightResult.error) return { error: lightResult.error };
+
+  let lightRows = filterLightRowsByKind(lightResult.data, options.productKind);
+  if (!lightRows.length) {
+    return { rows: [], totalRows: 0, page, pageSize };
+  }
+
+  const allProductIds = [...new Set(lightRows.map((row) => row.product_id))];
+  const productsResult = await fetchAllWhereIn<ProductMeta>(
+    createClient(),
+    "products",
+    "id,sku,name_ar,category_id,category,image_url",
+    "id",
+    allProductIds
+  );
+  if (productsResult.error) return { error: productsResult.error };
+
+  const productById = new Map(productsResult.data.map((row) => [row.id, row]));
+
+  if (categoryIds?.size) {
+    lightRows = lightRows.filter((row) => {
+      const product = productById.get(row.product_id);
+      return product?.category_id && categoryIds.has(product.category_id);
+    });
+  }
+
+  const sortedProductIds = [...new Set(lightRows.map((row) => row.product_id))]
+    .filter((id) => productById.has(id))
+    .sort((a, b) => productById.get(a)!.name_ar.localeCompare(productById.get(b)!.name_ar, "ar"));
+
+  const totalRows = sortedProductIds.length;
+  const pageProductIds = paginate
+    ? sortedProductIds.slice((page - 1) * pageSize, page * pageSize)
+    : sortedProductIds;
+
+  const pageLightRows = lightRows.filter((row) => pageProductIds.includes(row.product_id));
+  const invoiceMap = await fetchInvoiceFileNamesByShipmentId();
+  const lines = lightRowsToProductLines(pageLightRows, productById, shipmentById, invoiceMap);
+
+  return {
+    rows: groupProductLines(lines, {
+      productKind: options.productKind,
+      categoryIds,
+      dateColumns,
+    }),
+    totalRows,
+    page: paginate ? page : 1,
+    pageSize: paginate ? pageSize : totalRows,
+  };
+}
+
 async function productsReport(
   slug: string,
   from: string,
   to: string,
   options: BuildReportOptions
-): Promise<{ rows: ReportRow[] } | { error: string }> {
+): Promise<BuildReportResult | { error: string }> {
+  if (slug === "incoming-products") {
+    return incomingProductsReport(from, to, options);
+  }
+
   const result = await fetchAllFromTable(
     createClient(),
     "shipment_products",
