@@ -171,6 +171,54 @@ export async function requireAdmin(request: Request) {
   return { ok: true as const, user, profile, adminClient };
 }
 
+export async function requireWriter(request: Request) {
+  let requestClient: ReturnType<typeof createRequestClient>;
+  let adminClient: ReturnType<typeof createAdminClient>;
+  try {
+    requestClient = createRequestClient(request);
+    adminClient = createAdminClient();
+  } catch (configError) {
+    return { ok: false as const, error: serverConfigError(configError), status: 500 as const };
+  }
+
+  const accessToken = getAccessToken(request);
+  if (!accessToken) {
+    return { ok: false as const, error: "غير مصرح بالدخول — أعد تسجيل الدخول.", status: 401 as const };
+  }
+
+  const {
+    data: { user },
+    error,
+  } = await requestClient.auth.getUser(accessToken).catch((authError) => ({
+    data: { user: null },
+    error: authError instanceof Error ? authError : new Error("تعذر التحقق من الجلسة."),
+  }));
+
+  if (error || !user) {
+    return { ok: false as const, error: "غير مصرح بالدخول — أعد تسجيل الدخول.", status: 401 as const };
+  }
+
+  const { data: profile, error: profileError } = await adminClient
+    .from("profiles")
+    .select("id, full_name, role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profileError) {
+    return { ok: false as const, error: `تعذر التحقق من الصلاحيات: ${profileError.message}`, status: 500 as const };
+  }
+
+  if (!profile) {
+    return { ok: false as const, error: "لا يوجد ملف لحسابك.", status: 403 as const };
+  }
+
+  if (profile.role !== "admin" && profile.role !== "manager") {
+    return { ok: false as const, error: "ليس لديك صلاحية تعديل الشحنات.", status: 403 as const };
+  }
+
+  return { ok: true as const, user, profile, adminClient };
+}
+
 export function jsonError(message: string, status = 400) {
   return Response.json({ error: message }, { status });
 }

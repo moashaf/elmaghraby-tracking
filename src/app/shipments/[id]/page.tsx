@@ -434,7 +434,6 @@ function CostsPanel({ cost, onEdit }: { cost: ShipmentCost | null; onEdit: () =>
   const { ui } = useLanguage();
   const values = useMemo(() => cost ? [
     [ui("جمارك"), cost.customs_cost],
-    [ui("شحن"), cost.shipping_cost],
     [ui("تخليص"), cost.clearance_cost],
     [ui("نقل داخلي"), cost.local_transport_cost],
     [ui("مصروفات أخرى"), cost.other_expenses],
@@ -487,7 +486,6 @@ function CostsDialog({
   const { ui } = useLanguage();
   const [form, setForm] = useState({
     customs_cost: cost?.customs_cost?.toString() ?? "0",
-    shipping_cost: cost?.shipping_cost?.toString() ?? "0",
     clearance_cost: cost?.clearance_cost?.toString() ?? "0",
     local_transport_cost: cost?.local_transport_cost?.toString() ?? "0",
     other_expenses: cost?.other_expenses?.toString() ?? "0",
@@ -564,24 +562,39 @@ function CostsDialog({
         await uploadCustomsRelease(customsReleaseFile);
       }
 
-      const result = await createClient().rpc("close_shipment_with_costs", {
-        shipment_id: shipmentId,
-        customs_cost: Number(form.customs_cost) || 0,
-        shipping_cost: Number(form.shipping_cost) || 0,
-        clearance_cost: Number(form.clearance_cost) || 0,
-        local_transport_cost: Number(form.local_transport_cost) || 0,
-        other_expenses: Number(form.other_expenses) || 0,
-        closing_notes: form.closing_notes.trim() || null,
+      const supabase = createClient();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setError(ui("سجل الدخول أولا."));
+        return;
+      }
+
+      const response = await fetch(`/api/shipments/${shipmentId}/close-with-costs`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          customs_cost: Number(form.customs_cost) || 0,
+          clearance_cost: Number(form.clearance_cost) || 0,
+          local_transport_cost: Number(form.local_transport_cost) || 0,
+          other_expenses: Number(form.other_expenses) || 0,
+          closing_notes: form.closing_notes.trim() || null,
+        }),
       });
 
-      if (result.error) {
-        setError(result.error.message);
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        setError(payload.error ?? ui("تعذر حفظ المصاريف."));
         return;
       }
 
       onSaved();
     } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : ui("تعذر رفع ملف INV."));
+      setError(uploadError instanceof Error ? uploadError.message : ui("تعذر رفع ملف الإفراج الجمركي."));
     } finally {
       setLoading(false);
     }
@@ -597,7 +610,6 @@ function CostsDialog({
         <ErrorMessage message={error} />
         <div className="grid gap-3 md:grid-cols-2">
           <CostInput label={ui("الجمارك")} name="customs_cost" form={form} setForm={setForm} />
-          <CostInput label={ui("الشحن")} name="shipping_cost" form={form} setForm={setForm} />
           <CostInput label={ui("التخليص")} name="clearance_cost" form={form} setForm={setForm} />
           <CostInput label={ui("النقل الداخلي")} name="local_transport_cost" form={form} setForm={setForm} />
           <CostInput label={ui("مصروفات أخرى")} name="other_expenses" form={form} setForm={setForm} />
@@ -630,7 +642,6 @@ function CostsDialog({
 
 type CostsForm = {
   customs_cost: string;
-  shipping_cost: string;
   clearance_cost: string;
   local_transport_cost: string;
   other_expenses: string;

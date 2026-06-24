@@ -305,7 +305,6 @@ export function ShipmentPrintReport({ shipmentId }: { shipmentId: string }) {
           <h2 className="mb-3 text-base font-bold">{ui("مصاريف الإغلاق")}</h2>
           <div className="grid gap-3 text-sm md:grid-cols-3">
             <Field label={ui("جمارك")} value={Number(cost.customs_cost).toLocaleString(languageToLocale(lang))} />
-            <Field label={ui("شحن")} value={Number(cost.shipping_cost).toLocaleString(languageToLocale(lang))} />
             <Field label={ui("تخليص")} value={Number(cost.clearance_cost).toLocaleString(languageToLocale(lang))} />
             <Field label={ui("نقل داخلي")} value={Number(cost.local_transport_cost).toLocaleString(languageToLocale(lang))} />
             <Field label={ui("مصروفات أخرى")} value={Number(cost.other_expenses).toLocaleString(languageToLocale(lang))} />
