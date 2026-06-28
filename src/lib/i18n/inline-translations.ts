@@ -829,6 +829,18 @@ export const INLINE_TRANSLATIONS: Record<string, InlineEntry> = {
     "en": "Leave empty to auto-generate SKU",
     "zh": "留空则自动生成 SKU"
   },
+  "اختر ملف": {
+    "en": "Choose file",
+    "zh": "选择文件"
+  },
+  "اضغط هنا ثم Ctrl+V للصق صورة من Excel أو أي برنامج": {
+    "en": "Click here then Ctrl+V to paste an image from Excel or another app",
+    "zh": "点击此处后按 Ctrl+V 粘贴来自 Excel 或其他应用的图片"
+  },
+  "تم حفظ المنتج لكن فشل رفع الصورة.": {
+    "en": "Product saved but image upload failed.",
+    "zh": "产品已保存，但图片上传失败。"
+  },
   "الوحدة الافتراضية": {
     "en": "Default unit",
     "zh": "默认单位"
