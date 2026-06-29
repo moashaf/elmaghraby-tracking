@@ -106,14 +106,14 @@ type CostJoin = {
 
 function shipmentToReportRow(row: ShipmentReportRow): ReportRow {
   return {
-    "رقم الشحنة": row.invoice_file_name ? displayInvoiceNumber(row.invoice_file_name) : "-",
+    "رقم الفاتورة": row.invoice_file_name ? displayInvoiceNumber(row.invoice_file_name) : "-",
     ACID: row.acid,
     الشركة: row.company,
     "عدد الكراتين": row.total_cartons ?? "-",
     "عدد الحاويات": row.containers_count,
-    "قيمة الشحنة ($)": formatUsd(row.value_usd),
+    "قيمة الفاتورة ($)": formatUsd(row.value_usd),
     "تاريخ الشحن": formatDisplayDate(row.shipped_at),
-    "تاريخ الوصول": formatDisplayDate(row.eta),
+    "تاريخ الوصول المتوقع": formatDisplayDate(row.eta),
     الحالة: SHIPMENT_STATUS_LABELS[row.status],
     "نوع البضاعة": row.shipment_type || "-",
     _status: row.status,
@@ -592,10 +592,10 @@ async function containersReport(from: string, to: string): Promise<{ rows: Repor
         "رقم الحاوية": row.container_number,
         الوزن: row.weight_kg,
         الكرتين: row.cartons_count,
-        "رقم الشحنة": shipmentInvoiceLabel(shipment.invoice_file_name),
+        "رقم الفاتورة": shipmentInvoiceLabel(shipment.invoice_file_name),
         الشركة: row.shipments?.company ?? "-",
         المورد: row.shipments?.supplier ?? "-",
-        "تاريخ الوصول": row.shipments?.eta ?? "-",
+        "تاريخ الوصول المتوقع": row.shipments?.eta ?? "-",
         الحالة: row.shipments ? SHIPMENT_STATUS_LABELS[row.shipments.status] : "-",
       }));
     }),
@@ -666,13 +666,13 @@ async function containerFilesReport(): Promise<{ rows: ReportRow[] } | { error: 
     rows: rows.map((row) => {
       const shipment = normalizeShipmentJoin(row.shipment_containers?.shipments ?? null);
       return {
-        "رقم الشحنة": shipmentInvoiceLabel(shipment?.id ? invoiceMap.get(shipment.id) ?? null : null),
+        "رقم الفاتورة": shipmentInvoiceLabel(shipment?.id ? invoiceMap.get(shipment.id) ?? null : null),
         ACID: shipment?.acid ?? "-",
         الحاوية: row.shipment_containers?.container_number ?? "-",
         الملف: row.file_name,
         "حجم الملف (بايت)": row.size_bytes ?? "-",
         "تاريخ الرفع": row.uploaded_at.slice(0, 10),
-        "تاريخ الوصول": shipment?.eta ?? "-",
+        "تاريخ الوصول المتوقع": shipment?.eta ?? "-",
         _downloadPath: row.storage_path,
       };
     }),
@@ -703,7 +703,7 @@ async function costsReport(from: string, to: string): Promise<{ rows: ReportRow[
 
   return {
     rows: enriched.map(({ row, shipment, invoice }) => ({
-      "رقم الشحنة": shipmentInvoiceLabel(invoice),
+      "رقم الفاتورة": shipmentInvoiceLabel(invoice),
       ACID: shipment.acid,
       الشركة: shipment.company,
       المورد: shipment.supplier,

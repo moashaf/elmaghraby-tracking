@@ -4,16 +4,17 @@ type Col = { en: string; zh: string };
 
 /** Report / Excel column headers keyed by Arabic source label. */
 export const COLUMN_TRANSLATIONS: Record<string, Col> = {
-  "رقم الشحنة": { en: "Invoice no.", zh: "发票号" },
+  م: { en: "#", zh: "序号" },
+  "رقم الفاتورة": { en: "Invoice no.", zh: "发票号" },
   ACID: { en: "ACID", zh: "ACID" },
   الشركة: { en: "Company", zh: "公司" },
   المورد: { en: "Supplier", zh: "供应商" },
   "عدد الكراتين": { en: "Cartons", zh: "箱数" },
   "عدد الحاويات": { en: "Containers", zh: "集装箱数" },
-  "قيمة الشحنة ($)": { en: "Shipment value (USD)", zh: "货运价值（美元）" },
+  "قيمة الفاتورة ($)": { en: "Shipment value (USD)", zh: "货运价值（美元）" },
   "القيمة ($)": { en: "Value (USD)", zh: "价值（美元）" },
   "تاريخ الشحن": { en: "Ship date", zh: "装运日期" },
-  "تاريخ الوصول": { en: "ETA", zh: "预计到达" },
+  "تاريخ الوصول المتوقع": { en: "ETA", zh: "预计到达" },
   "تاريخ الإغلاق": { en: "Closing date", zh: "结案日期" },
   الحالة: { en: "Status", zh: "状态" },
   "نوع البضاعة": { en: "Cargo type", zh: "货物类型" },

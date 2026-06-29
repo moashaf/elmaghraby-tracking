@@ -13,7 +13,7 @@ import { findLocalizedReport, getStatusLabel, languageToLocale, localizeReportCe
 import { signedProductImageUrls } from "@/lib/product-images";
 import { buildReport } from "@/lib/reports/build-reports";
 import type { ProductKindFilter } from "@/lib/reports/constants";
-import { supportsIncomingFilters, supportsProductImages, hasShipmentLinks, hasDocumentDownload, supportsReportPagination, INCOMING_PRODUCTS_PAGE_SIZE } from "@/lib/reports/constants";
+import { supportsIncomingFilters, supportsProductImages, hasShipmentLinks, hasDocumentDownload, supportsReportPagination, INCOMING_PRODUCTS_PAGE_SIZE, SHIPMENT_SERIAL_COLUMN } from "@/lib/reports/constants";
 import { todayIso, type ReportRow } from "@/lib/reports/shipment-helpers";
 import { sumReportColumn, OPEN_SHIPMENT_STATUS_SORT_ORDER, type ShipmentStatusSummary } from "@/lib/shipment-container-count";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
@@ -23,6 +23,7 @@ import type { ProductCategory } from "@/lib/types";
 const bucket = "container-files";
 
 function printColumnClass(column: string) {
+  if (column === "م") return "report-print-col-serial";
   if (column === "SKU") return "report-print-col-sku";
   if (column === "المنتج") return "report-print-col-product";
   if (column === "التصنيف") return "report-print-col-category";
@@ -177,8 +178,9 @@ export default function ReportDetailPage() {
 
   const columns = useMemo(() => {
     const sample = dataRows[0] ?? tableRows.find((row) => !row._sectionHeader);
-    return sample ? Object.keys(sample).filter((key) => !key.startsWith("_")) : [];
-  }, [dataRows, tableRows]);
+    const keys = sample ? Object.keys(sample).filter((key) => !key.startsWith("_")) : [];
+    return showShipmentLinks ? [SHIPMENT_SERIAL_COLUMN, ...keys] : keys;
+  }, [dataRows, tableRows, showShipmentLinks]);
 
   const printableExtraColumns =
     (tableShowImages ? 1 : 0) + (showDocumentDownload ? 1 : 0);
@@ -253,8 +255,9 @@ export default function ReportDetailPage() {
         ? exportResult.rows.filter((row) => !row._sectionHeader)
         : dataRows;
 
-    const exportRows = sourceRows.map((row) => {
+    const exportRows = sourceRows.map((row, index) => {
       const copy: Record<string, string | number | null> = {};
+      if (showShipmentLinks) copy[SHIPMENT_SERIAL_COLUMN] = index + 1;
       for (const [key, value] of Object.entries(row)) {
         if (key.startsWith("_")) continue;
         copy[key] = value ?? "";
@@ -276,19 +279,22 @@ export default function ReportDetailPage() {
 
     if (shipmentTotals && columns.length) {
       const totalRow: Record<string, string | number | null> = {};
-      columns.forEach((column, index) => {
-        if (column === "عدد الكراتين") totalRow[column] = shipmentTotals.cartons;
+      columns.forEach((column) => {
+        if (column === SHIPMENT_SERIAL_COLUMN) totalRow[column] = "";
+        else if (column === "عدد الكراتين") totalRow[column] = shipmentTotals.cartons;
         else if (column === "عدد الحاويات") totalRow[column] = shipmentTotals.containers;
-        else totalRow[column] = index === 0 ? ui("الإجمالي") : "";
+        else if (column === "رقم الفاتورة") totalRow[column] = ui("الإجمالي");
+        else totalRow[column] = "";
       });
       exportRows.push(totalRow);
     }
 
     if (params.slug === "summary" && statusSummary) {
+      const summaryLabelColumn = columns.find((column) => column === "رقم الفاتورة") ?? columns[0] ?? tc("ملخص");
       exportRows.push({});
-      exportRows.push({ [columns[0] ?? tc("ملخص")]: ui("ملخص حسب الحالة") });
-      const summaryRow: Record<string, string | number | null> = { [columns[0] ?? ""]: ui("عدد الشحنات") };
-      const containerRow: Record<string, string | number | null> = { [columns[0] ?? ""]: ui("عدد الحاويات") };
+      exportRows.push({ [summaryLabelColumn]: ui("ملخص حسب الحالة") });
+      const summaryRow: Record<string, string | number | null> = { [summaryLabelColumn]: ui("عدد الشحنات") };
+      const containerRow: Record<string, string | number | null> = { [summaryLabelColumn]: ui("عدد الحاويات") };
       OPEN_SHIPMENT_STATUS_SORT_ORDER.forEach((status) => {
         const label = getStatusLabel(status, lang);
         summaryRow[label] = statusSummary[status].shipments;
@@ -440,7 +446,9 @@ export default function ReportDetailPage() {
                 </td>
               </tr>
             ) : tableRows.length ? (
-              tableRows.map((row, index) =>
+              (() => {
+                let shipmentSerial = 0;
+                return tableRows.map((row, index) =>
                 row._sectionHeader ? (
                   <tr className="report-section-row bg-slate-100 font-bold print:bg-slate-100" key={`section-${index}`}>
                     <td className="p-3" colSpan={Math.max(columns.length, 1) + printableExtraColumns + (showShipmentLinks ? 1 : 0)}>
@@ -448,6 +456,10 @@ export default function ReportDetailPage() {
                     </td>
                   </tr>
                 ) : (
+                  (() => {
+                    shipmentSerial += 1;
+                    const serial = shipmentSerial;
+                    return (
                   <tr className="border-t border-[var(--border)]" key={index}>
                     {tableShowImages ? (
                       <td className="report-print-image-col p-2 text-center">
@@ -465,7 +477,9 @@ export default function ReportDetailPage() {
                     ) : null}
                     {columns.map((column) => (
                       <td className={`p-3 ${printColumnClass(column)}`} key={column}>
-                        {column === "الرابط" && row._downloadPath ? (
+                        {column === SHIPMENT_SERIAL_COLUMN ? (
+                          serial
+                        ) : column === "الرابط" && row._downloadPath ? (
                           <button
                             className="text-[#0f766e] underline hover:opacity-80 print:text-inherit print:no-underline"
                             onClick={() => downloadFile(String(row._downloadPath))}
@@ -504,8 +518,11 @@ export default function ReportDetailPage() {
                       </td>
                     ) : null}
                   </tr>
+                    );
+                  })()
                 )
-              )
+              );
+              })()
             ) : (
               <tr>
                 <td className="p-4 text-[var(--muted)]" colSpan={Math.max(columns.length, 1) + printableExtraColumns + (showShipmentLinks ? 1 : 0)}>
@@ -518,7 +535,10 @@ export default function ReportDetailPage() {
             <tfoot className="table-head font-bold">
               <tr>
                 {tableShowImages ? <td className="p-3" /> : null}
-                {columns.map((column, index) => {
+                {columns.map((column) => {
+                  if (column === SHIPMENT_SERIAL_COLUMN) {
+                    return <td className="p-3" key={column} />;
+                  }
                   if (column === "عدد الكراتين") {
                     return (
                       <td className="p-3" key={column}>
@@ -535,7 +555,7 @@ export default function ReportDetailPage() {
                   }
                   return (
                     <td className="p-3" key={column}>
-                      {index === 0 ? ui("الإجمالي") : ""}
+                      {column === "رقم الفاتورة" ? ui("الإجمالي") : ""}
                     </td>
                   );
                 })}

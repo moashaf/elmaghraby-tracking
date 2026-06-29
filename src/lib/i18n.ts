@@ -49,7 +49,7 @@ export const DICT: Dictionary = {
   "dashboard.viewAll": { ar: "عرض الكل", en: "View all", zh: "查看全部" },
   "dashboard.empty": { ar: "لا توجد بيانات لعرضها.", en: "No data to show.", zh: "暂无数据。" },
 
-  "shipment.number": { ar: "رقم الشحنة", en: "Invoice no.", zh: "发票号" },
+  "shipment.number": { ar: "رقم الفاتورة", en: "Invoice no.", zh: "发票号" },
   "shipment.company": { ar: "الشركة", en: "Company", zh: "公司" },
   "shipment.supplier": { ar: "المورد", en: "Supplier", zh: "供应商" },
   "shipment.status": { ar: "الحالة", en: "Status", zh: "状态" },

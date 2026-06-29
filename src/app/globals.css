@@ -276,6 +276,14 @@ html.dark .table-head {
     print-color-adjust: exact;
   }
 
+  .report-print-col-serial {
+    width: 8mm;
+    min-width: 8mm;
+    max-width: 10mm;
+    text-align: center !important;
+    font-size: 11px !important;
+  }
+
   .report-print-col-sku {
     width: 24mm;
     min-width: 24mm;

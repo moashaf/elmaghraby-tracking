@@ -182,7 +182,7 @@ export default function ShipmentsPage() {
     const rows = filteredShipments.map((shipment) => {
       const invoiceFile = invoiceByShipmentId.get(shipment.id);
       return {
-        [tr("رقم الشحنة", "Shipment no.")]: invoiceFile ? displayInvoiceNumber(invoiceFile) : "-",
+        [tr("رقم الفاتورة", "Shipment no.")]: invoiceFile ? displayInvoiceNumber(invoiceFile) : "-",
         ACID: shipment.acid,
       [tr("الشركة", "Company")]: shipment.companies?.name_ar ?? "-",
       [tr("عدد الكراتين", "Cartons")]: shipment.total_cartons ?? "",
@@ -191,21 +191,21 @@ export default function ShipmentsPage() {
       ),
       [tr("القيمة ($)", "Value (USD)")]: shipment.value_usd ?? "",
       [tr("تاريخ الشحن", "Shipped")]: formatDisplayDate(shipment.shipped_at, lang),
-      [tr("تاريخ الوصول", "ETA")]: formatDisplayDate(shipment.eta, lang),
+      [tr("تاريخ الوصول المتوقع", "ETA")]: formatDisplayDate(shipment.eta, lang),
       [tr("الحالة", "Status")]: statusLabel(shipment.status),
       [tr("نوع البضاعة", "Cargo type")]: shipment.shipment_type || "-",
       };
     });
 
     rows.push({
-      [tr("رقم الشحنة", "Shipment no.")]: tr("الإجمالي", "Total"),
+      [tr("رقم الفاتورة", "Shipment no.")]: tr("الإجمالي", "Total"),
       ACID: "",
       [tr("الشركة", "Company")]: "",
       [tr("عدد الكراتين", "Cartons")]: listTotals.cartons,
       [tr("عدد الحاويات", "Containers")]: listTotals.containers,
       [tr("القيمة ($)", "Value (USD)")]: "",
       [tr("تاريخ الشحن", "Shipped")]: "",
-      [tr("تاريخ الوصول", "ETA")]: "",
+      [tr("تاريخ الوصول المتوقع", "ETA")]: "",
       [tr("الحالة", "Status")]: "",
       [tr("نوع البضاعة", "Cargo type")]: "",
     });
@@ -289,13 +289,13 @@ export default function ShipmentsPage() {
           <table className="report-print-table table-nowrap table-compact w-full text-sm">
             <thead className="table-head">
               <tr>
-                <th className="text-right">{ui("رقم الشحنة")}</th>
+                <th className="text-right">{ui("رقم الفاتورة")}</th>
                 <th className="text-right">{ui("نوع البضاعة")}</th>
                 <th className="text-right">{ui("عدد الكراتين")}</th>
                 <th className="text-right">{ui("عدد الحاويات")}</th>
                 <th className="text-right">{ui("قيمة الشحنة (USD)")}</th>
                 <th className="text-right">{ui("تاريخ الشحن")}</th>
-                <th className="text-right">{ui("تاريخ الوصول")}</th>
+                <th className="text-right">{ui("تاريخ الوصول المتوقع")}</th>
                 <th className="text-right">ACID</th>
                 <th className="text-right">{ui("الحالة")}</th>
                 <th className="text-right">{ui("الشركة")}</th>

@@ -334,13 +334,14 @@ export default function DashboardPage() {
               <table className="table-nowrap table-compact w-full text-sm">
                 <thead className="table-head">
                   <tr>
+                    <th className="text-right w-10">{ui("م")}</th>
                     <th className="text-right">{t("shipment.number")}</th>
                     <th className="text-right">{ui("نوع البضاعة")}</th>
                     <th className="text-right">{ui("عدد الكراتين")}</th>
                     <th className="text-right">{ui("عدد الحاويات")}</th>
                     <th className="text-right">{ui("قيمة الشحنة (USD)")}</th>
                     <th className="text-right">{ui("تاريخ الشحن")}</th>
-                    <th className="text-right">{ui("تاريخ الوصول")}</th>
+                    <th className="text-right">{ui("تاريخ الوصول المتوقع")}</th>
                     <th className="text-right">ACID</th>
                     <th className="text-right">{t("shipment.status")}</th>
                     <th className="text-right">{t("shipment.company")}</th>
@@ -350,15 +351,16 @@ export default function DashboardPage() {
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td className="p-4 text-[var(--muted)]" colSpan={11}>
+                      <td className="p-4 text-[var(--muted)]" colSpan={12}>
                         {ui("جاري التحميل...")}
                       </td>
                     </tr>
                   ) : recentShipments.length ? (
-                    recentShipments.map((shipment) => {
+                    recentShipments.map((shipment, index) => {
                       const invoiceFile = invoiceByShipmentId.get(shipment.id);
                       return (
                       <tr className="row-hover border-t border-[var(--border)]" key={shipment.id}>
+                        <td className="text-center text-[var(--muted)]">{index + 1}</td>
                         <td className="font-semibold">
                           {invoiceFile ? displayInvoiceNumber(invoiceFile) : "-"}
                         </td>
@@ -385,7 +387,7 @@ export default function DashboardPage() {
                     })
                   ) : (
                     <tr>
-                      <td className="p-4 text-[var(--muted)]" colSpan={11}>
+                      <td className="p-4 text-[var(--muted)]" colSpan={12}>
                         {lang === "ar" ? "لا توجد شحنات بعد." : lang === "zh" ? "暂无货运。" : "No shipments yet."}
                       </td>
                     </tr>
@@ -394,6 +396,7 @@ export default function DashboardPage() {
                 {recentShipments.length ? (
                   <tfoot className="table-head font-bold">
                     <tr>
+                      <td />
                       <td>{lang === "ar" ? "الإجمالي" : lang === "zh" ? "合计" : "Total"}</td>
                       <td />
                       <td>{recentTotals.cartons.toLocaleString(languageToLocale(lang))}</td>

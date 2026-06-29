@@ -569,7 +569,7 @@ export const INLINE_TRANSLATIONS: Record<string, InlineEntry> = {
     "en": "Print / PDF",
     "zh": "打印 / PDF"
   },
-  "رقم الشحنة": {
+  "رقم الفاتورة": {
     "en": "Invoice no.",
     "zh": "发票号"
   },
@@ -941,11 +941,11 @@ export const INLINE_TRANSLATIONS: Record<string, InlineEntry> = {
     "en": "Value (USD)",
     "zh": "价值（美元）"
   },
-  "تاريخ الوصول": {
+  "تاريخ الوصول المتوقع": {
     "en": "ETA",
     "zh": "预计到达"
   },
-  "بحث برقم الشحنة أو ACID...": {
+  "بحث برقم الفاتورة أو ACID...": {
     "en": "Search by invoice no. or ACID...",
     "zh": "按发票号或 ACID 搜索..."
   },

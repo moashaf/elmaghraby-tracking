@@ -143,9 +143,9 @@ export function productLinesToDetailRows(lines: ProductLine[], withImagePath = f
     الكرتين: row.cartons_count,
     "منتج جديد": row.is_new ? "نعم" : "لا",
     مفكك: row.is_disassembled ? "نعم" : "لا",
-    "رقم الشحنة": row.invoice_file_name ? displayInvoiceNumber(row.invoice_file_name) : "-",
+    "رقم الفاتورة": row.invoice_file_name ? displayInvoiceNumber(row.invoice_file_name) : "-",
     ACID: row.acid,
-    "تاريخ الوصول": row.eta,
+    "تاريخ الوصول المتوقع": row.eta,
     الحالة: row.status,
     ...(withImagePath && row.image_path ? { _imagePath: row.image_path } : {}),
   }));

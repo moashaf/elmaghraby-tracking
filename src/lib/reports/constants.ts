@@ -33,6 +33,9 @@ export function supportsProductImages(slug: string) {
   return PRODUCT_IMAGE_REPORT_SLUGS.includes(slug as ReportSlug);
 }
 
+/** Serial number column in shipment tables (مسلسل). */
+export const SHIPMENT_SERIAL_COLUMN = "م";
+
 export const SHIPMENT_LINK_REPORT_SLUGS = [
   "summary",
   "in-sea",
