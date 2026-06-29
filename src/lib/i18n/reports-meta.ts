@@ -12,9 +12,9 @@ const REPORT_META: Record<ReportSlug, ReportMeta> = {
   summary: {
     title: { ar: "ملخص الشحنات", en: "Shipment summary", zh: "货运汇总" },
     description: {
-      ar: "جميع الشحنات مرتبة برقم الفاتورة (ملف INV).",
-      en: "All shipments sorted by invoice number (INV file).",
-      zh: "按发票号（INV 文件）排序的全部货运。",
+      ar: "الشحنات المفتوحة مرتبة برقم الفاتورة (ملف INV) — بدون المغلقة.",
+      en: "Open shipments sorted by invoice number (INV file), excluding closed.",
+      zh: "按发票号排序的在途货运（不含已关闭）。",
     },
     dateFilter: "eta",
     dateHint: {

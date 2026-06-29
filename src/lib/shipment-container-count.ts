@@ -57,3 +57,6 @@ export function computeShipmentStatusSummary(
 }
 
 export const SHIPMENT_STATUS_SORT_ORDER: ShipmentStatus[] = ["in_sea", "customs", "closed"];
+
+/** Statuses shown in the open-shipment summary (excludes closed). */
+export const OPEN_SHIPMENT_STATUS_SORT_ORDER: ShipmentStatus[] = ["in_sea", "customs"];

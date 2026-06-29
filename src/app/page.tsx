@@ -6,7 +6,6 @@ import {
   AlertTriangle,
   Anchor,
   Boxes,
-  CheckCircle2,
   Package,
   Plus,
   Layers3,
@@ -188,12 +187,12 @@ export default function DashboardPage() {
     const countContainers = (shipmentIds: string[]) =>
       shipmentIds.reduce((total, shipmentId) => total + (containerCountByShipment.get(shipmentId) ?? 0), 0);
 
-    const inSea = shipments.filter((shipment) => shipment.status === "in_sea");
-    const customs = shipments.filter((shipment) => shipment.status === "customs");
-    const closed = shipments.filter((shipment) => shipment.status === "closed");
-    const overdue = shipments.filter((shipment) => isShipmentDelayed(shipment.eta, shipment.status, systemSettings, today));
-    const etaSoon = shipments.filter(
-      (shipment) => shipment.status !== "closed" && shipment.eta >= today && shipment.eta <= in7Days
+    const openShipments = shipments.filter((shipment) => shipment.status !== "closed");
+    const inSea = openShipments.filter((shipment) => shipment.status === "in_sea");
+    const customs = openShipments.filter((shipment) => shipment.status === "customs");
+    const overdue = openShipments.filter((shipment) => isShipmentDelayed(shipment.eta, shipment.status, systemSettings, today));
+    const etaSoon = openShipments.filter(
+      (shipment) => shipment.eta >= today && shipment.eta <= in7Days
     );
     const openContainerCount = containers.filter((container) => openShipmentIds.has(container.shipment_id)).length;
     const newIncomingProducts = incomingProducts.filter((row) => relatedShipmentStatus(row) !== "closed").length;
@@ -201,7 +200,7 @@ export default function DashboardPage() {
 
     return {
       containerCountByShipment,
-      recentShipments: shipments.slice(0, 8),
+      recentShipments: openShipments.slice(0, 8),
       overdueShipments: overdue.slice(0, 5),
       etaSoonShipments: etaSoon.slice(0, 5),
       stats: [
@@ -228,14 +227,6 @@ export default function DashboardPage() {
           href: "/reports/delayed",
           icon: AlertTriangle,
           tone: "bg-red-50 text-red-700 border-red-200",
-        },
-        {
-          label: "status.closed",
-          value: closed.length,
-          helper: `الحاويات: ${countContainers(closed.map((shipment) => shipment.id))}`,
-          href: "/shipments?status=closed",
-          icon: CheckCircle2,
-          tone: "bg-slate-50 text-slate-700 border-slate-200",
         },
         {
           label: "alerts.incomingContainers",
@@ -266,7 +257,6 @@ export default function DashboardPage() {
         shipmentsByStatus: [
           { label: getStatusLabel("in_sea", lang), value: inSea.length, color: "#2563eb" },
           { label: getStatusLabel("customs", lang), value: customs.length, color: "#ea580c" },
-          { label: getStatusLabel("closed", lang), value: closed.length, color: "#64748b" },
         ],
         incoming: [
           { label: t("alerts.incomingContainers"), value: openContainerCount, color: "#059669" },
@@ -305,7 +295,7 @@ export default function DashboardPage() {
 
       <ErrorMessage message={error} />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-6">
         {stats.map((item) => {
           const Icon = item.icon;
           return (

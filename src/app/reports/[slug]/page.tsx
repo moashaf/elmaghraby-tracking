@@ -15,7 +15,7 @@ import { buildReport } from "@/lib/reports/build-reports";
 import type { ProductKindFilter } from "@/lib/reports/constants";
 import { supportsIncomingFilters, supportsProductImages, hasShipmentLinks, hasDocumentDownload, supportsReportPagination, INCOMING_PRODUCTS_PAGE_SIZE } from "@/lib/reports/constants";
 import { todayIso, type ReportRow } from "@/lib/reports/shipment-helpers";
-import { sumReportColumn, SHIPMENT_STATUS_SORT_ORDER, type ShipmentStatusSummary } from "@/lib/shipment-container-count";
+import { sumReportColumn, OPEN_SHIPMENT_STATUS_SORT_ORDER, type ShipmentStatusSummary } from "@/lib/shipment-container-count";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { fetchAllFromTable } from "@/lib/supabase/fetch-all";
 import type { ProductCategory } from "@/lib/types";
@@ -289,7 +289,7 @@ export default function ReportDetailPage() {
       exportRows.push({ [columns[0] ?? tc("ملخص")]: ui("ملخص حسب الحالة") });
       const summaryRow: Record<string, string | number | null> = { [columns[0] ?? ""]: ui("عدد الشحنات") };
       const containerRow: Record<string, string | number | null> = { [columns[0] ?? ""]: ui("عدد الحاويات") };
-      SHIPMENT_STATUS_SORT_ORDER.forEach((status) => {
+      OPEN_SHIPMENT_STATUS_SORT_ORDER.forEach((status) => {
         const label = getStatusLabel(status, lang);
         summaryRow[label] = statusSummary[status].shipments;
         containerRow[label] = statusSummary[status].containers;
@@ -586,7 +586,7 @@ export default function ReportDetailPage() {
             <thead className="table-head">
               <tr>
                 <th className="p-3 text-right w-40" />
-                {SHIPMENT_STATUS_SORT_ORDER.map((status) => (
+                {OPEN_SHIPMENT_STATUS_SORT_ORDER.map((status) => (
                   <th className="p-3 text-right" key={status}>
                     {getStatusLabel(status, lang)}
                   </th>
@@ -596,7 +596,7 @@ export default function ReportDetailPage() {
             <tbody>
               <tr className="border-t border-[var(--border)]">
                 <td className="p-3 font-semibold">{ui("عدد الشحنات")}</td>
-                {SHIPMENT_STATUS_SORT_ORDER.map((status) => (
+                {OPEN_SHIPMENT_STATUS_SORT_ORDER.map((status) => (
                   <td className="p-3 text-center text-xl font-bold" key={status}>
                     {statusSummary[status].shipments}
                   </td>
@@ -604,7 +604,7 @@ export default function ReportDetailPage() {
               </tr>
               <tr className="border-t border-[var(--border)]">
                 <td className="p-3 font-semibold">{ui("عدد الحاويات")}</td>
-                {SHIPMENT_STATUS_SORT_ORDER.map((status) => (
+                {OPEN_SHIPMENT_STATUS_SORT_ORDER.map((status) => (
                   <td className="p-3 text-center text-xl font-bold text-[#0f766e]" key={status}>
                     {statusSummary[status].containers}
                   </td>

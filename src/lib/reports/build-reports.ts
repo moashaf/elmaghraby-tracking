@@ -272,10 +272,11 @@ export async function buildReport(
   }
 
   if (slug === "summary") {
-    const sorted = sortShipmentsByInvoiceNumber(filtered);
+    const openShipments = filtered.filter((row) => row.status !== "closed");
+    const sorted = sortShipmentsByInvoiceNumber(openShipments);
     return {
       rows: sorted.map(shipmentToReportRow),
-      statusSummary: computeShipmentStatusSummary(filtered),
+      statusSummary: computeShipmentStatusSummary(openShipments),
     };
   }
 
