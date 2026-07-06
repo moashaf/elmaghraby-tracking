@@ -24,6 +24,7 @@ import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
 import { useSupabaseRealtimeReload } from "@/lib/supabase/use-realtime-reload";
 import type { Shipment } from "@/lib/types";
 import { useProfile } from "@/context/profile-context";
+import { SHIPMENT_TABLE_CLASS } from "@/lib/reports/constants";
 
 type ContainerRow = {
   id: string;
@@ -331,21 +332,21 @@ export default function DashboardPage() {
               </Link>
             </div>
             <div className="overflow-auto">
-              <table className="table-nowrap table-compact w-full text-sm">
+              <table className={SHIPMENT_TABLE_CLASS}>
                 <thead className="table-head">
                   <tr>
-                    <th className="text-right w-10">{ui("م")}</th>
-                    <th className="text-right">{t("shipment.number")}</th>
-                    <th className="text-right">{ui("نوع البضاعة")}</th>
+                    <th className="table-actions-first text-right">{t("actions.view")}</th>
+                    <th className="text-right w-8">{ui("م")}</th>
+                    <th className="text-right col-invoice">{t("shipment.number")}</th>
+                    <th className="text-right col-cargo-type">{ui("نوع البضاعة")}</th>
                     <th className="text-right">{ui("عدد الكراتين")}</th>
                     <th className="text-right">{ui("عدد الحاويات")}</th>
-                    <th className="text-right">{ui("قيمة الشحنة (USD)")}</th>
+                    <th className="text-right col-amount">{ui("قيمة الشحنة (USD)")}</th>
                     <th className="text-right">{ui("تاريخ الشحن")}</th>
                     <th className="text-right">{ui("تاريخ الوصول المتوقع")}</th>
-                    <th className="text-right">ACID</th>
+                    <th className="text-right col-acid">ACID</th>
                     <th className="text-right">{t("shipment.status")}</th>
                     <th className="text-right">{t("shipment.company")}</th>
-                    <th className="text-right">{t("actions.view")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -360,28 +361,30 @@ export default function DashboardPage() {
                       const invoiceFile = invoiceByShipmentId.get(shipment.id);
                       return (
                       <tr className="row-hover border-t border-[var(--border)]" key={shipment.id}>
+                        <td className="table-actions-first">
+                          <Link className="btn btn-secondary px-2 py-1 text-xs" href={`/shipments/${shipment.id}`}>
+                            {t("actions.view")}
+                          </Link>
+                        </td>
                         <td className="text-center text-[var(--muted)]">{index + 1}</td>
-                        <td className="font-semibold">
+                        <td className="font-semibold col-invoice">
                           {invoiceFile ? displayInvoiceNumber(invoiceFile) : "-"}
                         </td>
-                        <td>{shipment.shipment_type || "-"}</td>
+                        <td className="col-cargo-type" title={shipment.shipment_type || undefined}>
+                          {shipment.shipment_type || "-"}
+                        </td>
                         <td>{shipment.total_cartons ?? "-"}</td>
                         <td>{containerCountByShipment.get(shipment.id) ?? 0}</td>
-                        <td className="font-semibold">{formatUsd(shipment.value_usd)}</td>
+                        <td className="font-semibold col-amount">{formatUsd(shipment.value_usd)}</td>
                         <td>{formatDate(shipment.shipped_at, lang)}</td>
                         <td>{formatDate(shipment.eta, lang)}</td>
-                        <td className="font-semibold">
+                        <td className="font-semibold col-acid" title={shipment.acid}>
                           <Link href={`/shipments/${shipment.id}`}>{shipment.acid}</Link>
                         </td>
                         <td>
                           <StatusLabel status={shipment.status} lang={lang} />
                         </td>
                         <td>{shipment.companies?.name_ar ?? "-"}</td>
-                        <td>
-                          <Link className="btn btn-secondary text-xs" href={`/shipments/${shipment.id}`}>
-                            {t("actions.view")}
-                          </Link>
-                        </td>
                       </tr>
                     );
                     })
@@ -397,11 +400,12 @@ export default function DashboardPage() {
                   <tfoot className="table-head font-bold">
                     <tr>
                       <td />
+                      <td />
                       <td>{lang === "ar" ? "الإجمالي" : lang === "zh" ? "合计" : "Total"}</td>
                       <td />
                       <td>{recentTotals.cartons.toLocaleString(languageToLocale(lang))}</td>
                       <td>{recentTotals.containers.toLocaleString(languageToLocale(lang))}</td>
-                      <td colSpan={7} />
+                      <td colSpan={6} />
                     </tr>
                   </tfoot>
                 ) : null}

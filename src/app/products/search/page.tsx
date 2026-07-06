@@ -8,7 +8,7 @@ import { useLanguage } from "@/context/language-context";
 import { getStatusLabel } from "@/lib/i18n";
 import type { ShipmentStatus } from "@/lib/constants";
 import { displayInvoiceNumber, invoiceMapFromDocuments, shipmentInvoiceLabel } from "@/lib/shipment-invoice-number";
-import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { SHIPMENT_TABLE_CLASS } from "@/lib/reports/constants";
 
 type ProductDetail = {
   id: string;
@@ -37,7 +37,7 @@ function escapeIlike(term: string) {
 }
 
 export default function ProductSmartSearchPage() {
-  const { tr, lang } = useLanguage();
+  const { tr, lang, ui } = useLanguage();
   const [query, setQuery] = useState("");
   const [matches, setMatches] = useState<ProductDetail[]>([]);
   const [product, setProduct] = useState<ProductDetail | null>(null);
@@ -201,13 +201,13 @@ export default function ProductSmartSearchPage() {
           <div className="border-b border-[var(--border)] p-3 text-sm text-[var(--muted)]">
             وُجد {matches.length} منتج{matches.length >= MATCH_LIMIT ? ` (أول ${MATCH_LIMIT} نتيجة — حدّد البحث)` : ""} — اختر منتجا لعرض التفاصيل:
           </div>
-          <table className="min-w-full text-sm">
+          <table className={SHIPMENT_TABLE_CLASS}>
             <thead className="table-head">
               <tr>
-                <th className="p-3 text-right">SKU</th>
-                <th className="p-3 text-right">الاسم</th>
-                <th className="p-3 text-right">التصنيف</th>
-                <th className="p-3 text-right">إجراء</th>
+                <th className="table-actions-first text-right">{ui("إجراء")}</th>
+                <th className="text-right">SKU</th>
+                <th className="text-right">الاسم</th>
+                <th className="text-right">التصنيف</th>
               </tr>
             </thead>
             <tbody>
@@ -216,10 +216,7 @@ export default function ProductSmartSearchPage() {
                   className={`border-t border-[var(--border)] ${product?.id === row.id ? "bg-emerald-50/60" : ""}`}
                   key={row.id}
                 >
-                  <td className="p-3 font-semibold">{row.sku}</td>
-                  <td className="p-3">{row.name_ar}</td>
-                  <td className="p-3">{row.category ?? "—"}</td>
-                  <td className="p-3">
+                  <td className="table-actions-first">
                     <button
                       className="btn btn-secondary px-2 py-1 text-xs"
                       disabled={detailLoading && product?.id === row.id}
@@ -229,6 +226,9 @@ export default function ProductSmartSearchPage() {
                       {detailLoading && product?.id === row.id ? "..." : "عرض"}
                     </button>
                   </td>
+                  <td className="font-semibold">{row.sku}</td>
+                  <td>{row.name_ar}</td>
+                  <td>{row.category ?? "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -275,35 +275,36 @@ export default function ProductSmartSearchPage() {
 
           {!detailLoading && hasShipment ? (
             <div className="overflow-auto report-print-table-wrap">
-              <table className="report-print-table min-w-full text-sm">
+              <table className={`report-print-table ${SHIPMENT_TABLE_CLASS}`}>
                 <thead className="table-head">
                   <tr>
-                    <th className="p-3 text-right">الشحنة</th>
-                    <th className="p-3 text-right">ETA</th>
-                    <th className="p-3 text-right">الحالة</th>
-                    <th className="p-3 text-right">المورد</th>
-                    <th className="p-3 text-right">الشركة</th>
-                    <th className="p-3 text-right">الكمية</th>
-                    <th className="p-3 text-right">الحاويات</th>
+                    <th className="table-actions-first text-right print:hidden">{ui("عرض الشحنة")}</th>
+                    <th className="text-right col-invoice">الشحنة</th>
+                    <th className="text-right">ETA</th>
+                    <th className="text-right">الحالة</th>
+                    <th className="text-right">المورد</th>
+                    <th className="text-right">الشركة</th>
+                    <th className="text-right">الكمية</th>
+                    <th className="text-right">الحاويات</th>
                   </tr>
                 </thead>
                 <tbody>
                   {lines.map((row) => (
                     <tr className="border-t border-[var(--border)]" key={row.shipmentId}>
-                      <td className="p-3">
-                        <Link className="font-semibold text-[#0f766e] print:hidden" href={`/shipments/${row.shipmentId}`}>
-                          {row.shipmentNumber}
+                      <td className="table-actions-first print:hidden">
+                        <Link className="btn btn-secondary px-2 py-1 text-xs whitespace-nowrap" href={`/shipments/${row.shipmentId}`}>
+                          {ui("عرض الشحنة")}
                         </Link>
-                        <span className="hidden print:inline">{row.shipmentNumber}</span>
                       </td>
-                      <td className="p-3">{row.eta}</td>
-                      <td className="p-3">
+                      <td className="font-semibold col-invoice">{row.shipmentNumber}</td>
+                      <td>{row.eta}</td>
+                      <td>
                         <span className={`status-badge status-${row.status}`}>{getStatusLabel(row.status, lang)}</span>
                       </td>
-                      <td className="p-3">{row.supplier}</td>
-                      <td className="p-3">{row.company}</td>
-                      <td className="p-3">{row.quantity}</td>
-                      <td className="p-3">{row.containers}</td>
+                      <td>{row.supplier}</td>
+                      <td>{row.company}</td>
+                      <td>{row.quantity}</td>
+                      <td>{row.containers}</td>
                     </tr>
                   ))}
                 </tbody>

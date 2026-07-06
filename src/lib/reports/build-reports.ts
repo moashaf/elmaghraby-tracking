@@ -597,6 +597,7 @@ async function containersReport(from: string, to: string): Promise<{ rows: Repor
         المورد: row.shipments?.supplier ?? "-",
         "تاريخ الوصول المتوقع": row.shipments?.eta ?? "-",
         الحالة: row.shipments ? SHIPMENT_STATUS_LABELS[row.shipments.status] : "-",
+        _shipmentId: shipment.id,
       }));
     }),
   };
@@ -674,6 +675,7 @@ async function containerFilesReport(): Promise<{ rows: ReportRow[] } | { error: 
         "تاريخ الرفع": row.uploaded_at.slice(0, 10),
         "تاريخ الوصول المتوقع": shipment?.eta ?? "-",
         _downloadPath: row.storage_path,
+        ...(shipment?.id ? { _shipmentId: shipment.id } : {}),
       };
     }),
   };
@@ -715,6 +717,7 @@ async function costsReport(from: string, to: string): Promise<{ rows: ReportRow[
       أخرى: row.other_expenses,
       الإجمالي: row.total_cost,
       ملاحظات: row.closing_notes,
+      _shipmentId: shipment.id,
     })),
   };
 }

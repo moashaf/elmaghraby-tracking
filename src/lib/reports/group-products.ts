@@ -148,6 +148,7 @@ export function productLinesToDetailRows(lines: ProductLine[], withImagePath = f
     "تاريخ الوصول المتوقع": row.eta,
     الحالة: row.status,
     ...(withImagePath && row.image_path ? { _imagePath: row.image_path } : {}),
+    ...(row.shipment_id ? { _shipmentId: row.shipment_id } : {}),
   }));
 }
 

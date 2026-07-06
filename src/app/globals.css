@@ -522,6 +522,58 @@ html.dark .table-head {
   padding: 0.5rem 0.625rem;
 }
 
+/* Sticky actions column — first in RTL row, stays visible when scrolling horizontally */
+.table-actions-first {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background: var(--surface);
+  box-shadow: -6px 0 10px -6px rgba(15, 23, 42, 0.12);
+}
+
+.table-actions-first::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -1px;
+  width: 1px;
+  background: var(--border);
+}
+
+/* Tighter data cells for wide shipment tables */
+.table-data-dense {
+  font-size: 0.8125rem;
+}
+
+.table-data-dense th,
+.table-data-dense td {
+  padding: 0.375rem 0.5rem;
+}
+
+.col-cargo-type {
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.col-acid {
+  max-width: 10.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+}
+
+.col-invoice {
+  max-width: 7.5rem;
+}
+
+.col-amount {
+  max-width: 6.5rem;
+}
+
 .report-print-product-img {
   height: 4rem;
   width: 4rem;

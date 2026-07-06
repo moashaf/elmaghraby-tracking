@@ -44,7 +44,13 @@ export const SHIPMENT_LINK_REPORT_SLUGS = [
   "arriving-10",
   "closed",
   "ready-to-close",
+  "containers",
+  "costs",
+  "container-files",
 ] as const;
+
+/** Shared table classes for shipment listing tables */
+export const SHIPMENT_TABLE_CLASS = "table-nowrap table-compact table-data-dense w-full text-sm";
 
 export function hasShipmentLinks(slug: string) {
   return SHIPMENT_LINK_REPORT_SLUGS.includes(slug as (typeof SHIPMENT_LINK_REPORT_SLUGS)[number]);

@@ -12,8 +12,9 @@ import {
 } from "@/lib/constants";
 import { getNextActionLabel, getStatusLabel, languageToLocale } from "@/lib/i18n";
 import { downloadExcelWithOptionalImages } from "@/lib/excel-export";
-import { useProfile } from "@/context/profile-context";
+import { SHIPMENT_TABLE_CLASS } from "@/lib/reports/constants";
 import { useLanguage } from "@/context/language-context";
+import { useProfile } from "@/context/profile-context";
 import { formatUsd, formatDisplayDate } from "@/lib/format";
 import { readEmbeddedContainerCount } from "@/lib/shipment-container-count";
 import { displayInvoiceNumber, invoiceMapFromDocuments, shipmentInvoiceLabel } from "@/lib/shipment-invoice-number";
@@ -286,20 +287,20 @@ export default function ShipmentsPage() {
 
       <div className="card overflow-hidden report-print-table-wrap">
         <div className="overflow-auto">
-          <table className="report-print-table table-nowrap table-compact w-full text-sm">
+          <table className={`report-print-table ${SHIPMENT_TABLE_CLASS}`}>
             <thead className="table-head">
               <tr>
-                <th className="text-right">{ui("رقم الفاتورة")}</th>
-                <th className="text-right">{ui("نوع البضاعة")}</th>
+                <th className="table-actions-first text-right print:hidden">{ui("إجراءات")}</th>
+                <th className="text-right col-invoice">{ui("رقم الفاتورة")}</th>
+                <th className="text-right col-cargo-type">{ui("نوع البضاعة")}</th>
                 <th className="text-right">{ui("عدد الكراتين")}</th>
                 <th className="text-right">{ui("عدد الحاويات")}</th>
-                <th className="text-right">{ui("قيمة الشحنة (USD)")}</th>
+                <th className="text-right col-amount">{ui("قيمة الشحنة (USD)")}</th>
                 <th className="text-right">{ui("تاريخ الشحن")}</th>
                 <th className="text-right">{ui("تاريخ الوصول المتوقع")}</th>
-                <th className="text-right">ACID</th>
+                <th className="text-right col-acid">ACID</th>
                 <th className="text-right">{ui("الحالة")}</th>
                 <th className="text-right">{ui("الشركة")}</th>
-                <th className="text-right print:hidden">{ui("إجراءات")}</th>
               </tr>
             </thead>
             <tbody>
@@ -313,26 +314,8 @@ export default function ShipmentsPage() {
                   const invoiceFile = invoiceByShipmentId.get(shipment.id);
                   return (
                     <tr className="row-hover border-t border-[var(--border)]" key={shipment.id}>
-                      <td className="font-semibold">
-                        {invoiceFile ? displayInvoiceNumber(invoiceFile) : "-"}
-                      </td>
-                      <td>{shipment.shipment_type || "-"}</td>
-                      <td>{shipment.total_cartons ?? "-"}</td>
-                      <td>
-                        {readEmbeddedContainerCount(
-                          (shipment as Shipment & { shipment_containers?: unknown }).shipment_containers
-                        )}
-                      </td>
-                      <td className="font-semibold">{formatUsd(shipment.value_usd)}</td>
-                      <td>{formatDisplayDate(shipment.shipped_at, lang)}</td>
-                      <td>{formatDisplayDate(shipment.eta, lang)}</td>
-                      <td className="font-semibold">{shipment.acid}</td>
-                      <td>
-                        <span className={`status-badge status-${shipment.status}`}>{statusLabel(shipment.status)}</span>
-                      </td>
-                      <td>{shipment.companies?.name_ar ?? "-"}</td>
-                      <td className="print:hidden">
-                        <div className="flex flex-wrap gap-1.5">
+                      <td className="table-actions-first print:hidden">
+                        <div className="flex flex-wrap gap-1">
                           <Link className="btn btn-secondary px-2 py-1 text-xs" href={`/shipments/${shipment.id}/report`} title={ui("تقرير / PDF")}>
                             <Eye className="h-4 w-4" />
                           </Link>
@@ -359,6 +342,28 @@ export default function ShipmentsPage() {
                           ) : null}
                         </div>
                       </td>
+                      <td className="font-semibold col-invoice">
+                        {invoiceFile ? displayInvoiceNumber(invoiceFile) : "-"}
+                      </td>
+                      <td className="col-cargo-type" title={shipment.shipment_type || undefined}>
+                        {shipment.shipment_type || "-"}
+                      </td>
+                      <td>{shipment.total_cartons ?? "-"}</td>
+                      <td>
+                        {readEmbeddedContainerCount(
+                          (shipment as Shipment & { shipment_containers?: unknown }).shipment_containers
+                        )}
+                      </td>
+                      <td className="font-semibold col-amount">{formatUsd(shipment.value_usd)}</td>
+                      <td>{formatDisplayDate(shipment.shipped_at, lang)}</td>
+                      <td>{formatDisplayDate(shipment.eta, lang)}</td>
+                      <td className="font-semibold col-acid" title={shipment.acid}>
+                        {shipment.acid}
+                      </td>
+                      <td>
+                        <span className={`status-badge status-${shipment.status}`}>{statusLabel(shipment.status)}</span>
+                      </td>
+                      <td>{shipment.companies?.name_ar ?? "-"}</td>
                     </tr>
                   );
                 })
@@ -371,11 +376,12 @@ export default function ShipmentsPage() {
           {!loading && filteredShipments.length ? (
             <tfoot className="table-head font-bold">
               <tr>
+                <td className="print:hidden" />
                 <td>{ui("الإجمالي")}</td>
                 <td />
                 <td>{listTotals.cartons.toLocaleString(languageToLocale(lang))}</td>
                 <td>{listTotals.containers.toLocaleString(languageToLocale(lang))}</td>
-                <td colSpan={7} />
+                <td colSpan={6} />
               </tr>
             </tfoot>
           ) : null}

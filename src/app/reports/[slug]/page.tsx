@@ -13,7 +13,7 @@ import { findLocalizedReport, getStatusLabel, languageToLocale, localizeReportCe
 import { signedProductImageUrls } from "@/lib/product-images";
 import { buildReport } from "@/lib/reports/build-reports";
 import type { ProductKindFilter } from "@/lib/reports/constants";
-import { supportsIncomingFilters, supportsProductImages, hasShipmentLinks, hasDocumentDownload, supportsReportPagination, INCOMING_PRODUCTS_PAGE_SIZE, SHIPMENT_SERIAL_COLUMN } from "@/lib/reports/constants";
+import { supportsIncomingFilters, supportsProductImages, hasShipmentLinks, hasDocumentDownload, supportsReportPagination, INCOMING_PRODUCTS_PAGE_SIZE, SHIPMENT_SERIAL_COLUMN, SHIPMENT_TABLE_CLASS } from "@/lib/reports/constants";
 import { todayIso, type ReportRow } from "@/lib/reports/shipment-helpers";
 import { sumReportColumn, OPEN_SHIPMENT_STATUS_SORT_ORDER, type ShipmentStatusSummary } from "@/lib/shipment-container-count";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
@@ -29,6 +29,14 @@ function printColumnClass(column: string) {
   if (column === "التصنيف") return "report-print-col-category";
   if (column === "إجمالي الكرتين" || column === "إجمالي القطع") return "report-print-col-total";
   if (/^\d{2}-\d{2}-\d{4}$/.test(column)) return "report-print-col-eta";
+  return "";
+}
+
+function dataColumnClass(column: string) {
+  if (column === "نوع البضاعة") return "col-cargo-type";
+  if (column === "ACID") return "col-acid";
+  if (column === "رقم الفاتورة") return "col-invoice";
+  if (column === "قيمة الفاتورة ($)" || column === "قيمة الشحنة ($)") return "col-amount";
   return "";
 }
 
@@ -66,6 +74,8 @@ export default function ReportDetailPage() {
   const showImages = withImages && supportsProductImages(params.slug);
   const showIncomingFilters = supportsIncomingFilters(params.slug);
   const showShipmentLinks = hasShipmentLinks(params.slug);
+  const showShipmentActions =
+    showShipmentLinks || rows.some((row) => !row._sectionHeader && Boolean(row._shipmentId));
   const showDocumentLinks = params.slug === "customs-releases" || params.slug === "shipment-invoices";
   const showDocumentDownload = hasDocumentDownload(params.slug) && params.slug === "container-files";
 
@@ -425,23 +435,25 @@ export default function ReportDetailPage() {
       </div>
 
       <div className="card overflow-auto print:overflow-visible report-print-table-wrap">
-        <table className="report-print-table table-nowrap min-w-full text-sm">
+        <table className={`report-print-table min-w-full text-sm ${showShipmentActions ? SHIPMENT_TABLE_CLASS : "table-nowrap"}`}>
           <thead className="table-head">
             <tr>
-              {tableShowImages ? <th className="report-print-image-col p-3 text-center">{ui("صورة")}</th> : null}
+              {showShipmentActions ? (
+                <th className="table-actions-first p-2 text-right print:hidden">{ui("فتح الشحنة")}</th>
+              ) : null}
+              {tableShowImages ? <th className="report-print-image-col p-2 text-center">{ui("صورة")}</th> : null}
               {columns.map((column) => (
-                <th className={`p-3 text-right ${printColumnClass(column)}`} key={column}>
+                <th className={`p-2 text-right ${printColumnClass(column)} ${dataColumnClass(column)}`} key={column}>
                   {tc(column)}
                 </th>
               ))}
-              {showDocumentDownload ? <th className="p-3 text-right">{ui("تحميل")}</th> : null}
-              {showShipmentLinks ? <th className="p-3 text-right print:hidden">{ui("فتح الشحنة")}</th> : null}
+              {showDocumentDownload ? <th className="p-2 text-right">{ui("تحميل")}</th> : null}
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td className="p-4 text-[var(--muted)]" colSpan={Math.max(columns.length, 1) + printableExtraColumns + (showShipmentLinks ? 1 : 0)}>
+                <td className="p-4 text-[var(--muted)]" colSpan={Math.max(columns.length, 1) + printableExtraColumns + (showShipmentActions ? 1 : 0)}>
                   {ui("جاري التحميل...")}
                 </td>
               </tr>
@@ -451,7 +463,7 @@ export default function ReportDetailPage() {
                 return tableRows.map((row, index) =>
                 row._sectionHeader ? (
                   <tr className="report-section-row bg-slate-100 font-bold print:bg-slate-100" key={`section-${index}`}>
-                    <td className="p-3" colSpan={Math.max(columns.length, 1) + printableExtraColumns + (showShipmentLinks ? 1 : 0)}>
+                    <td className="p-3" colSpan={Math.max(columns.length, 1) + printableExtraColumns + (showShipmentActions ? 1 : 0)}>
                       {row._sectionHeader}
                     </td>
                   </tr>
@@ -461,6 +473,17 @@ export default function ReportDetailPage() {
                     const serial = shipmentSerial;
                     return (
                   <tr className="border-t border-[var(--border)]" key={index}>
+                    {showShipmentActions ? (
+                      <td className="table-actions-first p-2 print:hidden">
+                        {row._shipmentId ? (
+                          <Link className="btn btn-secondary px-2 py-1 text-xs whitespace-nowrap" href={`/shipments/${row._shipmentId}`}>
+                            {ui("عرض الشحنة")}
+                          </Link>
+                        ) : (
+                          <span className="text-[var(--muted)]">-</span>
+                        )}
+                      </td>
+                    ) : null}
                     {tableShowImages ? (
                       <td className="report-print-image-col p-2 text-center">
                         {row._imagePath && tableImageUrls.get(row._imagePath) ? (
@@ -476,7 +499,15 @@ export default function ReportDetailPage() {
                       </td>
                     ) : null}
                     {columns.map((column) => (
-                      <td className={`p-3 ${printColumnClass(column)}`} key={column}>
+                      <td
+                        className={`p-2 ${printColumnClass(column)} ${dataColumnClass(column)}`}
+                        key={column}
+                        title={
+                          column === "نوع البضاعة" || column === "ACID"
+                            ? String(row[column] ?? "")
+                            : undefined
+                        }
+                      >
                         {column === SHIPMENT_SERIAL_COLUMN ? (
                           serial
                         ) : column === "الرابط" && row._downloadPath ? (
@@ -504,18 +535,7 @@ export default function ReportDetailPage() {
                         </button>
                       </td>
                     ) : showDocumentDownload ? (
-                      <td className="p-3 text-[var(--muted)]">-</td>
-                    ) : null}
-                    {showShipmentLinks ? (
-                      <td className="p-3 print:hidden">
-                        {row._shipmentId ? (
-                          <Link className="btn btn-secondary px-2 py-1 text-xs whitespace-nowrap" href={`/shipments/${row._shipmentId}`}>
-                            {ui("عرض الشحنة")}
-                          </Link>
-                        ) : (
-                          <span className="text-[var(--muted)]">-</span>
-                        )}
-                      </td>
+                      <td className="p-2 text-[var(--muted)]">-</td>
                     ) : null}
                   </tr>
                     );
@@ -525,7 +545,7 @@ export default function ReportDetailPage() {
               })()
             ) : (
               <tr>
-                <td className="p-4 text-[var(--muted)]" colSpan={Math.max(columns.length, 1) + printableExtraColumns + (showShipmentLinks ? 1 : 0)}>
+                <td className="p-4 text-[var(--muted)]" colSpan={Math.max(columns.length, 1) + printableExtraColumns + (showShipmentActions ? 1 : 0)}>
                   {ui("لا توجد بيانات.")}
                 </td>
               </tr>
@@ -534,33 +554,33 @@ export default function ReportDetailPage() {
           {shipmentTotals ? (
             <tfoot className="table-head font-bold">
               <tr>
-                {tableShowImages ? <td className="p-3" /> : null}
+                {showShipmentActions ? <td className="table-actions-first p-2 print:hidden" /> : null}
+                {tableShowImages ? <td className="p-2" /> : null}
                 {columns.map((column) => {
                   if (column === SHIPMENT_SERIAL_COLUMN) {
-                    return <td className="p-3" key={column} />;
+                    return <td className="p-2" key={column} />;
                   }
                   if (column === "عدد الكراتين") {
                     return (
-                      <td className="p-3" key={column}>
+                      <td className="p-2" key={column}>
                         {shipmentTotals.cartons.toLocaleString(languageToLocale(lang))}
                       </td>
                     );
                   }
                   if (column === "عدد الحاويات") {
                     return (
-                      <td className="p-3" key={column}>
+                      <td className="p-2" key={column}>
                         {shipmentTotals.containers.toLocaleString(languageToLocale(lang))}
                       </td>
                     );
                   }
                   return (
-                    <td className="p-3" key={column}>
+                    <td className="p-2" key={column}>
                       {column === "رقم الفاتورة" ? ui("الإجمالي") : ""}
                     </td>
                   );
                 })}
-                {showDocumentDownload ? <td className="p-3" /> : null}
-                {showShipmentLinks ? <td className="p-3 print:hidden" /> : null}
+                {showDocumentDownload ? <td className="p-2" /> : null}
               </tr>
             </tfoot>
           ) : null}
