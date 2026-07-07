@@ -376,7 +376,7 @@ export function ShipmentForm({
             weiyun_ship_id: null,
             vessel_location_text: null,
             vessel_tracked_at: null,
-            vessel_tracking_status: null,
+            vessel_tracking_status: "pending",
           }),
       shipping_duration_days: routeDuration ?? (form.shipping_duration_days ? Number(form.shipping_duration_days) : null),
       shipment_type: form.shipment_type.trim() || "—",
