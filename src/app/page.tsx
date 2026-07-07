@@ -109,7 +109,6 @@ export default function DashboardPage() {
 
     try {
       const supabase = createClient();
-      await supabase.rpc("auto_move_shipments_to_customs");
       const [shipmentsResult, containersResult, newProductsResult, disassembledResult, documentsResult] = await Promise.all([
         supabase
           .from("shipments")
@@ -341,6 +340,7 @@ export default function DashboardPage() {
                     <th className="text-right col-cargo-type">{ui("نوع البضاعة")}</th>
                     <th className="text-right">{ui("عدد الكراتين")}</th>
                     <th className="text-right">{ui("عدد الحاويات")}</th>
+                    <th className="text-right">{ui("موقع المركب")}</th>
                     <th className="text-right col-amount">{ui("قيمة الشحنة (USD)")}</th>
                     <th className="text-right">{ui("تاريخ الشحن")}</th>
                     <th className="text-right">{ui("تاريخ الوصول المتوقع")}</th>
@@ -352,7 +352,7 @@ export default function DashboardPage() {
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td className="p-4 text-[var(--muted)]" colSpan={12}>
+                      <td className="p-4 text-[var(--muted)]" colSpan={13}>
                         {ui("جاري التحميل...")}
                       </td>
                     </tr>
@@ -375,6 +375,9 @@ export default function DashboardPage() {
                         </td>
                         <td>{shipment.total_cartons ?? "-"}</td>
                         <td>{containerCountByShipment.get(shipment.id) ?? 0}</td>
+                        <td className="text-[var(--muted)]" title={shipment.vessel_location_text ?? undefined}>
+                          {shipment.vessel_location_text?.trim() || "-"}
+                        </td>
                         <td className="font-semibold col-amount">{formatUsd(shipment.value_usd)}</td>
                         <td>{formatDate(shipment.shipped_at, lang)}</td>
                         <td>{formatDate(shipment.eta, lang)}</td>
@@ -390,7 +393,7 @@ export default function DashboardPage() {
                     })
                   ) : (
                     <tr>
-                      <td className="p-4 text-[var(--muted)]" colSpan={12}>
+                      <td className="p-4 text-[var(--muted)]" colSpan={13}>
                         {lang === "ar" ? "لا توجد شحنات بعد." : lang === "zh" ? "暂无货运。" : "No shipments yet."}
                       </td>
                     </tr>
@@ -405,6 +408,7 @@ export default function DashboardPage() {
                       <td />
                       <td>{recentTotals.cartons.toLocaleString(languageToLocale(lang))}</td>
                       <td>{recentTotals.containers.toLocaleString(languageToLocale(lang))}</td>
+                      <td />
                       <td colSpan={6} />
                     </tr>
                   </tfoot>

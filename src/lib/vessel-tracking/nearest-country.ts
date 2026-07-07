@@ -134,8 +134,8 @@ export function formatVesselLocationText(options: {
   const seaAr = options.seaArea ? seaAreaToArabic(options.seaArea) : null;
   const countryAr = options.nearestCountryAr?.trim() || null;
 
-  if (countryAr && seaAr) return `قرب ${countryAr} — ${seaAr}`;
-  if (countryAr) return `قرب ${countryAr}`;
+  if (countryAr && seaAr) return `${seaAr} (${countryAr})`;
+  if (countryAr) return countryAr;
   if (seaAr) return seaAr;
   return null;
 }

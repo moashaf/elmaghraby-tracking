@@ -6,19 +6,21 @@ import { weiyunResolveShip, type WeiyunShipHit } from "@/lib/vessel-tracking/wei
 export type VesselTrackResult = {
   hit: WeiyunShipHit | null;
   locationText: string | null;
+  lat: number | null;
+  lon: number | null;
   trackingStatus: "ok" | "not_found" | "pending" | "error";
 };
 
 export async function trackVesselByName(shipName: string): Promise<VesselTrackResult> {
   const trimmed = shipName.trim();
   if (!trimmed) {
-    return { hit: null, locationText: null, trackingStatus: "not_found" };
+    return { hit: null, locationText: null, lat: null, lon: null, trackingStatus: "not_found" };
   }
 
   try {
     const hit = await weiyunResolveShip(trimmed);
     if (!hit) {
-      return { hit: null, locationText: null, trackingStatus: "not_found" };
+      return { hit: null, locationText: null, lat: null, lon: null, trackingStatus: "not_found" };
     }
 
     const [vfLocation, mstPosition] = await Promise.all([
@@ -34,16 +36,21 @@ export async function trackVesselByName(shipName: string): Promise<VesselTrackRe
       nearestCountryAr: nearest?.nameAr ?? null,
     });
 
+    const lat = mstPosition?.lat ?? null;
+    const lon = mstPosition?.lon ?? null;
+
     if (!locationText) {
-      return { hit, locationText: null, trackingStatus: "pending" };
+      return { hit, locationText: null, lat, lon, trackingStatus: "pending" };
     }
 
     return {
       hit,
       locationText,
+      lat,
+      lon,
       trackingStatus: "ok",
     };
   } catch {
-    return { hit: null, locationText: null, trackingStatus: "error" };
+    return { hit: null, locationText: null, lat: null, lon: null, trackingStatus: "error" };
   }
 }

@@ -29,7 +29,7 @@ export async function GET(request: Request) {
 
   const { data: shipments, error } = await supabase
     .from("shipments")
-    .select("id, vessel_name")
+    .select("id, vessel_name, arrival_port, status")
     .eq("status", "in_sea")
     .not("vessel_name", "is", null)
     .limit(30);
@@ -41,12 +41,17 @@ export async function GET(request: Request) {
   let updated = 0;
   let notFound = 0;
   let failed = 0;
+  let movedToCustoms = 0;
 
   for (const shipment of shipments ?? []) {
     const outcome = await syncShipmentVesselTracking(supabase, shipment);
     if (outcome === "updated") updated++;
     else if (outcome === "not_found") notFound++;
     else if (outcome === "failed") failed++;
+    else if (outcome === "moved_to_customs") {
+      updated++;
+      movedToCustoms++;
+    }
   }
 
   return NextResponse.json({
@@ -55,6 +60,7 @@ export async function GET(request: Request) {
     updated,
     notFound,
     failed,
+    movedToCustoms,
   });
 }
 
@@ -76,7 +82,7 @@ export async function POST(request: Request) {
 
   const { data: shipment, error } = await writer.adminClient
     .from("shipments")
-    .select("id, vessel_name")
+    .select("id, vessel_name, arrival_port, status")
     .eq("id", shipmentId)
     .maybeSingle();
 

@@ -51,7 +51,6 @@ export default function ShipmentsPage() {
     if (!options?.silent) setLoading(true);
     try {
       const supabase = createClient();
-      await supabase.rpc("auto_move_shipments_to_customs");
       let request = supabase
         .from("shipments")
         .select("*,companies(name_ar),suppliers(name_ar),shipment_containers(count)")
@@ -190,6 +189,7 @@ export default function ShipmentsPage() {
       [tr("عدد الحاويات", "Containers")]: readEmbeddedContainerCount(
         (shipment as Shipment & { shipment_containers?: unknown }).shipment_containers
       ),
+      [tr("موقع المركب", "Vessel location")]: shipment.vessel_location_text?.trim() || "-",
       [tr("القيمة ($)", "Value (USD)")]: shipment.value_usd ?? "",
       [tr("تاريخ الشحن", "Shipped")]: formatDisplayDate(shipment.shipped_at, lang),
       [tr("تاريخ الوصول المتوقع", "ETA")]: formatDisplayDate(shipment.eta, lang),
@@ -204,6 +204,7 @@ export default function ShipmentsPage() {
       [tr("الشركة", "Company")]: "",
       [tr("عدد الكراتين", "Cartons")]: listTotals.cartons,
       [tr("عدد الحاويات", "Containers")]: listTotals.containers,
+      [tr("موقع المركب", "Vessel location")]: "",
       [tr("القيمة ($)", "Value (USD)")]: "",
       [tr("تاريخ الشحن", "Shipped")]: "",
       [tr("تاريخ الوصول المتوقع", "ETA")]: "",
@@ -295,6 +296,7 @@ export default function ShipmentsPage() {
                 <th className="text-right col-cargo-type">{ui("نوع البضاعة")}</th>
                 <th className="text-right">{ui("عدد الكراتين")}</th>
                 <th className="text-right">{ui("عدد الحاويات")}</th>
+                <th className="text-right">{ui("موقع المركب")}</th>
                 <th className="text-right col-amount">{ui("قيمة الشحنة (USD)")}</th>
                 <th className="text-right">{ui("تاريخ الشحن")}</th>
                 <th className="text-right">{ui("تاريخ الوصول المتوقع")}</th>
@@ -306,7 +308,7 @@ export default function ShipmentsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="p-4 text-[var(--muted)]" colSpan={11}>{ui("جاري التحميل...")}</td>
+                  <td className="p-4 text-[var(--muted)]" colSpan={12}>{ui("جاري التحميل...")}</td>
                 </tr>
               ) : filteredShipments.length ? (
                 filteredShipments.map((shipment) => {
@@ -354,6 +356,9 @@ export default function ShipmentsPage() {
                           (shipment as Shipment & { shipment_containers?: unknown }).shipment_containers
                         )}
                       </td>
+                      <td className="text-[var(--muted)]" title={shipment.vessel_location_text ?? undefined}>
+                        {shipment.vessel_location_text?.trim() || "-"}
+                      </td>
                       <td className="font-semibold col-amount">{formatUsd(shipment.value_usd)}</td>
                       <td>{formatDisplayDate(shipment.shipped_at, lang)}</td>
                       <td>{formatDisplayDate(shipment.eta, lang)}</td>
@@ -369,7 +374,7 @@ export default function ShipmentsPage() {
                 })
               ) : (
                 <tr>
-                  <td className="p-4 text-[var(--muted)]" colSpan={11}>{ui("لا توجد شحنات مطابقة.")}</td>
+                  <td className="p-4 text-[var(--muted)]" colSpan={12}>{ui("لا توجد شحنات مطابقة.")}</td>
                 </tr>
             )}
           </tbody>
@@ -381,6 +386,7 @@ export default function ShipmentsPage() {
                 <td />
                 <td>{listTotals.cartons.toLocaleString(languageToLocale(lang))}</td>
                 <td>{listTotals.containers.toLocaleString(languageToLocale(lang))}</td>
+                <td />
                 <td colSpan={6} />
               </tr>
             </tfoot>
