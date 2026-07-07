@@ -111,7 +111,8 @@ function shipmentToReportRow(row: ShipmentReportRow): ReportRow {
     الشركة: row.company,
     "عدد الكراتين": row.total_cartons ?? "-",
     "عدد الحاويات": row.containers_count,
-    "موقع المركب": row.vessel_location_text?.trim() || "-",
+    "موقع المركب":
+      row.vessel_name?.trim() && row.vessel_location_text?.trim() ? row.vessel_location_text.trim() : "-",
     "قيمة الفاتورة ($)": formatUsd(row.value_usd),
     "تاريخ الشحن": formatDisplayDate(row.shipped_at),
     "تاريخ الوصول المتوقع": formatDisplayDate(row.eta),

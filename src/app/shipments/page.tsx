@@ -189,7 +189,10 @@ export default function ShipmentsPage() {
       [tr("عدد الحاويات", "Containers")]: readEmbeddedContainerCount(
         (shipment as Shipment & { shipment_containers?: unknown }).shipment_containers
       ),
-      [tr("موقع المركب", "Vessel location")]: shipment.vessel_location_text?.trim() || "-",
+      [tr("موقع المركب", "Vessel location")]:
+        shipment.vessel_name?.trim() && shipment.vessel_location_text?.trim()
+          ? shipment.vessel_location_text
+          : "-",
       [tr("القيمة ($)", "Value (USD)")]: shipment.value_usd ?? "",
       [tr("تاريخ الشحن", "Shipped")]: formatDisplayDate(shipment.shipped_at, lang),
       [tr("تاريخ الوصول المتوقع", "ETA")]: formatDisplayDate(shipment.eta, lang),
@@ -357,7 +360,9 @@ export default function ShipmentsPage() {
                         )}
                       </td>
                       <td className="text-[var(--muted)]" title={shipment.vessel_location_text ?? undefined}>
-                        {shipment.vessel_location_text?.trim() || "-"}
+                        {shipment.vessel_name?.trim() && shipment.vessel_location_text?.trim()
+                          ? shipment.vessel_location_text
+                          : "-"}
                       </td>
                       <td className="font-semibold col-amount">{formatUsd(shipment.value_usd)}</td>
                       <td>{formatDisplayDate(shipment.shipped_at, lang)}</td>

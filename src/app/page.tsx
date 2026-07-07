@@ -376,7 +376,9 @@ export default function DashboardPage() {
                         <td>{shipment.total_cartons ?? "-"}</td>
                         <td>{containerCountByShipment.get(shipment.id) ?? 0}</td>
                         <td className="text-[var(--muted)]" title={shipment.vessel_location_text ?? undefined}>
-                          {shipment.vessel_location_text?.trim() || "-"}
+                          {shipment.vessel_name?.trim() && shipment.vessel_location_text?.trim()
+                            ? shipment.vessel_location_text
+                            : "-"}
                         </td>
                         <td className="font-semibold col-amount">{formatUsd(shipment.value_usd)}</td>
                         <td>{formatDate(shipment.shipped_at, lang)}</td>

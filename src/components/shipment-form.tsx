@@ -358,6 +358,7 @@ export function ShipmentForm({
     const etaValue =
       routeDuration && form.shipped_at ? addDaysToIsoDate(form.shipped_at, routeDuration) : form.eta;
 
+    const vesselName = form.vessel_name.trim() || null;
     const shipmentPayload = {
       acid: form.acid.trim(),
       company_id: form.company_id,
@@ -366,7 +367,17 @@ export function ShipmentForm({
       arrival_port: form.arrival_port.trim(),
       shipped_at: form.shipped_at,
       eta: etaValue,
-      vessel_name: form.vessel_name.trim() || null,
+      vessel_name: vesselName,
+      ...(vesselName
+        ? {}
+        : {
+            vessel_imo: null,
+            vessel_mmsi: null,
+            weiyun_ship_id: null,
+            vessel_location_text: null,
+            vessel_tracked_at: null,
+            vessel_tracking_status: null,
+          }),
       shipping_duration_days: routeDuration ?? (form.shipping_duration_days ? Number(form.shipping_duration_days) : null),
       shipment_type: form.shipment_type.trim() || "—",
       total_weight_kg: toNullableNumber(form.total_weight_kg),
@@ -472,7 +483,7 @@ export function ShipmentForm({
       return;
     }
 
-    const savedVesselName = form.vessel_name.trim();
+    const savedVesselName = vesselName;
     if (savedVesselName) {
       const session = await supabase.auth.getSession();
       const token = session.data.session?.access_token;

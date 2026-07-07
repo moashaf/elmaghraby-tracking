@@ -259,11 +259,11 @@ export default function ShipmentDetailsPage() {
         <InfoCard
           label={ui("موقع المركب")}
           value={
-            shipment.vessel_location_text?.trim()
-              ? shipment.vessel_location_text
-              : shipment.vessel_name?.trim()
-                ? ui("جاري التتبع...")
-                : ui("أضف اسم المركب أولا")
+            shipment.vessel_name?.trim()
+              ? shipment.vessel_location_text?.trim()
+                ? shipment.vessel_location_text
+                : ui("جاري التتبع...")
+              : ui("أضف اسم المركب أولا")
           }
         />
         <InfoCard label={ui("عدد الحاويات")} value={containers.length.toString()} />
