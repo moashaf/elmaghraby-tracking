@@ -1,3 +1,5 @@
+import { fetchMyShipTrackingPosition } from "@/lib/vessel-tracking/myshiptracking";
+import { formatVesselLocationText, nearestCountry } from "@/lib/vessel-tracking/nearest-country";
 import { fetchVesselLocationByImo } from "@/lib/vessel-tracking/vesselfinder";
 import { weiyunResolveShip, type WeiyunShipHit } from "@/lib/vessel-tracking/weiyun";
 
@@ -19,18 +21,26 @@ export async function trackVesselByName(shipName: string): Promise<VesselTrackRe
       return { hit: null, locationText: null, trackingStatus: "not_found" };
     }
 
-    if (!hit.imo) {
-      return { hit, locationText: null, trackingStatus: "pending" };
-    }
+    const [vfLocation, mstPosition] = await Promise.all([
+      hit.imo ? fetchVesselLocationByImo(hit.imo) : Promise.resolve(null),
+      hit.mmsi ? fetchMyShipTrackingPosition(hit.mmsi) : Promise.resolve(null),
+    ]);
 
-    const location = await fetchVesselLocationByImo(hit.imo);
-    if (!location?.locationText) {
+    const seaArea = mstPosition?.area || vfLocation?.area || null;
+    const nearest = mstPosition ? nearestCountry(mstPosition.lat, mstPosition.lon, seaArea) : null;
+
+    const locationText = formatVesselLocationText({
+      seaArea,
+      nearestCountryAr: nearest?.nameAr ?? null,
+    });
+
+    if (!locationText) {
       return { hit, locationText: null, trackingStatus: "pending" };
     }
 
     return {
       hit,
-      locationText: location.locationText,
+      locationText,
       trackingStatus: "ok",
     };
   } catch {
