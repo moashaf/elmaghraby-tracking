@@ -30,9 +30,9 @@ export async function GET(request: Request) {
   const { data: shipments, error } = await supabase
     .from("shipments")
     .select("id, vessel_name, arrival_port, status")
-    .eq("status", "in_sea")
+    .in("status", ["in_sea", "customs"])
     .not("vessel_name", "is", null)
-    .limit(30);
+    .limit(40);
 
   if (error) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
@@ -42,6 +42,7 @@ export async function GET(request: Request) {
   let notFound = 0;
   let failed = 0;
   let movedToCustoms = 0;
+  let revertedToInSea = 0;
 
   for (const shipment of shipments ?? []) {
     const outcome = await syncShipmentVesselTracking(supabase, shipment);
@@ -51,6 +52,9 @@ export async function GET(request: Request) {
     else if (outcome === "moved_to_customs") {
       updated++;
       movedToCustoms++;
+    } else if (outcome === "reverted_to_in_sea") {
+      updated++;
+      revertedToInSea++;
     }
   }
 
@@ -61,6 +65,7 @@ export async function GET(request: Request) {
     notFound,
     failed,
     movedToCustoms,
+    revertedToInSea,
   });
 }
 

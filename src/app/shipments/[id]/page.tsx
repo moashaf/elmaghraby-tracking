@@ -90,6 +90,38 @@ export default function ShipmentDetailsPage() {
 
     const firstRelatedError = containersResult.error || productsResult.error || costResult.error || timelineResult.error || documentsResult.error;
     if (firstRelatedError) setError(firstRelatedError.message);
+
+    const loadedShipment = shipmentResult.data as Shipment;
+    if (
+      loadedShipment.vessel_name?.trim() &&
+      (loadedShipment.status === "in_sea" || loadedShipment.status === "customs")
+    ) {
+      void syncVesselTracking(loadedShipment.id).then((synced) => {
+        if (synced) void load({ silent: true });
+      });
+    }
+  }
+
+  async function syncVesselTracking(shipmentId: string) {
+    const session = await createClient().auth.getSession();
+    const token = session.data.session?.access_token;
+    if (!token) return false;
+
+    try {
+      const response = await fetch("/api/vessel-tracking/sync", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ shipmentId }),
+      });
+      if (!response.ok) return false;
+      const body = (await response.json()) as { outcome?: string };
+      return body.outcome === "moved_to_customs" || body.outcome === "reverted_to_in_sea" || body.outcome === "updated";
+    } catch {
+      return false;
+    }
   }
 
   const reloadSilently = useCallback(() => load({ silent: true }), [params.id, ui]);

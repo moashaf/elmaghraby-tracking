@@ -247,7 +247,16 @@ export async function buildReport(
   if (slug === "customs" || slug === "ready-to-close") filtered = filtered.filter((row) => row.status === "customs");
   if (slug === "closed") filtered = filtered.filter((row) => row.status === "closed");
   if (slug === "delayed") {
-    filtered = filtered.filter((row) => isShipmentDelayed(row.eta, row.status, systemSettings ?? { delayed_after_eta_days: 0, require_costs_before_close: true, require_customs_document: false }));
+    filtered = filtered.filter((row) =>
+      isShipmentDelayed(
+        row.eta,
+        row.status,
+        systemSettings ?? { delayed_after_eta_days: 0, require_costs_before_close: true, require_customs_document: false },
+        undefined,
+        row.shipped_at,
+        row.shipping_duration_days
+      )
+    );
   }
   if (slug === "arriving-10") {
     filtered = filtered.filter((row) => row.status !== "closed" && row.eta >= today && row.eta <= next10Iso);

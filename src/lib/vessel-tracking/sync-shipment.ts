@@ -9,7 +9,21 @@ export type VesselSyncShipment = {
   status?: string | null;
 };
 
-export type VesselSyncOutcome = "updated" | "not_found" | "failed" | "skipped" | "moved_to_customs";
+export type VesselSyncOutcome =
+  | "updated"
+  | "not_found"
+  | "failed"
+  | "skipped"
+  | "moved_to_customs"
+  | "reverted_to_in_sea";
+
+function canCheckPortPosition(
+  lat: number | null,
+  lon: number | null,
+  arrivalPort: string | null | undefined
+) {
+  return lat != null && lon != null && (arrivalPort ?? "").trim() !== "";
+}
 
 export async function syncShipmentVesselTracking(
   supabase: SupabaseClient,
@@ -44,12 +58,9 @@ export async function syncShipmentVesselTracking(
       return "failed";
     }
 
-    const arrivedAtPort =
-      shipment.status === "in_sea" &&
-      result.lat != null &&
-      result.lon != null &&
-      (shipment.arrival_port ?? "").trim() !== "" &&
-      isVesselAtArrivalPort(result.lat, result.lon, shipment.arrival_port!);
+    const hasPosition = canCheckPortPosition(result.lat, result.lon, shipment.arrival_port);
+    const atPort =
+      hasPosition && isVesselAtArrivalPort(result.lat!, result.lon!, shipment.arrival_port!);
 
     const updatePayload: Record<string, unknown> = {
       vessel_imo: result.hit.imo ?? null,
@@ -61,15 +72,21 @@ export async function syncShipmentVesselTracking(
       updated_at: trackedAt,
     };
 
-    if (arrivedAtPort) {
+    if (shipment.status === "in_sea" && atPort) {
       updatePayload.status = "customs";
       updatePayload.previous_status = "in_sea";
       updatePayload.auto_moved_to_customs_at = trackedAt;
+    } else if (shipment.status === "customs" && hasPosition && !atPort) {
+      updatePayload.status = "in_sea";
+      updatePayload.previous_status = null;
+      updatePayload.auto_moved_to_customs_at = null;
     }
 
     await supabase.from("shipments").update(updatePayload).eq("id", shipment.id);
 
-    return arrivedAtPort ? "moved_to_customs" : "updated";
+    if (shipment.status === "in_sea" && atPort) return "moved_to_customs";
+    if (shipment.status === "customs" && hasPosition && !atPort) return "reverted_to_in_sea";
+    return "updated";
   } catch {
     await supabase
       .from("shipments")

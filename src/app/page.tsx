@@ -190,7 +190,16 @@ export default function DashboardPage() {
     const openShipments = shipments.filter((shipment) => shipment.status !== "closed");
     const inSea = openShipments.filter((shipment) => shipment.status === "in_sea");
     const customs = openShipments.filter((shipment) => shipment.status === "customs");
-    const overdue = openShipments.filter((shipment) => isShipmentDelayed(shipment.eta, shipment.status, systemSettings, today));
+    const overdue = openShipments.filter((shipment) =>
+      isShipmentDelayed(
+        shipment.eta,
+        shipment.status,
+        systemSettings,
+        today,
+        shipment.shipped_at,
+        shipment.shipping_duration_days
+      )
+    );
     const etaSoon = openShipments.filter(
       (shipment) => shipment.eta >= today && shipment.eta <= in7Days
     );

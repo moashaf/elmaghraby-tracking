@@ -31,14 +31,23 @@ export async function fetchSystemSettings(): Promise<SystemSettings> {
   };
 }
 
-/** Shipment is overdue when today is past ETA + grace days (settings). */
+/** Shipment is overdue when still in sea past shipped_at + duration (or ETA + grace). */
 export function isShipmentDelayed(
   eta: string | null | undefined,
   status: string,
   settings: SystemSettings,
-  today = todayIso()
+  today = todayIso(),
+  shippedAt?: string | null,
+  shippingDurationDays?: number | null
 ): boolean {
-  if (status === "closed" || !eta) return false;
+  if (status !== "in_sea") return false;
+
+  if (shippedAt && shippingDurationDays != null && shippingDurationDays > 0) {
+    const threshold = addDaysToIsoDate(shippedAt, shippingDurationDays);
+    return today > threshold;
+  }
+
+  if (!eta) return false;
   const threshold = addDaysToIsoDate(eta, settings.delayed_after_eta_days ?? 0);
   return today > threshold;
 }
