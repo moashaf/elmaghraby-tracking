@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local reverse-engineering scratch
+tmp-*.js
+tmp-*.txt
+tmp-*.mjs
+tmp-*.json

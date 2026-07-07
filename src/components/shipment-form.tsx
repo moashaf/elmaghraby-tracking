@@ -42,6 +42,7 @@ const emptyForm: ShipmentFormValues = {
   arrival_port: "",
   shipped_at: today,
   eta: today,
+  vessel_name: "",
   shipping_duration_days: "",
   shipment_type: "",
   total_weight_kg: "",
@@ -80,6 +81,7 @@ function formFromShipment(shipment?: Shipment): ShipmentFormValues {
     arrival_port: shipment.arrival_port,
     shipped_at: shipment.shipped_at,
     eta: shipment.eta,
+    vessel_name: shipment.vessel_name ?? "",
     shipping_duration_days: shipment.shipping_duration_days?.toString() ?? "",
     shipment_type: shipment.shipment_type ?? "",
     total_weight_kg: shipment.total_weight_kg?.toString() ?? "",
@@ -364,6 +366,7 @@ export function ShipmentForm({
       arrival_port: form.arrival_port.trim(),
       shipped_at: form.shipped_at,
       eta: etaValue,
+      vessel_name: form.vessel_name.trim() || null,
       shipping_duration_days: routeDuration ?? (form.shipping_duration_days ? Number(form.shipping_duration_days) : null),
       shipment_type: form.shipment_type.trim() || "—",
       total_weight_kg: toNullableNumber(form.total_weight_kg),
@@ -469,6 +472,22 @@ export function ShipmentForm({
       return;
     }
 
+    const savedVesselName = form.vessel_name.trim();
+    if (savedVesselName) {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      if (token) {
+        void fetch("/api/vessel-tracking/sync", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ shipmentId }),
+        }).catch(() => undefined);
+      }
+    }
+
     if (onSaved) {
       onSaved();
       return;
@@ -569,6 +588,17 @@ export function ShipmentForm({
                 value={form.arrival_port}
                 onChange={(value) => setField("arrival_port", value)}
                 placeholder={ui("اختر ميناء الوصول")}
+              />
+            </label>
+            <label className="label">
+              {ui("اسم المركب (اختياري)")}
+              <input
+                className={fieldClass}
+                placeholder={ui("مثال: TIGER LONGKOU")}
+                readOnly={readOnly}
+                disabled={disabled}
+                value={form.vessel_name}
+                onChange={(event) => setField("vessel_name", event.target.value)}
               />
             </label>
             <label className="label">

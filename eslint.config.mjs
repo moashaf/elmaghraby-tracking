@@ -13,7 +13,19 @@ const eslintConfig = defineConfig([
     "build/**",
     "src-tauri/target/**",
     "next-env.d.ts",
+    // Local scratch / reverse-engineering artifacts.
+    "tmp-*.js",
+    "tmp-*.txt",
+    "scripts/**/*.mjs",
   ]),
+  {
+    rules: {
+      // This rule is too noisy for our current patterns (async loaders in effects).
+      "react-hooks/set-state-in-effect": "off",
+      // We intentionally mirror callback refs via useRef assignment.
+      "react-hooks/refs": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

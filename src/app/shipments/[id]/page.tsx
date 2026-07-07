@@ -255,6 +255,17 @@ export default function ShipmentDetailsPage() {
         <InfoCard label={ui("تاريخ الشحن")} value={shipment.shipped_at} />
         <InfoCard label={ui("الوصول المتوقع")} value={shipment.eta} />
         <InfoCard label={ui("خروج جمرك (+15 يوم)")} value={customsExit} />
+        <InfoCard label={ui("اسم المركب")} value={shipment.vessel_name?.trim() ? shipment.vessel_name : ui("غير محدد")} />
+        <InfoCard
+          label={ui("موقع المركب")}
+          value={
+            shipment.vessel_location_text?.trim()
+              ? shipment.vessel_location_text
+              : shipment.vessel_name?.trim()
+                ? ui("جاري التتبع...")
+                : ui("أضف اسم المركب أولا")
+          }
+        />
         <InfoCard label={ui("عدد الحاويات")} value={containers.length.toString()} />
       </section>
 

@@ -1,0 +1,9 @@
+{
+  "crons": [
+    {
+      "path": "/api/vessel-tracking/sync",
+      "schedule": "0 */6 * * *"
+    }
+  ]
+}
+

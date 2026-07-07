@@ -941,10 +941,6 @@ export const INLINE_TRANSLATIONS: Record<string, InlineEntry> = {
     "en": "Value (USD)",
     "zh": "价值（美元）"
   },
-  "تاريخ الوصول المتوقع": {
-    "en": "ETA",
-    "zh": "预计到达"
-  },
   "بحث برقم الفاتورة أو ACID...": {
     "en": "Search by invoice no. or ACID...",
     "zh": "按发票号或 ACID 搜索..."

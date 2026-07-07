@@ -9,6 +9,7 @@ import { getStatusLabel } from "@/lib/i18n";
 import type { ShipmentStatus } from "@/lib/constants";
 import { displayInvoiceNumber, invoiceMapFromDocuments, shipmentInvoiceLabel } from "@/lib/shipment-invoice-number";
 import { SHIPMENT_TABLE_CLASS } from "@/lib/reports/constants";
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
 type ProductDetail = {
   id: string;
@@ -95,7 +96,7 @@ export default function ProductSmartSearchPage() {
         setError(containersResult.error.message);
         return;
       }
-      (containersResult.data ?? []).forEach((container) => {
+      (containersResult.data ?? []).forEach((container: { shipment_id: string }) => {
         const shipmentId = String(container.shipment_id);
         containerCounts.set(shipmentId, (containerCounts.get(shipmentId) ?? 0) + 1);
       });

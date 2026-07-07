@@ -58,6 +58,13 @@ export type Shipment = {
   arrival_port: string;
   shipped_at: string;
   eta: string;
+  vessel_name?: string | null;
+  vessel_imo?: string | null;
+  vessel_mmsi?: string | null;
+  weiyun_ship_id?: string | null;
+  vessel_location_text?: string | null;
+  vessel_tracked_at?: string | null;
+  vessel_tracking_status?: "pending" | "ok" | "not_found" | "error" | null;
   shipping_duration_days: number | null;
   shipment_type: string;
   total_weight_kg: number | null;
@@ -148,6 +155,7 @@ export type ShipmentFormValues = {
   arrival_port: string;
   shipped_at: string;
   eta: string;
+  vessel_name: string;
   shipping_duration_days: string;
   shipment_type: string;
   total_weight_kg: string;
