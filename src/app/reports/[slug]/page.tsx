@@ -88,7 +88,10 @@ export default function ReportDetailPage() {
     });
   }, [showIncomingFilters]);
 
-  async function load(targetPage = page, exportAll = false) {
+  async function load(
+    targetPage = page,
+    options?: { exportAll?: boolean; forExcel?: boolean }
+  ) {
     if (!report) return;
     setError("");
     if (!isSupabaseConfigured()) {
@@ -97,6 +100,7 @@ export default function ReportDetailPage() {
       return;
     }
 
+    const exportAll = Boolean(options?.exportAll);
     setLoading(true);
     const result = await buildReport(params.slug, from, to, {
       categoryId: categoryId || undefined,
@@ -104,6 +108,7 @@ export default function ReportDetailPage() {
       page: paginatedReport && !exportAll ? targetPage : undefined,
       pageSize: paginatedReport && !exportAll ? INCOMING_PRODUCTS_PAGE_SIZE : undefined,
       exportAll: paginatedReport && exportAll,
+      forExcel: options?.forExcel,
     });
     setLoading(false);
 
@@ -222,7 +227,7 @@ export default function ReportDetailPage() {
     let rowsForPrint = dataRows;
 
     if (paginatedReport) {
-      const result = await load(page, true);
+      const result = await load(page, { exportAll: true });
       if (result && !("error" in result)) {
         rowsForPrint = result.rows.filter((row) => !row._sectionHeader);
         setPrintSnapshot(result.rows);
@@ -257,7 +262,7 @@ export default function ReportDetailPage() {
 
   async function exportExcel() {
     const exportResult = paginatedReport
-      ? await load(page, true)
+      ? await load(page, { exportAll: true, forExcel: true })
       : null;
 
     const sourceRows =

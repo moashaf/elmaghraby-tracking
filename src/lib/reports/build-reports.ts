@@ -15,6 +15,7 @@ import type { ProductKindFilter } from "@/lib/reports/constants";
 import { GROUPED_PRODUCT_REPORT_SLUGS, INCOMING_PRODUCTS_PAGE_SIZE } from "@/lib/reports/constants";
 import {
   groupProductLines,
+  formatEtaHeader,
   productLinesToDetailRows,
   statusLabel,
   type ProductLine,
@@ -186,6 +187,8 @@ export type BuildReportOptions = {
   pageSize?: number;
   /** When true, return all matching rows (e.g. Excel export) instead of one page. */
   exportAll?: boolean;
+  /** When true with exportAll, append daily ETA carton totals (incoming-products Excel only). */
+  forExcel?: boolean;
 };
 
 export type BuildReportResult = {
@@ -473,12 +476,45 @@ async function incomingProductsReport(
   const invoiceMap = await fetchInvoiceFileNamesByShipmentId();
   const lines = lightRowsToProductLines(pageLightRows, productById, shipmentById, invoiceMap);
 
+  const groupedRows = groupProductLines(lines, {
+    productKind: options.productKind,
+    categoryIds,
+    dateColumns,
+  });
+
+  // إجمالي كرتونات الوصول لكل يوم ETA — صف واحد في نهاية ملف Excel فقط.
+  const includeDailyTotals = Boolean(options.forExcel && options.exportAll);
+  let dailyTotalRows: ReportRow[] = [];
+  if (includeDailyTotals && dateColumns.length) {
+    const dailyCartons = new Map<string, number>();
+
+    for (const row of lightRows) {
+      const eta = shipmentById.get(row.shipment_id)?.eta ?? "";
+      if (!eta || !dateColumns.includes(eta)) continue;
+      dailyCartons.set(eta, (dailyCartons.get(eta) ?? 0) + Number(row.cartons_count ?? 0));
+    }
+
+    const footer: ReportRow = {
+      SKU: "إجمالي الوصول اليومي",
+      المنتج: "",
+      التصنيف: "",
+      "إجمالي الكرتين": 0,
+      "إجمالي القطع": "",
+    };
+
+    let grandCartons = 0;
+    for (const eta of dateColumns) {
+      const cartons = dailyCartons.get(eta) ?? 0;
+      grandCartons += cartons;
+      footer[formatEtaHeader(eta)] = cartons > 0 ? cartons : "-";
+    }
+    footer["إجمالي الكرتين"] = grandCartons;
+
+    dailyTotalRows = [footer];
+  }
+
   return {
-    rows: groupProductLines(lines, {
-      productKind: options.productKind,
-      categoryIds,
-      dateColumns,
-    }),
+    rows: includeDailyTotals ? [...groupedRows, ...dailyTotalRows] : groupedRows,
     totalRows,
     page: paginate ? page : 1,
     pageSize: paginate ? pageSize : totalRows,
