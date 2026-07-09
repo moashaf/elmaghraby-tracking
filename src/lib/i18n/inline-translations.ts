@@ -9,6 +9,8 @@ export const INLINE_TRANSLATIONS: Record<string, InlineEntry> = {
   "تاريخ الطلب": { en: "Order date", zh: "下单日期" },
   "عرض كموظف": { en: "View as staff", zh: "以员工视角查看" },
   "أمر الشراء غير موجود.": { en: "Purchase order not found.", zh: "未找到采购订单。" },
+  "اختر المورد.": { en: "Select a supplier.", zh: "请选择供应商。" },
+  "لا توجد شركة نشطة في النظام.": { en: "No active company in the system.", zh: "系统中没有启用的公司。" },
   "رقم الأمر": { en: "PO number", zh: "订单号" },
   "إجراء": { en: "Action", zh: "操作" },
   "بحث برقم الأمر...": { en: "Search by PO number...", zh: "按订单号搜索..." },

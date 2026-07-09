@@ -11,7 +11,6 @@ import { useLanguage } from "@/context/language-context";
 import { createClient } from "@/lib/supabase/client";
 import { fetchAllFromTable } from "@/lib/supabase/fetch-all";
 import type {
-  Company,
   Product,
   ProductCategory,
   PurchaseOrderFormValues,
@@ -41,6 +40,13 @@ function toPositiveNumber(value: string) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
+function findDefaultSupplier(suppliers: Supplier[]) {
+  return suppliers.find((row) => {
+    const normalized = row.name_ar.replace(/\s/g, "");
+    return normalized.includes("شمس") && (normalized.includes("خديجة") || normalized.includes("خديجه"));
+  });
+}
+
 type Props = {
   onSaved: (purchaseOrderId: string) => void;
   onCancel?: () => void;
@@ -51,7 +57,6 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
   const [form, setForm] = useState<PurchaseOrderFormValues>(emptyForm);
   const [items, setItems] = useState<PurchaseOrderItemDraft[]>([{ ...emptyItem }]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [companies, setCompanies] = useState<Company[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [showProductModal, setShowProductModal] = useState(false);
@@ -63,14 +68,29 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
       const supabase = createClient();
       const [suppliersResult, companiesResult, productsResult, categoriesResult] = await Promise.all([
         fetchAllFromTable<Supplier>(supabase, "suppliers", "id,name_ar,code,is_active", { column: "name_ar" }),
-        fetchAllFromTable<Company>(supabase, "companies", "id,name_ar,code,is_active", { column: "name_ar" }),
+        fetchAllFromTable<{ id: string; is_active: boolean }>(supabase, "companies", "id,is_active", {
+          column: "name_ar",
+        }),
         fetchAllFromTable<Product>(supabase, "products", "id,sku,name_ar,unit,is_active", { column: "sku" }),
         fetchAllFromTable<ProductCategory>(supabase, "product_categories", "id,name_ar,code,parent_id,is_active", {
           column: "name_ar",
         }),
       ]);
-      if (!suppliersResult.error) setSuppliers(suppliersResult.data.filter((row) => row.is_active));
-      if (!companiesResult.error) setCompanies(companiesResult.data.filter((row) => row.is_active));
+      const activeSuppliers = suppliersResult.error
+        ? []
+        : suppliersResult.data.filter((row) => row.is_active);
+      const activeCompanies = companiesResult.error
+        ? []
+        : companiesResult.data.filter((row) => row.is_active);
+      if (activeSuppliers.length) setSuppliers(activeSuppliers);
+
+      const defaultSupplier = findDefaultSupplier(activeSuppliers);
+      const defaultCompanyId = activeCompanies[0]?.id ?? "";
+      setForm((current) => ({
+        ...current,
+        supplier_id: defaultSupplier?.id ?? current.supplier_id,
+        company_id: defaultCompanyId || current.company_id,
+      }));
       if (!productsResult.error) setProducts(productsResult.data.filter((row) => row.is_active));
       if (!categoriesResult.error) setCategories(categoriesResult.data.filter((row) => row.is_active));
     })();
@@ -84,15 +104,6 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
         (row) => `${row.code ?? ""} ${row.name_ar}`
       ),
     [suppliers]
-  );
-  const companyOptions = useMemo(
-    () =>
-      toEntityOptions(
-        companies,
-        (row) => `${row.code ? `${row.code} — ` : ""}${row.name_ar}`,
-        (row) => `${row.code ?? ""} ${row.name_ar}`
-      ),
-    [companies]
   );
   const productOptions = useMemo(
     () =>
@@ -125,8 +136,12 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
       return cartons > 0 && unit > 0;
     });
 
-    if (!form.supplier_id || !form.company_id) {
-      setError(ui("اختر المورد والشركة."));
+    if (!form.supplier_id) {
+      setError(ui("اختر المورد."));
+      return;
+    }
+    if (!form.company_id) {
+      setError(ui("لا توجد شركة نشطة في النظام."));
       return;
     }
     if (!validItems.length) {
@@ -202,15 +217,6 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
               value={form.supplier_id}
               onChange={(value) => setForm((current) => ({ ...current, supplier_id: value }))}
               placeholder={ui("اختر المورد")}
-            />
-          </label>
-          <label className="label">
-            {ui("الشركة")}
-            <SearchableSelect
-              options={companyOptions}
-              value={form.company_id}
-              onChange={(value) => setForm((current) => ({ ...current, company_id: value }))}
-              placeholder={ui("اختر الشركة")}
             />
           </label>
           <label className="label">
