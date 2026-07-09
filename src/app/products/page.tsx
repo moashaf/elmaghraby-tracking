@@ -48,7 +48,7 @@ function productDeleteError(message: string) {
 
 export default function ProductsPage() {
   const { canWrite } = useProfile();
-  const { tr } = useLanguage();
+  const { tr, ui } = useLanguage();
   const [rows, setRows] = useState<Product[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [form, setForm] = useState<ProductForm>(emptyForm);
@@ -65,7 +65,7 @@ export default function ProductsPage() {
     setError("");
     if (!isSupabaseConfigured()) {
       setCategoriesLoading(false);
-      setError("اضبط ملف .env.local أولا بقيم Supabase.");
+      setError(ui("اضبط ملف .env.local أولا بقيم Supabase."));
       return;
     }
 
@@ -168,9 +168,9 @@ export default function ProductsPage() {
     if (result.error) {
       setSaving(false);
       if (result.error.message.includes("products_barcode_unique_idx")) {
-        setError("الباركود مستخدم لمنتج آخر.");
+        setError(ui("الباركود مستخدم لمنتج آخر."));
       } else if (result.error.message.includes("products_sku_key")) {
-        setError("كود SKU مستخدم لمنتج آخر.");
+        setError(ui("كود SKU مستخدم لمنتج آخر."));
       } else {
         setError(result.error.message);
       }
@@ -232,10 +232,11 @@ export default function ProductsPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title={tr("المنتجات", "Products")}
+        title={tr("المنتجات", "Products", "产品")}
         description={tr(
           "ابحث بالاسم أو SKU لإضافة أو تعديل صنف.",
-          "Search by name or SKU to add or edit a product."
+          "Search by name or SKU to add or edit a product.",
+          "按名称或 SKU 搜索以新增或编辑产品。"
         )}
       />
       <ErrorMessage message={error} />
@@ -244,21 +245,21 @@ export default function ProductsPage() {
         <form className="card grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-6" onSubmit={submit}>
           <input
             className="input"
-            placeholder={tr("SKU (اختياري)", "SKU (optional)")}
+            placeholder={tr("SKU (اختياري)", "SKU (optional)", "SKU（可选）")}
             value={form.sku}
             onChange={(event) => setForm({ ...form, sku: event.target.value })}
-            title={tr("اتركه فارغا لتوليد SKU تلقائيا", "Leave empty to auto-generate SKU")}
+            title={tr("اتركه فارغا لتوليد SKU تلقائيا", "Leave empty to auto-generate SKU", "留空则自动生成 SKU")}
           />
           <input
             className="input"
-            placeholder={tr("اسم المنتج", "Product name")}
+            placeholder={tr("اسم المنتج", "Product name", "产品名称")}
             required
             value={form.name_ar}
             onChange={(event) => setForm({ ...form, name_ar: event.target.value })}
           />
           <SearchableSelect
             options={categoryOptions}
-            placeholder={tr("ابحث عن الفئة...", "Search category...")}
+            placeholder={tr("ابحث عن الفئة...", "Search category...", "搜索类别...")}
             required
             value={form.category_id}
             onChange={(value) => setForm({ ...form, category_id: value })}
@@ -267,7 +268,7 @@ export default function ProductsPage() {
           <input
             className="input"
             inputMode="numeric"
-            placeholder="الباركود (اختياري)"
+            placeholder={tr("الباركود (اختياري)", "Barcode (optional)", "条形码（可选）")}
             value={form.barcode}
             onChange={(event) => setForm({ ...form, barcode: event.target.value })}
           />
@@ -276,12 +277,12 @@ export default function ProductsPage() {
             disabled
             readOnly
             value="piece"
-            title={tr("الوحدة الافتراضية", "Default unit")}
+            title={tr("الوحدة الافتراضية", "Default unit", "默认单位")}
           />
           <div className="flex flex-col gap-2 md:col-span-2 xl:col-span-1">
             <label className="btn btn-secondary cursor-pointer justify-center">
               <ImagePlus className="h-4 w-4" />
-              {tr("صورة (اختياري)", "Image (optional)")}
+              {tr("صورة (اختياري)", "Image (optional)", "图片（可选）")}
               <input
                 accept="image/*"
                 className="hidden"
@@ -319,7 +320,8 @@ export default function ProductsPage() {
             className="input pr-9"
             placeholder={tr(
               "ابحث بالاسم أو SKU أو الباركود — النتائج تظهر أثناء الكتابة",
-              "Search by name, SKU, or barcode — results appear as you type"
+              "Search by name, SKU, or barcode — results appear as you type",
+              "按名称、SKU 或条形码搜索（输入即显示结果）"
             )}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -328,8 +330,12 @@ export default function ProductsPage() {
         {hasQuery && !searching ? (
           <p className="mt-2 text-xs text-[var(--muted)]">
             {rows.length >= SEARCH_LIMIT
-              ? tr(`أول ${SEARCH_LIMIT} نتيجة — حدّد البحث أكثر`, `First ${SEARCH_LIMIT} results — refine your search`)
-              : tr(`${rows.length} نتيجة`, `${rows.length} result(s)`)}
+              ? tr(
+                  `أول ${SEARCH_LIMIT} نتيجة — حدّد البحث أكثر`,
+                  `First ${SEARCH_LIMIT} results — refine your search`,
+                  `前 ${SEARCH_LIMIT} 条结果—请缩小搜索范围`
+                )
+              : tr(`${rows.length} نتيجة`, `${rows.length} result(s)`, `${rows.length} 条结果`)}
           </p>
         ) : null}
       </div>
@@ -338,7 +344,8 @@ export default function ProductsPage() {
         <div className="card p-8 text-center text-sm text-[var(--muted)]">
           {tr(
             "ابدأ بالبحث لعرض المنتجات — لا يتم تحميل كل الأصناف مرة واحدة.",
-            "Start typing to search products — the full catalog is not loaded at once."
+            "Start typing to search products — the full catalog is not loaded at once.",
+            "开始输入以搜索产品（不会一次性加载全部产品）。"
           )}
         </div>
       ) : (
@@ -346,19 +353,19 @@ export default function ProductsPage() {
           <table className="min-w-full text-sm">
             <thead className="table-head">
               <tr>
-                <th className="p-3 text-right">SKU</th>
-                <th className="p-3 text-right">الاسم</th>
-                <th className="p-3 text-right">الباركود</th>
-                <th className="p-3 text-right">التصنيف</th>
-                <th className="p-3 text-right">الحالة</th>
-                <th className="p-3 text-right">إجراء</th>
+                <th className="p-3 text-right">{ui("SKU")}</th>
+                <th className="p-3 text-right">{ui("الاسم")}</th>
+                <th className="p-3 text-right">{ui("الباركود")}</th>
+                <th className="p-3 text-right">{ui("التصنيف")}</th>
+                <th className="p-3 text-right">{ui("الحالة")}</th>
+                <th className="p-3 text-right">{ui("إجراء")}</th>
               </tr>
             </thead>
             <tbody>
               {searching ? (
                 <tr>
                   <td className="p-4 text-[var(--muted)]" colSpan={6}>
-                    {tr("جاري البحث...", "Searching...")}
+                    {tr("جاري البحث...", "Searching...", "正在搜索...")}
                   </td>
                 </tr>
               ) : rows.length ? (
@@ -368,7 +375,7 @@ export default function ProductsPage() {
                     <td className="p-3">{row.name_ar}</td>
                     <td className="p-3">{row.barcode ?? "-"}</td>
                     <td className="p-3">{row.category ?? "-"}</td>
-                    <td className="p-3">{row.is_active ? "نشط" : "متوقف"}</td>
+                    <td className="p-3">{row.is_active ? ui("نشط") : ui("متوقف")}</td>
                     <td className="flex flex-wrap gap-2 p-3">
                       {canWrite ? (
                         <button
@@ -390,7 +397,7 @@ export default function ProductsPage() {
                           type="button"
                         >
                           <Edit2 className="h-4 w-4" />
-                          تعديل
+                          {ui("تعديل")}
                         </button>
                       ) : null}
                       {canWrite ? (
@@ -401,7 +408,7 @@ export default function ProductsPage() {
                           type="button"
                         >
                           <Trash2 className="h-4 w-4" />
-                          حذف
+                          {ui("حذف")}
                         </button>
                       ) : null}
                     </td>
@@ -410,7 +417,7 @@ export default function ProductsPage() {
               ) : (
                 <tr>
                   <td className="p-4 text-[var(--muted)]" colSpan={6}>
-                    {tr("لا توجد نتائج.", "No results.")}
+                    {tr("لا توجد نتائج.", "No results.", "暂无结果。")}
                   </td>
                 </tr>
               )}

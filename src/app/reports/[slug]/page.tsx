@@ -61,6 +61,7 @@ export default function ReportDetailPage() {
   const [categoryId, setCategoryId] = useState("");
   const [withImages, setWithImages] = useState(false);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
+  const [availableReceiptDates, setAvailableReceiptDates] = useState<string[]>([]);
   const [imageUrls, setImageUrls] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -87,6 +88,29 @@ export default function ReportDetailPage() {
       if (!result.error) setCategories(result.data);
     });
   }, [showIncomingFilters]);
+
+  const isChinaArrivals = params.slug === "china-arrivals";
+  useEffect(() => {
+    if (!isChinaArrivals) return;
+    void (async () => {
+      const supabase = createClient();
+      const result = await supabase
+        .from("purchase_order_delivery_batches")
+        .select("planned_date")
+        .eq("status", "scheduled")
+        .order("planned_date", { ascending: true });
+      if (result.error) return;
+      const dates = Array.from(
+        new Set(
+          (result.data ?? [])
+            .map((row) => (row as { planned_date: string | null }).planned_date)
+            .filter((d): d is string => Boolean(d))
+            .map((d) => String(d).slice(0, 10))
+        )
+      );
+      setAvailableReceiptDates(dates);
+    })();
+  }, [isChinaArrivals]);
 
   async function load(
     targetPage = page,
@@ -424,7 +448,29 @@ export default function ReportDetailPage() {
               onChange={setCategoryId}
             />
           ) : null}
-          {report.dateFilter !== "none" ? (
+          {isChinaArrivals ? (
+            <select
+              className="input"
+              value={from && to && from === to ? from : ""}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (!value) {
+                  setFrom("");
+                  setTo("");
+                  return;
+                }
+                setFrom(value);
+                setTo(value);
+              }}
+            >
+              <option value="">{ui("كل تواريخ الاستلام")}</option>
+              {availableReceiptDates.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          ) : report.dateFilter !== "none" ? (
             <>
               <input className="input" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
               <input className="input" type="date" value={to} onChange={(event) => setTo(event.target.value)} />

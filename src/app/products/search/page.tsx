@@ -137,7 +137,7 @@ export default function ProductSmartSearchPage() {
     if (!query.trim()) return;
 
     if (!isSupabaseConfigured()) {
-      setError("اضبط ملف .env.local أولا بقيم Supabase.");
+      setError(ui("اضبط ملف .env.local أولا بقيم Supabase."));
       return;
     }
 
@@ -161,7 +161,7 @@ export default function ProductSmartSearchPage() {
 
     const found = (productsResult.data ?? []) as ProductDetail[];
     if (!found.length) {
-      setError("لم يُعثر على منتج بهذا البحث.");
+      setError(ui("لم يُعثر على منتج بهذا البحث."));
       return;
     }
 
@@ -172,7 +172,7 @@ export default function ProductSmartSearchPage() {
     }
   }
 
-  const printTitle = useMemo(() => (product ? `تقرير منتج: ${product.sku} — ${product.name_ar}` : ""), [product]);
+  const printTitle = useMemo(() => (product ? `${ui("تقرير منتج")}: ${product.sku} — ${product.name_ar}` : ""), [product, ui]);
 
   return (
     <div className="report-print-root space-y-5">
@@ -180,8 +180,12 @@ export default function ProductSmartSearchPage() {
 
       <div className="print:hidden">
         <PageHeader
-          title={tr("بحث المنتجات الذكي", "Smart product search")}
-          description={tr("ابحث عن أي منتج — داخل شحنة أو غير مرتبط بشحنة.", "Search any product (in shipments or standalone).")}
+          title={tr("بحث المنتجات الذكي", "Smart product search", "智能产品搜索")}
+          description={tr(
+            "ابحث عن أي منتج — داخل شحنة أو غير مرتبط بشحنة.",
+            "Search any product (in shipments or standalone).",
+            "搜索任意产品（在货运内或独立产品）。"
+          )}
         />
       </div>
 
@@ -190,25 +194,35 @@ export default function ProductSmartSearchPage() {
       </div>
 
       <form className="card grid gap-3 p-4 md:grid-cols-[1fr_auto] print:hidden" onSubmit={search}>
-        <input className="input" placeholder="ابحث بالاسم أو SKU أو التصنيف أو الباركود" value={query} onChange={(event) => setQuery(event.target.value)} />
+        <input
+          className="input"
+          placeholder={ui("ابحث بالاسم أو SKU أو التصنيف أو الباركود")}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
         <button className="btn" disabled={loading} type="submit">
           <Search className="h-4 w-4" />
-          {loading ? "..." : "بحث"}
+          {loading ? ui("...") : ui("بحث")}
         </button>
       </form>
 
       {matches.length > 1 ? (
         <section className="card overflow-auto print:hidden">
           <div className="border-b border-[var(--border)] p-3 text-sm text-[var(--muted)]">
-            وُجد {matches.length} منتج{matches.length >= MATCH_LIMIT ? ` (أول ${MATCH_LIMIT} نتيجة — حدّد البحث)` : ""} — اختر منتجا لعرض التفاصيل:
+            {ui("وُجد")} {matches.length} {ui("منتج")}
+            {matches.length >= MATCH_LIMIT
+              ? ` (${tr(`أول ${MATCH_LIMIT} نتيجة — حدّد البحث`, `First ${MATCH_LIMIT} results — refine your search`, `前 ${MATCH_LIMIT} 条结果—请缩小搜索范围`)})`
+              : ""}
+            {" — "}
+            {ui("اختر منتجا لعرض التفاصيل")}:
           </div>
           <table className={SHIPMENT_TABLE_CLASS}>
             <thead className="table-head">
               <tr>
                 <th className="table-actions-first text-right">{ui("إجراء")}</th>
-                <th className="text-right">SKU</th>
-                <th className="text-right">الاسم</th>
-                <th className="text-right">التصنيف</th>
+                <th className="text-right">{ui("SKU")}</th>
+                <th className="text-right">{ui("الاسم")}</th>
+                <th className="text-right">{ui("التصنيف")}</th>
               </tr>
             </thead>
             <tbody>
@@ -224,7 +238,7 @@ export default function ProductSmartSearchPage() {
                       onClick={() => void loadProductDetails(row)}
                       type="button"
                     >
-                      {detailLoading && product?.id === row.id ? "..." : "عرض"}
+                      {detailLoading && product?.id === row.id ? ui("...") : ui("عرض")}
                     </button>
                   </td>
                   <td className="font-semibold">{row.sku}</td>

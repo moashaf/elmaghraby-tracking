@@ -6,6 +6,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { ArrowRight, Coins, Download, Pencil, RefreshCw, X } from "lucide-react";
 import { ShipmentFiles } from "@/components/shipment-files";
 import { ShipmentForm } from "@/components/shipment-form";
+import { ShipmentAllocationsPanel } from "@/components/shipment-allocations";
 import { ErrorMessage, PageHeader } from "@/components/ui";
 import { getNextStatusAction } from "@/lib/constants";
 import { useLanguage } from "@/context/language-context";
@@ -17,12 +18,12 @@ import { useSupabaseRealtimeReload } from "@/lib/supabase/use-realtime-reload";
 import { addDaysToIsoDate } from "@/lib/eta";
 import { CUSTOMS_RELEASE_DOC_TYPE, shipmentCustomsReleasePath } from "@/lib/storage-path";
 import { displayUnitPerCarton } from "@/lib/shipment-product-quantity";
-import type { Shipment, ShipmentContainer, ShipmentCost, ShipmentDocument, ShipmentProduct, TimelineEvent } from "@/lib/types";
+import type { Shipment, ShipmentAllocation, ShipmentContainer, ShipmentCost, ShipmentDocument, ShipmentProduct, TimelineEvent } from "@/lib/types";
 
 const bucket = "container-files";
 const CUSTOMS_CLEARANCE_DAYS = 15;
 
-type Tab = "summary" | "containers" | "products" | "files" | "timeline" | "costs";
+type Tab = "summary" | "containers" | "products" | "allocations" | "files" | "timeline" | "costs";
 
 export default function ShipmentDetailsPage() {
   const params = useParams<{ id: string }>();
@@ -32,6 +33,7 @@ export default function ShipmentDetailsPage() {
   const [shipment, setShipment] = useState<Shipment | null>(null);
   const [containers, setContainers] = useState<ShipmentContainer[]>([]);
   const [products, setProducts] = useState<ShipmentProduct[]>([]);
+  const [allocations, setAllocations] = useState<ShipmentAllocation[]>([]);
   const [cost, setCost] = useState<ShipmentCost | null>(null);
   const [documents, setDocuments] = useState<ShipmentDocument[]>([]);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
@@ -47,6 +49,7 @@ export default function ShipmentDetailsPage() {
       { id: "summary", label: ui("ملخص") },
       { id: "containers", label: ui("الحاويات") },
       { id: "products", label: ui("المنتجات") },
+      { id: "allocations", label: ui("تخصيص PO") },
       { id: "files", label: ui("الملفات") },
       { id: "timeline", label: ui("السجل") },
       { id: "costs", label: ui("المصاريف") },
@@ -66,10 +69,15 @@ export default function ShipmentDetailsPage() {
       setError("");
     }
     const supabase = createClient();
-    const [shipmentResult, containersResult, productsResult, costResult, timelineResult, documentsResult] = await Promise.all([
+    const [shipmentResult, containersResult, productsResult, allocationsResult, costResult, timelineResult, documentsResult] = await Promise.all([
       supabase.from("shipments").select("*,companies(name_ar),suppliers(name_ar)").eq("id", params.id).single(),
       supabase.from("shipment_containers").select("*").eq("shipment_id", params.id).order("created_at"),
       supabase.from("shipment_products").select("*,products(sku,name_ar,unit)").eq("shipment_id", params.id).order("created_at"),
+      supabase
+        .from("shipment_allocations")
+        .select("*,purchase_order_receipts(received_quantity,received_date,purchase_order_items(products(sku,name_ar)))")
+        .eq("shipment_id", params.id)
+        .order("created_at", { ascending: false }),
       supabase.from("shipment_costs").select("*").eq("shipment_id", params.id).maybeSingle(),
       supabase.from("shipment_timeline_events").select("id,shipment_id,event_type,title_ar,description_ar,created_at").eq("shipment_id", params.id).order("created_at", { ascending: false }),
       supabase.from("shipment_documents").select("*").eq("shipment_id", params.id).order("uploaded_at", { ascending: false }),
@@ -84,18 +92,22 @@ export default function ShipmentDetailsPage() {
     setShipment(shipmentResult.data as Shipment);
     setContainers((containersResult.data ?? []) as ShipmentContainer[]);
     setProducts((productsResult.data ?? []) as ShipmentProduct[]);
+    setAllocations((allocationsResult.data ?? []) as ShipmentAllocation[]);
     setCost((costResult.data as ShipmentCost | null) ?? null);
     setDocuments((documentsResult.data ?? []) as ShipmentDocument[]);
     setTimeline((timelineResult.data ?? []) as TimelineEvent[]);
 
-    const firstRelatedError = containersResult.error || productsResult.error || costResult.error || timelineResult.error || documentsResult.error;
+    const firstRelatedError =
+      containersResult.error ||
+      productsResult.error ||
+      allocationsResult.error ||
+      costResult.error ||
+      timelineResult.error ||
+      documentsResult.error;
     if (firstRelatedError) setError(firstRelatedError.message);
 
     const loadedShipment = shipmentResult.data as Shipment;
-    if (
-      loadedShipment.vessel_name?.trim() &&
-      (loadedShipment.status === "in_sea" || loadedShipment.status === "customs")
-    ) {
+    if (loadedShipment.vessel_name?.trim() && loadedShipment.status === "in_sea") {
       void syncVesselTracking(loadedShipment.id).then((synced) => {
         if (synced) void load({ silent: true });
       });
@@ -131,6 +143,7 @@ export default function ShipmentDetailsPage() {
       { table: "shipments", filter: `id=eq.${params.id}` },
       { table: "shipment_containers", filter: `shipment_id=eq.${params.id}` },
       { table: "shipment_products", filter: `shipment_id=eq.${params.id}` },
+      { table: "shipment_allocations", filter: `shipment_id=eq.${params.id}` },
       { table: "shipment_timeline_events", filter: `shipment_id=eq.${params.id}` },
       { table: "shipment_documents", filter: `shipment_id=eq.${params.id}` },
       { table: "shipment_costs", filter: `shipment_id=eq.${params.id}` },
@@ -291,11 +304,15 @@ export default function ShipmentDetailsPage() {
         <InfoCard
           label={ui("موقع المركب")}
           value={
-            shipment.vessel_name?.trim()
-              ? shipment.vessel_location_text?.trim()
-                ? shipment.vessel_location_text
-                : ui("جاري التتبع...")
-              : ui("أضف اسم المركب أولا")
+            shipment.status === "closed"
+              ? ui("الشحنة أغلقت")
+              : shipment.status === "customs"
+                ? shipment.vessel_location_text?.trim() || ui("في الجمارك")
+                : shipment.vessel_name?.trim()
+                  ? shipment.vessel_location_text?.trim()
+                    ? shipment.vessel_location_text
+                    : ui("جاري التتبع...")
+                  : ui("أضف اسم المركب أولا")
           }
         />
         <InfoCard label={ui("عدد الحاويات")} value={containers.length.toString()} />
@@ -353,6 +370,16 @@ export default function ShipmentDetailsPage() {
       ) : null}
       {activeTab === "containers" ? <ContainersTable rows={containers} /> : null}
       {activeTab === "products" ? <ProductsTable rows={products} /> : null}
+      {activeTab === "allocations" && shipment ? (
+        <ShipmentAllocationsPanel
+          allocations={allocations}
+          canWrite={canWrite}
+          onSaved={() => void load()}
+          products={products}
+          shipmentId={shipment.id}
+          supplierId={shipment.supplier_id}
+        />
+      ) : null}
       {activeTab === "files" ? <ShipmentFiles shipmentId={shipment.id} containers={containers} /> : null}
       {activeTab === "timeline" ? <Timeline rows={timeline} /> : null}
       {activeTab === "costs" ? <CostsPanel cost={cost} onEdit={() => setShowCosts(true)} /> : null}

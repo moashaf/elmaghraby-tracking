@@ -225,29 +225,30 @@ export default function ShipmentsPage() {
   return (
     <div className="shipments-print-root space-y-5">
       <div className="shipments-print-title hidden">
-        {tr("الشحنات", "Shipments")} — {new Date().toLocaleDateString(languageToLocale(lang))}
+        {tr("الشحنات", "Shipments", "货运")} — {new Date().toLocaleDateString(languageToLocale(lang))}
       </div>
       <div className="print:hidden">
         <PageHeader
-          title={tr("الشحنات", "Shipments")}
+          title={tr("الشحنات", "Shipments", "货运")}
           description={tr(
             "قائمة الشحنات مع فلترة الحالة وإجراءات سريعة لكل شحنة.",
-            "Shipments list with status filters and quick actions."
+            "Shipments list with status filters and quick actions.",
+            "货运列表：支持按状态筛选，并提供快捷操作。"
           )}
           actions={
             <div className="flex flex-wrap gap-2">
               <button className="btn btn-secondary" onClick={() => void exportExcel()} type="button">
                 <FileSpreadsheet className="h-4 w-4" />
-                Excel
+                {tr("تصدير Excel", "Export Excel", "导出 Excel")}
               </button>
               <button className="btn btn-secondary" onClick={() => window.print()} type="button">
                 <Printer className="h-4 w-4" />
-                {tr("طباعة", "Print")}
+                {tr("طباعة", "Print", "打印")}
               </button>
               {canWrite ? (
                 <Link className="btn" href="/shipments/new">
                   <Plus className="h-4 w-4" />
-                  {tr("شحنة جديدة", "New shipment")}
+                  {tr("شحنة جديدة", "New shipment", "新建货运")}
                 </Link>
               ) : null}
             </div>
@@ -274,9 +275,14 @@ export default function ShipmentsPage() {
       </div>
 
       <div className="card grid gap-3 p-4 md:grid-cols-[1fr_220px_auto] print:hidden">
-        <input className="input" placeholder="بحث برقم الفاتورة أو ACID" value={query} onChange={(event) => setQuery(event.target.value)} />
+        <input
+          className="input"
+          placeholder={ui("بحث برقم الفاتورة أو ACID")}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
         <select className="input" value={status} onChange={(event) => setStatus(event.target.value as ShipmentStatus | "")}>
-          <option value="">كل الحالات</option>
+          <option value="">{ui("كل الحالات")}</option>
           {SHIPMENT_STATUSES.map((item) => (
             <option key={item} value={item}>
               {statusLabel(item)}

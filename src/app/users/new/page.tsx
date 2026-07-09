@@ -1,36 +1,50 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Save, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { AdminGuard } from "@/components/admin-guard";
+import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage, PageHeader, StatusPill } from "@/components/ui";
 import { useLanguage } from "@/context/language-context";
+import { toEntityOptions } from "@/lib/entity-options";
 import { ROLE_LABELS, type UserRole } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase/client";
 import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
+import type { Supplier } from "@/lib/types";
 
 type Role = UserRole;
 
 export default function NewUserPage() {
   const router = useRouter();
   const { tr } = useLanguage();
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [form, setForm] = useState({
     full_name: "",
     email: "",
     password: "",
     role: "viewer" as Role,
+    supplier_id: "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const authHeaders = useCallback(async (): Promise<Record<string, string>> => {
+  useEffect(() => {
+    void createClient()
+      .from("suppliers")
+      .select("id,name_ar,is_active")
+      .eq("is_active", true)
+      .order("name_ar")
+      .then((result) => setSuppliers((result.data ?? []) as Supplier[]));
+  }, []);
+
+  const authHeaders = async (): Promise<Record<string, string>> => {
     const {
       data: { session },
     } = await createClient().auth.getSession().catch(() => ({ data: { session: null } }));
     return session ? { Authorization: `Bearer ${session.access_token}` } : {};
-  }, []);
+  };
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -51,6 +65,7 @@ export default function NewUserPage() {
           email: form.email.trim(),
           password: form.password,
           role: form.role,
+          supplier_id: form.role === "supplier" ? form.supplier_id || null : null,
         }),
       });
       payload = await response.json();
@@ -132,6 +147,17 @@ export default function NewUserPage() {
               ))}
             </select>
           </label>
+          {form.role === "supplier" ? (
+            <label className="label md:col-span-2">
+              المورد المرتبط
+              <SearchableSelect
+                options={toEntityOptions(suppliers, (row) => row.name_ar)}
+                value={form.supplier_id}
+                onChange={(value) => setForm({ ...form, supplier_id: value })}
+                placeholder="اختر المورد"
+              />
+            </label>
+          ) : null}
         </div>
 
         <button className="btn" disabled={saving} type="submit">

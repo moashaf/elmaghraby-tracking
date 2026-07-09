@@ -3,7 +3,8 @@ import { jsonError, requireAdmin, upsertProfileRole, type AdminRole } from "@/li
 
 const updateUserSchema = z.object({
   full_name: z.string().min(2),
-  role: z.enum(["admin", "manager", "viewer"]),
+  role: z.enum(["admin", "manager", "viewer", "supplier"]),
+  supplier_id: z.string().uuid().optional().nullable(),
 });
 
 export async function PATCH(request: Request, context: RouteContext<"/api/users/[id]">) {
@@ -19,10 +20,15 @@ export async function PATCH(request: Request, context: RouteContext<"/api/users/
   });
   if (authError) return jsonError(authError.message);
 
+  if (parsed.data.role === "supplier" && !parsed.data.supplier_id) {
+    return jsonError("يجب ربط حساب المورد بمورد من القائمة.");
+  }
+
   const { error } = await upsertProfileRole(admin.adminClient, {
     id,
     full_name: parsed.data.full_name,
     role: parsed.data.role as AdminRole,
+    supplier_id: parsed.data.role === "supplier" ? parsed.data.supplier_id ?? null : null,
   });
   if (error) return jsonError(error.message);
 

@@ -37,7 +37,7 @@ export default function ShippingRoutesPage() {
     setError("");
     if (!isSupabaseConfigured()) {
       setLoading(false);
-      setError("اضبط ملف .env.local أولا بقيم Supabase.");
+      setError(ui("اضبط ملف .env.local أولا بقيم Supabase."));
       return;
     }
 
@@ -76,7 +76,7 @@ export default function ShippingRoutesPage() {
     setError("");
     const days = Number(form.duration_days);
     if (!form.shipping_port || !form.arrival_port || !Number.isFinite(days) || days < 1) {
-      setError("اختر الميناءين وأدخل مدة الشحن بالأيام.");
+      setError(ui("اختر الميناءين وأدخل مدة الشحن بالأيام."));
       return;
     }
 
@@ -114,14 +114,15 @@ export default function ShippingRoutesPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title={tr("مسارات الشحن", "Shipping routes")}
+        title={tr("مسارات الشحن", "Shipping routes", "航运路线")}
         description={tr(
           "حدد مدة الشحن بين الميناءين — تُستخدم تلقائيا عند إنشاء شحنة جديدة.",
-          "Define shipping duration between ports (used automatically when creating shipments)."
+          "Define shipping duration between ports (used automatically when creating shipments).",
+          "设置港口之间的运输时长（新建货运时将自动使用）。"
         )}
         actions={
           <StatusPill className="bg-emerald-50 text-emerald-700">
-            <Route className="inline h-3.5 w-3.5" /> {rows.length} مسار
+            <Route className="inline h-3.5 w-3.5" /> {rows.length} {ui("مسار")}
           </StatusPill>
         }
       />
@@ -130,27 +131,27 @@ export default function ShippingRoutesPage() {
       {canWrite ? (
       <form className="card grid gap-3 p-4 md:grid-cols-[1fr_1fr_140px_120px]" onSubmit={submit}>
         <label className="label">
-          ميناء الشحن
+          {ui("ميناء الشحن")}
           <SearchableSelect
             options={PORT_SELECT_OPTIONS}
             value={form.shipping_port}
             onChange={(value) => setForm({ ...form, shipping_port: value })}
-            placeholder="ميناء الشحن"
+            placeholder={ui("ميناء الشحن")}
             required
           />
         </label>
         <label className="label">
-          ميناء الوصول
+          {ui("ميناء الوصول")}
           <SearchableSelect
             options={PORT_SELECT_OPTIONS}
             value={form.arrival_port}
             onChange={(value) => setForm({ ...form, arrival_port: value })}
-            placeholder="ميناء الوصول"
+            placeholder={ui("ميناء الوصول")}
             required
           />
         </label>
         <label className="label">
-          المدة (يوم)
+          {ui("المدة (يوم)")}
           <input
             className="input"
             min={1}
@@ -162,7 +163,7 @@ export default function ShippingRoutesPage() {
         </label>
         <button className="btn self-end" disabled={saving} type="submit">
           {form.id ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-          {saving ? "..." : form.id ? ui("حفظ") : ui("إضافة")}
+          {saving ? ui("...") : form.id ? ui("حفظ") : ui("إضافة")}
         </button>
       </form>
       ) : null}
@@ -172,7 +173,7 @@ export default function ShippingRoutesPage() {
           <Search className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-[var(--muted)]" />
           <input
             className="input pr-9"
-            placeholder="بحث بالمسار أو الميناء"
+            placeholder={ui("بحث بالمسار أو الميناء")}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -183,10 +184,10 @@ export default function ShippingRoutesPage() {
         <table className="min-w-full text-sm">
           <thead className="table-head">
             <tr>
-              <th className="p-3 text-right">ميناء الشحن</th>
-              <th className="p-3 text-right">ميناء الوصول</th>
-              <th className="p-3 text-right">المدة (يوم)</th>
-              <th className="p-3 text-right">إجراء</th>
+              <th className="p-3 text-right">{ui("ميناء الشحن")}</th>
+              <th className="p-3 text-right">{ui("ميناء الوصول")}</th>
+              <th className="p-3 text-right">{ui("المدة (يوم)")}</th>
+              <th className="p-3 text-right">{ui("إجراء")}</th>
             </tr>
           </thead>
           <tbody>

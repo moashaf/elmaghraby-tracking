@@ -51,6 +51,12 @@ export const COLUMN_TRANSLATIONS: Record<string, Col> = {
   التاريخ: { en: "Date", zh: "日期" },
   "اسم الملف": { en: "File name", zh: "文件名" },
   الرابط: { en: "Link", zh: "链接" },
+  "متاح (كرتونة)": { en: "Available (cartons)", zh: "可用（箱）" },
+  "متاح (قطعة)": { en: "Available (pcs)", zh: "可用（件）" },
+  "مستلم (كرتونة)": { en: "Received (cartons)", zh: "已收（箱）" },
+  "مستلم (قطعة)": { en: "Received (pcs)", zh: "已收（件）" },
+  "مخصص للشحن (كرتونة)": { en: "Allocated (cartons)", zh: "已分配（箱）" },
+  "مخصص للشحن (قطعة)": { en: "Allocated (pcs)", zh: "已分配（件）" },
 };
 
 export function translateColumn(key: string, lang: AppLanguage): string {

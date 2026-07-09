@@ -34,6 +34,10 @@ export const DICT: Dictionary = {
   "nav.companies": { ar: "الشركات", en: "Companies", zh: "公司" },
   "nav.routes": { ar: "مسارات الشحن", en: "Shipping routes", zh: "航运路线" },
   "nav.reports": { ar: "التقارير", en: "Reports", zh: "报告" },
+  "nav.purchaseOrders": { ar: "أوامر الشراء", en: "Purchase orders", zh: "采购订单" },
+  "nav.newPurchaseOrder": { ar: "أمر شراء جديد", en: "New PO", zh: "新建采购单" },
+  "nav.supplierPortal": { ar: "بوابة المورد", en: "Supplier portal", zh: "供应商门户" },
+  "nav.awaitingReceipt": { ar: "أصناف تحت الاستلام", en: "Awaiting receipt", zh: "待收货" },
   "nav.users": { ar: "المستخدمون", en: "Users", zh: "用户" },
   "nav.settings": { ar: "الإعدادات", en: "Settings", zh: "设置" },
 

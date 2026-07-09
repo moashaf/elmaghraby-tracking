@@ -40,7 +40,7 @@ const emptyForm: CategoryForm = {
 type ListScope = { type: "all" } | { type: "under"; parentId: string };
 
 export default function CategoriesPage() {
-  const { tr } = useLanguage();
+  const { tr, ui } = useLanguage();
   const { canWrite } = useProfile();
   const [rows, setRows] = useState<ProductCategory[]>([]);
   const [form, setForm] = useState<CategoryForm>(emptyForm);
@@ -59,7 +59,7 @@ export default function CategoriesPage() {
     setError("");
     if (!isSupabaseConfigured()) {
       setLoading(false);
-      setError("اضبط ملف .env.local أولا بقيم Supabase.");
+      setError(ui("اضبط ملف .env.local أولا بقيم Supabase."));
       return;
     }
 
@@ -258,10 +258,11 @@ export default function CategoriesPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title={tr("الفئات", "Categories")}
+        title={tr("الفئات", "Categories", "类别")}
         description={tr(
           "اختر «الكل» أو فئة رئيسية، ثم ادخل للفروع. اضغط «عرض الفروع» لفتح مستوى أعمق.",
-          "Pick All or a main category, then drill into subcategories."
+          "Pick All or a main category, then drill into subcategories.",
+          "先选择「全部」或某个主类，再进入子类；点击「子类」可继续下钻。"
         )}
         actions={
           <StatusPill className="bg-emerald-50 text-emerald-700">
@@ -276,20 +277,20 @@ export default function CategoriesPage() {
       <form className="card grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-[1fr_140px_1fr_120px_120px]" onSubmit={submit}>
         <input
           className="input"
-          placeholder="اسم الفئة"
+          placeholder={ui("اسم الفئة")}
           required
           value={form.name_ar}
           onChange={(event) => setForm({ ...form, name_ar: event.target.value })}
         />
         <input
           className="input"
-          placeholder="كود (اختياري)"
+          placeholder={ui("كود (اختياري)")}
           value={form.code}
           onChange={(event) => setForm({ ...form, code: event.target.value })}
         />
         <SearchableSelect
           options={parentOptions}
-          placeholder="تحت فئة — ابحث (فاضي = رئيسية)"
+          placeholder={ui("تحت فئة — ابحث (فاضي = رئيسية)")}
           value={form.parent_id}
           onChange={(value) => setForm({ ...form, parent_id: value })}
         />
@@ -299,18 +300,18 @@ export default function CategoriesPage() {
             onChange={(event) => setForm({ ...form, is_active: event.target.checked })}
             type="checkbox"
           />
-          نشطة
+          {ui("نشطة")}
         </label>
         <button className="btn" disabled={saving} type="submit">
           {form.id ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-          {saving ? "..." : form.id ? "حفظ" : "إضافة"}
+          {saving ? ui("...") : form.id ? ui("حفظ") : ui("إضافة")}
         </button>
       </form>
 
       {form.id ? (
         <button className="btn btn-secondary text-sm" onClick={() => setForm(emptyForm)} type="button">
           <X className="h-4 w-4" />
-          إلغاء التعديل
+          {ui("إلغاء التعديل")}
         </button>
       ) : null}
       </>
@@ -318,14 +319,14 @@ export default function CategoriesPage() {
 
       <div className="card space-y-4 p-4">
         <div>
-          <div className="mb-2 text-sm font-semibold text-[var(--muted)]">{tr("الفئات الرئيسية", "Main categories")}</div>
+          <div className="mb-2 text-sm font-semibold text-[var(--muted)]">{tr("الفئات الرئيسية", "Main categories", "主类别")}</div>
           <div className="flex flex-wrap gap-2">
             <button
               className={`btn text-sm ${listScope.type === "all" ? "" : "btn-secondary"}`}
               onClick={showAll}
               type="button"
             >
-              {tr("الكل", "All")}
+              {tr("الكل", "All", "全部")}
             </button>
             {rootCategories.map((root) => {
               const childCount = countDirectChildren(rows, root.id);
@@ -378,7 +379,7 @@ export default function CategoriesPage() {
           <Search className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-[var(--muted)]" />
           <input
             className="input pr-9"
-            placeholder={tr("بحث بالاسم أو الكود", "Search by name or code")}
+            placeholder={tr("بحث بالاسم أو الكود", "Search by name or code", "按名称或代码搜索")}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -404,7 +405,7 @@ export default function CategoriesPage() {
                   onChange={(event) => setExportWithImages(event.target.checked)}
                   type="checkbox"
                 />
-                {tr("بالصور", "With images")}
+                {tr("بالصور", "With images", "含图片")}
               </label>
               <button className="btn btn-secondary" onClick={() => void exportCategoryExcel()} type="button">
                 <FileSpreadsheet className="h-4 w-4" />
@@ -427,7 +428,7 @@ export default function CategoriesPage() {
                 {shippedLoading ? (
                   <tr>
                     <td className="p-4 text-[var(--muted)]" colSpan={Math.max(shippedColumns.length, 1)}>
-                      {tr("جاري التحميل...", "Loading...")}
+                      {tr("جاري التحميل...", "Loading...", "正在加载...")}
                     </td>
                   </tr>
                 ) : shippedProducts.length ? (
@@ -443,7 +444,11 @@ export default function CategoriesPage() {
                 ) : (
                   <tr>
                     <td className="p-4 text-[var(--muted)]" colSpan={Math.max(shippedColumns.length, 1)}>
-                      {tr("لا توجد منتجات مشحونة في هذه الفئة.", "No shipped products in this category.")}
+                      {tr(
+                        "لا توجد منتجات مشحونة في هذه الفئة.",
+                        "No shipped products in this category.",
+                        "此类别下暂无已发货产品。"
+                      )}
                     </td>
                   </tr>
                 )}
@@ -468,7 +473,7 @@ export default function CategoriesPage() {
             {loading ? (
               <tr>
                 <td className="p-4 text-[var(--muted)]" colSpan={5}>
-                  جاري التحميل...
+                  {ui("جاري التحميل...")}
                 </td>
               </tr>
             ) : (
@@ -526,8 +531,8 @@ export default function CategoriesPage() {
               <tr>
                 <td className="p-4 text-[var(--muted)]" colSpan={5}>
                   {listScope.type === "under"
-                    ? tr("لا توجد فئات فرعية هنا.", "No subcategories here.")
-                    : tr("لا توجد فئات.", "No categories.")}
+                    ? tr("لا توجد فئات فرعية هنا.", "No subcategories here.", "这里没有子类别。")
+                    : tr("لا توجد فئات.", "No categories.", "暂无类别。")}
                 </td>
               </tr>
             ) : null}

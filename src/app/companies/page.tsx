@@ -24,7 +24,7 @@ const emptyForm: CompanyForm = {
 };
 
 export default function CompaniesPage() {
-  const { tr } = useLanguage();
+  const { tr, ui } = useLanguage();
   const { canWrite } = useProfile();
   const [rows, setRows] = useState<Company[]>([]);
   const [form, setForm] = useState<CompanyForm>(emptyForm);
@@ -37,7 +37,7 @@ export default function CompaniesPage() {
     setError("");
     if (!isSupabaseConfigured()) {
       setLoading(false);
-      setError("اضبط ملف .env.local أولا بقيم Supabase.");
+      setError(ui("اضبط ملف .env.local أولا بقيم Supabase."));
       return;
     }
 
@@ -97,28 +97,49 @@ export default function CompaniesPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title={tr("شركات الاستيراد", "Import companies")}
-        description={tr("الشركات المرجعية المستخدمة داخل الشحنات.", "Reference companies used in shipments.")}
+        title={tr("شركات الاستيراد", "Import companies", "进口公司")}
+        description={tr(
+          "الشركات المرجعية المستخدمة داخل الشحنات.",
+          "Reference companies used in shipments.",
+          "货运中使用的参考公司名单。"
+        )}
       />
       <ErrorMessage message={error} />
 
       {canWrite ? (
       <form className="card grid gap-3 p-4 md:grid-cols-[1fr_1fr_120px_120px]" onSubmit={submit}>
-        <input className="input" placeholder="اسم الشركة" required value={form.name_ar} onChange={(event) => setForm({ ...form, name_ar: event.target.value })} />
-        <input className="input" placeholder="اسم إنجليزي" value={form.name_en} onChange={(event) => setForm({ ...form, name_en: event.target.value })} />
+        <input
+          className="input"
+          placeholder={ui("اسم الشركة")}
+          required
+          value={form.name_ar}
+          onChange={(event) => setForm({ ...form, name_ar: event.target.value })}
+        />
+        <input
+          className="input"
+          placeholder={ui("اسم إنجليزي")}
+          value={form.name_en}
+          onChange={(event) => setForm({ ...form, name_en: event.target.value })}
+        />
         {form.id ? (
-          <input className="input bg-slate-50" disabled value={form.code} title="الكود لا يُعدَّل" />
+          <input className="input bg-slate-50" disabled value={form.code} title={ui("الكود لا يُعدَّل")} />
         ) : (
-          <input className="input bg-slate-50 text-[var(--muted)]" disabled placeholder="كود تلقائي" readOnly value="" />
+          <input
+            className="input bg-slate-50 text-[var(--muted)]"
+            disabled
+            placeholder={ui("كود تلقائي")}
+            readOnly
+            value=""
+          />
         )}
         <div className="flex items-center gap-2">
           <label className="flex items-center gap-2 text-sm text-[var(--muted)]">
             <input checked={form.is_active} onChange={(event) => setForm({ ...form, is_active: event.target.checked })} type="checkbox" />
-            نشط
+            {ui("نشط")}
           </label>
           <button className="btn ms-auto" disabled={saving} type="submit">
             {form.id ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            {saving ? "..." : form.id ? "حفظ" : "إضافة"}
+            {saving ? ui("...") : form.id ? ui("حفظ") : ui("إضافة")}
           </button>
         </div>
       </form>
@@ -129,7 +150,7 @@ export default function CompaniesPage() {
           <Search className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-[var(--muted)]" />
           <input
             className="input pr-9"
-            placeholder="بحث بالاسم أو الكود"
+            placeholder={ui("بحث بالاسم أو الكود")}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -140,17 +161,17 @@ export default function CompaniesPage() {
         <table className="min-w-full text-sm">
           <thead className="table-head">
             <tr>
-              <th className="p-3 text-right">الشركة</th>
-              <th className="p-3 text-right">الكود</th>
-              <th className="p-3 text-right">الحالة</th>
-              <th className="p-3 text-right">إجراء</th>
+              <th className="p-3 text-right">{ui("الشركة")}</th>
+              <th className="p-3 text-right">{ui("الكود")}</th>
+              <th className="p-3 text-right">{ui("الحالة")}</th>
+              <th className="p-3 text-right">{ui("إجراء")}</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
                 <td className="p-4 text-[var(--muted)]" colSpan={4}>
-                  جاري التحميل...
+                  {ui("جاري التحميل...")}
                 </td>
               </tr>
             ) : (
@@ -158,7 +179,7 @@ export default function CompaniesPage() {
                 <tr className="border-t border-[var(--border)]" key={row.id}>
                   <td className="p-3 font-semibold">{row.name_ar}</td>
                   <td className="p-3">{row.code ?? "-"}</td>
-                  <td className="p-3">{row.is_active ? "نشط" : "متوقف"}</td>
+                  <td className="p-3">{row.is_active ? ui("نشط") : ui("متوقف")}</td>
                   <td className="p-3">
                     <button
                       className="btn btn-secondary px-2 py-1 text-xs"
@@ -174,7 +195,7 @@ export default function CompaniesPage() {
                       type="button"
                     >
                       <Edit2 className="h-4 w-4" />
-                      تعديل
+                      {ui("تعديل")}
                     </button>
                   </td>
                 </tr>

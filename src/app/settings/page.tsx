@@ -179,8 +179,12 @@ export default function SettingsPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title={tr("الإعدادات", "Settings")}
-        description={tr("إدارة الملف الشخصي وإعدادات التشغيل العامة.", "Manage your profile and system settings.")}
+        title={tr("الإعدادات", "Settings", "设置")}
+        description={tr(
+          "إدارة الملف الشخصي وإعدادات التشغيل العامة.",
+          "Manage your profile and system settings.",
+          "管理个人资料与系统设置。"
+        )}
       />
       <ErrorMessage message={error ? ui(error) : ""} />
       {message ? <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{ui(message)}</div> : null}

@@ -46,6 +46,38 @@ type ShipmentProductJoin = {
   shipments: ShipmentReportRow | ShipmentReportRow[] | null;
 };
 
+type ChinaWarehouseStockRow = {
+  supplier_id: string;
+  product_id: string;
+  received_quantity: number;
+  received_cartons: number;
+  allocated_quantity: number;
+  allocated_cartons: number;
+  available_quantity: number;
+  available_cartons: number;
+};
+
+type PlannedBatchJoin = {
+  planned_date: string | null;
+  planned_cartons: number | null;
+  planned_quantity: number;
+  status: "scheduled" | "received" | "cancelled";
+  purchase_order_items: {
+    product_id: string;
+    products: {
+      sku: string;
+      name_ar: string;
+      category_id: string | null;
+      category: string | null;
+    } | null;
+    purchase_orders: {
+      po_number: string;
+      suppliers: { name_ar: string } | null;
+      companies: { name_ar: string } | null;
+    } | null;
+  } | null;
+};
+
 type ContainerJoin = {
   container_number: string;
   weight_kg: number | null;
@@ -209,6 +241,9 @@ export async function buildReport(
 
   if (slug === "all-products") return allProductsReport();
 
+  if (slug === "china-warehouse") return chinaWarehouseReport(options);
+  if (slug === "china-arrivals") return chinaArrivalsReport(from, to, options);
+
   if (slug === "customs-releases") return customsReleasesReport(from, to);
   if (slug === "shipment-invoices") return shipmentInvoicesReport(from, to);
 
@@ -295,6 +330,171 @@ export async function buildReport(
   }
 
   return { rows: sortShipmentsByInvoiceNumber(filtered).map(shipmentToReportRow) };
+}
+
+async function chinaWarehouseReport(
+  options: BuildReportOptions
+): Promise<{ rows: ReportRow[] } | { error: string }> {
+  const supabase = createClient();
+
+  const stockResult = await supabase
+    .from("china_warehouse_stock")
+    .select("supplier_id,product_id,received_quantity,received_cartons,allocated_quantity,allocated_cartons,available_quantity,available_cartons")
+    .gt("available_quantity", 0)
+    .order("available_cartons", { ascending: false });
+
+  if (stockResult.error) return { error: stockResult.error.message };
+
+  const stock = (stockResult.data ?? []) as ChinaWarehouseStockRow[];
+  const productIds = Array.from(new Set(stock.map((row) => row.product_id)));
+
+  const productsResult = await fetchAllWhereIn<{
+    id: string;
+    sku: string;
+    name_ar: string;
+    category_id: string | null;
+    category: string | null;
+  }>(supabase, "products", "id,sku,name_ar,category_id,category", "id", productIds);
+
+  if (productsResult.error) return { error: productsResult.error };
+
+  const productById = new Map(productsResult.data.map((p) => [p.id, p]));
+
+  // Category filter (same semantics as product reports: include descendants).
+  let allowedCategoryIds: Set<string> | null = null;
+  if (options.categoryId) {
+    const categoriesResult = await fetchAllFromTable<ProductCategory>(
+      supabase,
+      "product_categories",
+      "id,name_ar,code,parent_id,is_active",
+      { column: "name_ar" }
+    );
+    if (!categoriesResult.error) {
+      allowedCategoryIds = new Set(collectDescendantCategoryIds(categoriesResult.data, options.categoryId));
+      allowedCategoryIds.add(options.categoryId);
+    } else {
+      allowedCategoryIds = new Set([options.categoryId]);
+    }
+  }
+
+  const rows: ReportRow[] = stock
+    .flatMap((row) => {
+      const product = productById.get(row.product_id);
+      if (!product) return [];
+      if (allowedCategoryIds && product.category_id && !allowedCategoryIds.has(product.category_id)) return [];
+
+      return [
+        {
+          SKU: product.sku,
+          المنتج: product.name_ar,
+          التصنيف: product.category ?? "-",
+          "متاح (كرتونة)": row.available_cartons ?? 0,
+          "متاح (قطعة)": row.available_quantity ?? 0,
+          "مستلم (كرتونة)": row.received_cartons ?? 0,
+          "مستلم (قطعة)": row.received_quantity ?? 0,
+          "مخصص للشحن (كرتونة)": row.allocated_cartons ?? 0,
+          "مخصص للشحن (قطعة)": row.allocated_quantity ?? 0,
+        } satisfies ReportRow,
+      ];
+    });
+
+  return { rows };
+}
+
+async function chinaArrivalsReport(
+  from: string,
+  to: string,
+  options: BuildReportOptions
+): Promise<{ rows: ReportRow[] } | { error: string }> {
+  const supabase = createClient();
+
+  let request = supabase
+    .from("purchase_order_delivery_batches")
+    .select(
+      "planned_date,planned_cartons,planned_quantity,status,purchase_order_items(product_id,products(sku,name_ar,category_id,category),purchase_orders(po_number,suppliers(name_ar),companies(name_ar)))"
+    )
+    .eq("status", "scheduled");
+
+  // If user picked a range via from/to.
+  if (from && to) {
+    request = request.gte("planned_date", from).lte("planned_date", to);
+  } else if (from) {
+    request = request.eq("planned_date", from);
+  }
+
+  const result = await request.order("planned_date", { ascending: true });
+  if (result.error) return { error: result.error.message };
+
+  const rows = (result.data ?? []) as unknown as PlannedBatchJoin[];
+
+  // Category filter
+  let allowedCategoryIds: Set<string> | null = null;
+  if (options.categoryId) {
+    const categoriesResult = await fetchAllFromTable<ProductCategory>(
+      supabase,
+      "product_categories",
+      "id,name_ar,code,parent_id,is_active",
+      { column: "name_ar" }
+    );
+    if (!categoriesResult.error) {
+      allowedCategoryIds = new Set(collectDescendantCategoryIds(categoriesResult.data, options.categoryId));
+      allowedCategoryIds.add(options.categoryId);
+    } else {
+      allowedCategoryIds = new Set([options.categoryId]);
+    }
+  }
+
+  const lines = rows
+    .map((row) => {
+      const item = row.purchase_order_items;
+      const product = item?.products;
+      const plannedDate = row.planned_date ? String(row.planned_date).slice(0, 10) : "";
+      if (!item?.product_id || !product?.sku || !plannedDate) return null;
+      if (allowedCategoryIds && product.category_id && !allowedCategoryIds.has(product.category_id)) return null;
+      return {
+        product_id: item.product_id,
+        sku: product.sku,
+        name_ar: product.name_ar,
+        category: product.category ?? "-",
+        planned_date: plannedDate,
+        cartons: Number(row.planned_cartons ?? 0),
+      };
+    })
+    .filter((line): line is { product_id: string; sku: string; name_ar: string; category: string; planned_date: string; cartons: number } =>
+      Boolean(line)
+    );
+
+  const dateColumns = Array.from(new Set(lines.map((l) => l.planned_date))).sort();
+
+  const bySku = new Map<string, typeof lines>();
+  for (const line of lines) {
+    const list = bySku.get(line.sku) ?? [];
+    list.push(line);
+    bySku.set(line.sku, list);
+  }
+
+  const reportRows: ReportRow[] = Array.from(bySku.entries())
+    .sort((a, b) => a[0].localeCompare(b[0], "ar"))
+    .map(([sku, skuLines]) => {
+      const sample = skuLines[0]!;
+      const row: ReportRow = {
+        SKU: sku,
+        المنتج: sample.name_ar,
+        التصنيف: sample.category,
+        "إجمالي الكرتين": skuLines.reduce((sum, l) => sum + Number(l.cartons ?? 0), 0),
+        "إجمالي القطع": "",
+      };
+      for (const dateIso of dateColumns) {
+        const col = formatEtaHeader(dateIso);
+        const cartons = skuLines
+          .filter((l) => l.planned_date === dateIso)
+          .reduce((sum, l) => sum + Number(l.cartons ?? 0), 0);
+        row[col] = cartons > 0 ? cartons : "-";
+      }
+      return row;
+    });
+
+  return { rows: reportRows };
 }
 
 async function allProductsReport(): Promise<{ rows: ReportRow[] } | { error: string }> {

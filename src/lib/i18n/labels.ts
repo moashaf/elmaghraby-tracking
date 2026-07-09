@@ -21,6 +21,7 @@ const ROLES: Record<UserRole, { ar: string; en: string; zh: string }> = {
   admin: { ar: "مدير النظام", en: "System admin", zh: "系统管理员" },
   manager: { ar: "مشرف", en: "Manager", zh: "主管" },
   viewer: { ar: "مشاهدة فقط", en: "View only", zh: "仅查看" },
+  supplier: { ar: "مورد", en: "Supplier", zh: "供应商" },
 };
 
 function pick<T extends { ar: string; en: string; zh: string }>(entry: T, lang: AppLanguage): string {

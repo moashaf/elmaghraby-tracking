@@ -182,3 +182,114 @@ export type ShipmentProductDraft = {
   is_new_incoming_product: boolean;
   is_disassembled: boolean;
 };
+
+export type PoStatus =
+  | "draft"
+  | "confirmed"
+  | "partially_received"
+  | "received"
+  | "over_received"
+  | "cancelled";
+
+export type PurchaseOrder = {
+  id: string;
+  po_number: string;
+  supplier_id: string;
+  company_id: string;
+  order_date: string;
+  expected_eta: string | null;
+  status: PoStatus;
+  notes: string | null;
+  created_by: string | null;
+  received_at: string | null;
+  created_at: string;
+  updated_at: string;
+  suppliers?: Pick<Supplier, "name_ar"> | null;
+  companies?: Pick<Company, "name_ar"> | null;
+};
+
+export type PoItemStatus = "draft" | "awaiting_receipt" | "received" | "cancelled";
+
+export type PurchaseOrderItem = {
+  id: string;
+  purchase_order_id: string;
+  product_id: string;
+  order_quantity: number;
+  order_cartons: number | null;
+  accepted_quantity: number | null;
+  accepted_cartons: number | null;
+  is_disassembled: boolean;
+  is_new_incoming_product: boolean;
+  confirmed_at: string | null;
+  item_status: PoItemStatus;
+  notes: string | null;
+  products?: Pick<Product, "sku" | "name_ar" | "unit"> | null;
+};
+
+export type PurchaseOrderDeliveryBatch = {
+  id: string;
+  purchase_order_item_id: string;
+  planned_quantity: number;
+  planned_cartons: number | null;
+  planned_date: string | null;
+  status: "scheduled" | "received" | "cancelled";
+  notes: string | null;
+  created_at: string;
+};
+
+export type PurchaseOrderReceipt = {
+  id: string;
+  purchase_order_id: string;
+  purchase_order_item_id: string;
+  delivery_batch_id?: string | null;
+  received_date: string;
+  received_quantity: number;
+  received_cartons: number | null;
+  notes: string | null;
+  received_by: string | null;
+  created_at: string;
+  purchase_order_items?: Pick<PurchaseOrderItem, "product_id"> & {
+    products?: Pick<Product, "sku" | "name_ar"> | null;
+  } | null;
+};
+
+export type ShipmentAllocation = {
+  id: string;
+  purchase_order_receipt_id: string;
+  shipment_id: string;
+  shipment_product_id: string;
+  allocated_quantity: number;
+  allocated_cartons: number | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  purchase_order_receipts?: Pick<PurchaseOrderReceipt, "received_quantity" | "received_date"> & {
+    purchase_order_items?: { products?: Pick<Product, "sku" | "name_ar"> | null } | null;
+  } | null;
+};
+
+export type PoTimelineEvent = {
+  id: string;
+  purchase_order_id: string;
+  event_type: string;
+  title_ar: string;
+  description_ar: string | null;
+  created_at: string;
+};
+
+export type PurchaseOrderItemDraft = {
+  product_id: string;
+  cartons_count: string;
+  unit_quantity: string;
+  quantity: string;
+  is_disassembled: boolean;
+  is_new_incoming_product: boolean;
+  notes: string;
+};
+
+export type PurchaseOrderFormValues = {
+  supplier_id: string;
+  company_id: string;
+  order_date: string;
+  notes: string;
+};

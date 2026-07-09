@@ -6,6 +6,8 @@ export type ReportSlug =
   | "arriving-10"
   | "closed"
   | "incoming-products"
+  | "china-warehouse"
+  | "china-arrivals"
   | "costs"
   | "ready-to-close"
   | "containers"
@@ -37,6 +39,8 @@ export const REPORTS: Array<{
   { slug: "arriving-10", title: "وصول خلال 10 أيام", description: "شحنات متوقعة الوصول خلال 10 أيام.", dateFilter: "none" },
   { slug: "closed", title: "الشحنات المغلقة", description: "كل الشحنات التي تم إغلاقها.", dateFilter: "closed", dateHint: "فلترة حسب تاريخ الإغلاق" },
   { slug: "incoming-products", title: "منتجات واردة", description: "منتجات الشحنات المفتوحة والمغلقة.", dateFilter: "eta", dateHint: "فلترة حسب ETA للشحنة" },
+  { slug: "china-warehouse", title: "مخزن الصين", description: "الرصيد الحالي المتاح في مخزن الصين (المستلم ناقص المخصص للشحن).", dateFilter: "none" },
+  { slug: "china-arrivals", title: "استلامات مخزن الصين (مجدولة)", description: "دفعات التسليم المتوقعة إلى مخزن الصين حسب تاريخ الاستلام مع تجميع حسب الصنف.", dateFilter: "none" },
   { slug: "costs", title: "تقرير المصاريف", description: "تكاليف الشحنات وإجمالي الإغلاق.", dateFilter: "closed", dateHint: "فلترة حسب تاريخ الإغلاق" },
   { slug: "ready-to-close", title: "جاهزة للإغلاق", description: "الشحنات الموجودة في الجمارك.", dateFilter: "none" },
   { slug: "containers", title: "الحاويات", description: "كل الحاويات وأوزانها وكرتينها.", dateFilter: "eta", dateHint: "فلترة حسب ETA للشحنة" },

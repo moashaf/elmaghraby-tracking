@@ -7,6 +7,7 @@ import {
   BarChart3,
   Boxes,
   Building2,
+  ClipboardList,
   FileText,
   Home,
   LogOut,
@@ -30,10 +31,12 @@ import type { UserRole } from "@/lib/permissions";
 import { AppWaveBackground } from "@/components/decor/app-wave-background";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
-const navItems = [
+const staffNavItems = [
   { href: "/", labelKey: "nav.dashboard", icon: Home },
   { href: "/shipments", labelKey: "nav.shipments", icon: Boxes },
   { href: "/shipments/new", labelKey: "nav.newShipment", icon: Plus, writeOnly: true },
+  { href: "/purchase-orders", labelKey: "nav.purchaseOrders", icon: ClipboardList },
+  { href: "/purchase-orders/new", labelKey: "nav.newPurchaseOrder", icon: Plus, writeOnly: true },
   { href: "/categories", labelKey: "nav.categories", icon: Tags, writeOnly: true },
   { href: "/products", labelKey: "nav.products", icon: Package },
   { href: "/products/search", labelKey: "nav.productsSearch", icon: Search },
@@ -45,27 +48,47 @@ const navItems = [
   { href: "/settings", labelKey: "nav.settings", icon: Settings },
 ];
 
+const supplierNavItems = [
+  { href: "/supplier", labelKey: "nav.supplierPortal", icon: Home },
+  { href: "/supplier/purchase-orders", labelKey: "nav.purchaseOrders", icon: ClipboardList },
+  { href: "/supplier/awaiting-receipt", labelKey: "nav.awaitingReceipt", icon: ClipboardList },
+  { href: "/settings", labelKey: "nav.settings", icon: Settings },
+];
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const isLogin = pathname === "/login";
-  const { role, canWrite, loading } = useProfile();
+  const { role, canWrite, loading, isSupplier, isAdmin } = useProfile();
   const { t, setLanguage, lang, ui } = useLanguage();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const navItems = useMemo(() => {
+    if (isSupplier) return supplierNavItems;
+    if (isAdmin) {
+      return [
+        ...staffNavItems,
+        { href: "/supplier/purchase-orders", labelKey: "nav.supplierPortal", icon: ClipboardList },
+      ];
+    }
+    return staffNavItems;
+  }, [isAdmin, isSupplier]);
 
   const visibleNavItems = useMemo(
     () =>
       navItems.filter((item) => {
-        if (item.adminOnly && role !== "admin") return false;
-        if (item.writeOnly && !canWrite) return false;
+        if ("adminOnly" in item && item.adminOnly && role !== "admin") return false;
+        if ("writeOnly" in item && item.writeOnly && !canWrite) return false;
         return true;
       }),
-    [role, canWrite]
+    [navItems, role, canWrite]
   );
 
-  const mobileNavItems = visibleNavItems.filter((item) =>
-    ["/", "/shipments", "/shipments/new", "/products/search", "/reports", "/settings"].includes(item.href)
-  );
+  const mobileNavItems = isSupplier
+    ? visibleNavItems
+    : visibleNavItems.filter((item) =>
+        ["/", "/shipments", "/purchase-orders", "/products/search", "/reports", "/settings"].includes(item.href)
+      );
 
   async function signOut() {
     if (isSupabaseConfigured()) {

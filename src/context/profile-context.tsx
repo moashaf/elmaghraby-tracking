@@ -10,7 +10,7 @@ import {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { Session, User } from "@supabase/supabase-js";
-import { canWrite, isAdmin, type UserRole } from "@/lib/permissions";
+import { canWrite, isAdmin, isSupplier, type UserRole } from "@/lib/permissions";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
 
@@ -18,15 +18,18 @@ type ProfileState = {
   id: string;
   full_name: string | null;
   role: UserRole;
+  supplier_id: string | null;
 };
 
 type ProfileContextValue = {
   profile: ProfileState | null;
   user: User | null;
   role: UserRole | "";
+  supplierId: string | null;
   loading: boolean;
   canWrite: boolean;
   isAdmin: boolean;
+  isSupplier: boolean;
   refresh: () => Promise<void>;
 };
 
@@ -38,7 +41,7 @@ async function loadProfileForUser(
 ): Promise<ProfileState | null> {
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, full_name, role")
+    .select("id, full_name, role, supplier_id")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -47,6 +50,7 @@ async function loadProfileForUser(
       id: data.id,
       full_name: data.full_name,
       role: data.role as UserRole,
+      supplier_id: (data as { supplier_id?: string | null }).supplier_id ?? null,
     };
   }
 
@@ -62,15 +66,17 @@ async function loadProfileForUser(
       id: user.id,
       full_name: user.user_metadata?.full_name ?? user.email ?? null,
       role: "viewer",
+      supplier_id: null,
     };
   }
 
-  const row = ensured as { id: string; full_name: string | null; role: UserRole } | null;
+  const row = ensured as { id: string; full_name: string | null; role: UserRole; supplier_id?: string | null } | null;
   if (row?.role) {
     return {
       id: row.id,
       full_name: row.full_name,
       role: row.role,
+      supplier_id: row.supplier_id ?? null,
     };
   }
 
@@ -78,6 +84,7 @@ async function loadProfileForUser(
     id: user.id,
     full_name: user.user_metadata?.full_name ?? user.email ?? null,
     role: "viewer",
+    supplier_id: null,
   };
 }
 
@@ -143,6 +150,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const role: UserRole | "" = profile?.role ?? "";
+
   useEffect(() => {
     if (loading || !isSupabaseConfigured()) return;
 
@@ -152,9 +161,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     }
 
     if (user && isLogin) {
-      router.replace("/");
+      router.replace(isSupplier(role) ? "/supplier" : "/");
     }
-  }, [loading, user, isLogin, router]);
+  }, [loading, user, isLogin, router, role]);
 
   const refresh = async () => {
     if (!isSupabaseConfigured()) {
@@ -186,16 +195,16 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   };
 
-  const role: UserRole | "" = profile?.role ?? "";
-
   const value = useMemo(
     () => ({
       profile,
       user,
       role,
+      supplierId: profile?.supplier_id ?? null,
       loading,
       canWrite: canWrite(role),
       isAdmin: isAdmin(role),
+      isSupplier: isSupplier(role),
       refresh,
     }),
     [profile, user, role, loading]

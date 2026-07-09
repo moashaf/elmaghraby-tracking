@@ -1,7 +1,7 @@
 import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
 import { ROLE_LABELS } from "@/lib/permissions";
 
-export type AdminRole = "admin" | "manager" | "viewer";
+export type AdminRole = "admin" | "manager" | "viewer" | "supplier";
 
 function getAccessToken(request: Request) {
   const header = request.headers.get("authorization") ?? "";
@@ -225,12 +225,13 @@ export function jsonError(message: string, status = 400) {
 
 export async function upsertProfileRole(
   adminClient: SupabaseClient,
-  values: { id: string; full_name: string; role: AdminRole }
+  values: { id: string; full_name: string; role: AdminRole; supplier_id?: string | null }
 ) {
   return adminClient.from("profiles").upsert({
     id: values.id,
     full_name: values.full_name,
     role: values.role,
+    supplier_id: values.role === "supplier" ? values.supplier_id ?? null : null,
     locale: "ar",
   });
 }

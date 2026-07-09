@@ -30,7 +30,7 @@ export async function GET(request: Request) {
   const { data: shipments, error } = await supabase
     .from("shipments")
     .select("id, vessel_name, arrival_port, status")
-    .in("status", ["in_sea", "customs"])
+    .in("status", ["in_sea"])
     .not("vessel_name", "is", null)
     .limit(40);
 

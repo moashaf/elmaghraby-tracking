@@ -31,6 +31,7 @@ export async function syncShipmentVesselTracking(
 ): Promise<VesselSyncOutcome> {
   const vesselName = (shipment.vessel_name ?? "").trim();
   if (!vesselName) return "skipped";
+  if (shipment.status !== "in_sea") return "skipped";
 
   try {
     const result = await trackVesselByName(vesselName);
@@ -76,16 +77,12 @@ export async function syncShipmentVesselTracking(
       updatePayload.status = "customs";
       updatePayload.previous_status = "in_sea";
       updatePayload.auto_moved_to_customs_at = trackedAt;
-    } else if (shipment.status === "customs" && hasPosition && !atPort) {
-      updatePayload.status = "in_sea";
-      updatePayload.previous_status = null;
-      updatePayload.auto_moved_to_customs_at = null;
+      updatePayload.vessel_location_text = `في الجمارك — ${(shipment.arrival_port ?? "").trim() || "الميناء"}`;
     }
 
     await supabase.from("shipments").update(updatePayload).eq("id", shipment.id);
 
     if (shipment.status === "in_sea" && atPort) return "moved_to_customs";
-    if (shipment.status === "customs" && hasPosition && !atPort) return "reverted_to_in_sea";
     return "updated";
   } catch {
     await supabase

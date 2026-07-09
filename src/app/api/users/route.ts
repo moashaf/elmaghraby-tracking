@@ -5,7 +5,8 @@ const createUserSchema = z.object({
   full_name: z.string().min(2),
   email: z.email(),
   password: z.string().min(6),
-  role: z.enum(["admin", "manager", "viewer"]),
+  role: z.enum(["admin", "manager", "viewer", "supplier"]),
+  supplier_id: z.string().uuid().optional().nullable(),
 });
 
 async function loadProfiles(adminClient: ReturnType<typeof import("@/lib/supabase/server").createAdminClient>) {
@@ -66,7 +67,10 @@ export async function POST(request: Request) {
   const parsed = createUserSchema.safeParse(await request.json());
   if (!parsed.success) return jsonError("بيانات المستخدم غير صحيحة");
 
-  const { email, full_name, password, role } = parsed.data;
+  const { email, full_name, password, role, supplier_id } = parsed.data;
+  if (role === "supplier" && !supplier_id) {
+    return jsonError("يجب ربط حساب المورد بمورد من القائمة.");
+  }
   const { data, error } = await admin.adminClient.auth.admin.createUser({
     email,
     password,
@@ -80,6 +84,7 @@ export async function POST(request: Request) {
     id: data.user.id,
     full_name,
     role: role as AdminRole,
+    supplier_id: role === "supplier" ? supplier_id ?? null : null,
   });
 
   if (profileResult.error) return jsonError(profileResult.error.message);

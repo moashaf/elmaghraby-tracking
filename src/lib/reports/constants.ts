@@ -57,7 +57,7 @@ export function hasShipmentLinks(slug: string) {
 }
 
 export function supportsIncomingFilters(slug: string) {
-  return slug === INCOMING_FILTER_SLUG;
+  return slug === INCOMING_FILTER_SLUG || slug === "china-warehouse" || slug === "china-arrivals";
 }
 
 export const DOCUMENT_DOWNLOAD_REPORT_SLUGS = [

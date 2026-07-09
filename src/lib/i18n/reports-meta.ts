@@ -89,6 +89,24 @@ const REPORT_META: Record<ReportSlug, ReportMeta> = {
       zh: "按货运 ETA 筛选",
     },
   },
+  "china-warehouse": {
+    title: { ar: "مخزن الصين", en: "China warehouse stock", zh: "中国仓库存量" },
+    description: {
+      ar: "الرصيد الحالي المتاح في مخزن الصين (المستلم ناقص المخصص للشحن).",
+      en: "Current available stock in China warehouse (received minus allocated).",
+      zh: "中国仓库当前可用库存（已收货减去已分配）。",
+    },
+    dateFilter: "none",
+  },
+  "china-arrivals": {
+    title: { ar: "استلامات مخزن الصين (مجدولة)", en: "China arrivals (scheduled)", zh: "中国到货（计划）" },
+    description: {
+      ar: "دفعات التسليم المتوقعة إلى مخزن الصين حسب تاريخ الاستلام — تجميع حسب الصنف.",
+      en: "Planned delivery batches into China warehouse by receiving date — grouped by product.",
+      zh: "按收货日期查看计划到货批次，并按产品汇总。",
+    },
+    dateFilter: "none",
+  },
   costs: {
     title: { ar: "تقرير المصاريف", en: "Costs report", zh: "费用报告" },
     description: {

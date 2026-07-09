@@ -101,7 +101,7 @@ export default function LoginPage() {
           <div className="login-hero-copy hidden text-center lg:block">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#0f766e]">Elmaghraby Tracing</p>
             <h2 className="mt-2 text-2xl font-bold leading-snug text-[#1e293b]">
-              {tr("نظام تتبع الشحنات والاستيراد", "Shipment & import tracking")}
+              {tr("نظام تتبع الشحنات والاستيراد", "Shipment & import tracking", "货运与进口跟踪系统")}
             </h2>
             <p className="mt-2 text-sm text-[var(--muted)]">
               {tr(
@@ -116,13 +116,13 @@ export default function LoginPage() {
                 <ShipWheel className="h-6 w-6" />
               </div>
               <div>
-                <h1 className="text-xl font-bold">{tr("تسجيل الدخول", "Sign in")}</h1>
+                <h1 className="text-xl font-bold">{tr("تسجيل الدخول", "Sign in", "登录")}</h1>
                 <p className="text-sm text-[var(--muted)]">Elmaghraby Tracing</p>
               </div>
             </div>
             <ErrorMessage message={error} />
             <label className="label">
-              {tr("البريد الإلكتروني", "Email")}
+              {tr("البريد الإلكتروني", "Email", "邮箱")}
               <input
                 className="input"
                 required
@@ -132,7 +132,7 @@ export default function LoginPage() {
               />
             </label>
             <label className="label">
-              {tr("كلمة المرور", "Password")}
+              {tr("كلمة المرور", "Password", "密码")}
               <input
                 className="input"
                 required

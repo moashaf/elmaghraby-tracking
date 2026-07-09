@@ -30,7 +30,7 @@ const emptyForm: SupplierForm = {
 const countryOptions = ALL_COUNTRIES.map((country) => ({ value: country, label: country }));
 
 export default function SuppliersPage() {
-  const { tr } = useLanguage();
+  const { tr, ui } = useLanguage();
   const { canWrite } = useProfile();
   const [rows, setRows] = useState<Supplier[]>([]);
   const [form, setForm] = useState<SupplierForm>(emptyForm);
@@ -43,7 +43,7 @@ export default function SuppliersPage() {
     setError("");
     if (!isSupabaseConfigured()) {
       setLoading(false);
-      setError("اضبط ملف .env.local أولا بقيم Supabase.");
+      setError(ui("اضبط ملف .env.local أولا بقيم Supabase."));
       return;
     }
 
@@ -111,34 +111,55 @@ export default function SuppliersPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title={tr("الموردين", "Suppliers")}
-        description={tr("المورد يتم ربطه بالشحنة فقط وليس بالمنتج.", "Suppliers are linked to shipments (not products).")}
+        title={tr("الموردين", "Suppliers", "供应商")}
+        description={tr(
+          "المورد يتم ربطه بالشحنة فقط وليس بالمنتج.",
+          "Suppliers are linked to shipments (not products).",
+          "供应商只与货运关联，不与产品直接关联。"
+        )}
       />
       <ErrorMessage message={error} />
 
       {canWrite ? (
       <form className="card grid gap-3 p-4 md:grid-cols-[1fr_1fr_1fr_120px_120px]" onSubmit={submit}>
-        <input className="input" placeholder="اسم المورد" required value={form.name_ar} onChange={(event) => setForm({ ...form, name_ar: event.target.value })} />
+        <input
+          className="input"
+          placeholder={ui("اسم المورد")}
+          required
+          value={form.name_ar}
+          onChange={(event) => setForm({ ...form, name_ar: event.target.value })}
+        />
         {form.id ? (
           <input className="input bg-slate-50" disabled value={form.code} />
         ) : (
-          <input className="input bg-slate-50 text-[var(--muted)]" disabled placeholder="كود تلقائي" readOnly value="" />
+          <input
+            className="input bg-slate-50 text-[var(--muted)]"
+            disabled
+            placeholder={ui("كود تلقائي")}
+            readOnly
+            value=""
+          />
         )}
         <SearchableSelect
           options={countryPickerOptions}
           value={form.country}
           onChange={(value) => setForm({ ...form, country: value })}
-          placeholder="الدولة"
+          placeholder={ui("الدولة")}
         />
-        <input className="input" placeholder="الهاتف" value={form.contact_phone} onChange={(event) => setForm({ ...form, contact_phone: event.target.value })} />
+        <input
+          className="input"
+          placeholder={ui("الهاتف")}
+          value={form.contact_phone}
+          onChange={(event) => setForm({ ...form, contact_phone: event.target.value })}
+        />
         <div className="flex items-center gap-2">
           <label className="flex items-center gap-2 text-sm text-[var(--muted)]">
             <input checked={form.is_active} onChange={(event) => setForm({ ...form, is_active: event.target.checked })} type="checkbox" />
-            نشط
+            {ui("نشط")}
           </label>
           <button className="btn ms-auto" disabled={saving} type="submit">
             {form.id ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            {saving ? "..." : form.id ? "حفظ" : "إضافة"}
+            {saving ? ui("...") : form.id ? ui("حفظ") : ui("إضافة")}
           </button>
         </div>
       </form>
@@ -149,7 +170,7 @@ export default function SuppliersPage() {
           <Search className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-[var(--muted)]" />
           <input
             className="input pr-9"
-            placeholder="بحث بالاسم أو الكود أو الدولة"
+            placeholder={ui("بحث بالاسم أو الكود أو الدولة")}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -160,19 +181,19 @@ export default function SuppliersPage() {
         <table className="min-w-full text-sm">
           <thead className="table-head">
             <tr>
-              <th className="p-3 text-right">المورد</th>
-              <th className="p-3 text-right">الكود</th>
-              <th className="p-3 text-right">الدولة</th>
-              <th className="p-3 text-right">الهاتف</th>
-              <th className="p-3 text-right">الحالة</th>
-              <th className="p-3 text-right">إجراء</th>
+              <th className="p-3 text-right">{ui("المورد")}</th>
+              <th className="p-3 text-right">{ui("الكود")}</th>
+              <th className="p-3 text-right">{ui("الدولة")}</th>
+              <th className="p-3 text-right">{ui("الهاتف")}</th>
+              <th className="p-3 text-right">{ui("الحالة")}</th>
+              <th className="p-3 text-right">{ui("إجراء")}</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
                 <td className="p-4 text-[var(--muted)]" colSpan={6}>
-                  جاري التحميل...
+                  {ui("جاري التحميل...")}
                 </td>
               </tr>
             ) : (
@@ -182,7 +203,7 @@ export default function SuppliersPage() {
                   <td className="p-3">{row.code ?? "-"}</td>
                   <td className="p-3">{row.country ?? "-"}</td>
                   <td className="p-3">{row.contact_phone ?? "-"}</td>
-                  <td className="p-3">{row.is_active ? "نشط" : "متوقف"}</td>
+                  <td className="p-3">{row.is_active ? ui("نشط") : ui("متوقف")}</td>
                   <td className="p-3">
                     <button
                       className="btn btn-secondary px-2 py-1 text-xs"
@@ -199,7 +220,7 @@ export default function SuppliersPage() {
                       type="button"
                     >
                       <Edit2 className="h-4 w-4" />
-                      تعديل
+                      {ui("تعديل")}
                     </button>
                   </td>
                 </tr>

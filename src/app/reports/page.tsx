@@ -13,8 +13,12 @@ export default function ReportsPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title={tr("التقارير", "Reports")}
-        description={tr("تقارير تشغيلية قابلة للتصدير Excel والطباعة.", "Operational reports with Excel export and printing.")}
+        title={tr("التقارير", "Reports", "报告")}
+        description={tr(
+          "تقارير تشغيلية قابلة للتصدير Excel والطباعة.",
+          "Operational reports with Excel export and printing.",
+          "可导出 Excel 并支持打印的运营报表。"
+        )}
       />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {reports.map((report) => (
@@ -25,7 +29,7 @@ export default function ReportsPage() {
             </div>
             <p className="mt-2 text-sm text-[var(--muted)]">{report.description}</p>
             <span className="mt-4 inline-block text-sm font-semibold text-[#0f766e]">
-              {tr("فتح التقرير", "Open report")}
+              {tr("فتح التقرير", "Open report", "打开报告")}
             </span>
           </Link>
         ))}

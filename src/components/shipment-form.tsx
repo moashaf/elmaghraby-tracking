@@ -162,6 +162,8 @@ export function ShipmentForm({
   const [companies, setCompanies] = useState<Company[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [chinaWarehouseOnly, setChinaWarehouseOnly] = useState(false);
+  const [chinaWarehouseProductIds, setChinaWarehouseProductIds] = useState<Set<string>>(new Set());
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [routes, setRoutes] = useState<ShippingRoute[]>([]);
   const [invFile, setInvFile] = useState<File | null>(null);
@@ -169,15 +171,17 @@ export function ShipmentForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const productOptions = useMemo(
-    () =>
-      products.map((product) => ({
-        value: product.id,
-        label: `${product.sku} — ${product.name_ar}`,
-        keywords: `${product.sku} ${product.name_ar} ${product.category ?? ""}`,
-      })),
-    [products]
-  );
+  const productOptions = useMemo(() => {
+    const source = chinaWarehouseOnly
+      ? products.filter((product) => chinaWarehouseProductIds.has(product.id))
+      : products;
+
+    return source.map((product) => ({
+      value: product.id,
+      label: `${product.sku} — ${product.name_ar}`,
+      keywords: `${product.sku} ${product.name_ar} ${product.category ?? ""}`,
+    }));
+  }, [products, chinaWarehouseOnly, chinaWarehouseProductIds]);
 
   const companyOptions = useMemo(
     () =>
@@ -237,6 +241,16 @@ export function ShipmentForm({
       setProducts((productsResult.data ?? []) as Product[]);
       setCategories((categoriesResult.data ?? []) as ProductCategory[]);
       setRoutes((routesResult.data ?? []) as ShippingRoute[]);
+
+      const stock = await supabase
+        .from("china_warehouse_stock")
+        .select("product_id,available_quantity")
+        .gt("available_quantity", 0);
+      if (!stock.error) {
+        setChinaWarehouseProductIds(
+          new Set((stock.data ?? []).map((row) => String((row as { product_id: string }).product_id)))
+        );
+      }
     }
 
     void loadLookups();
@@ -483,6 +497,13 @@ export function ShipmentForm({
       return;
     }
 
+    // Auto-pull from China warehouse into allocations (best-effort).
+    try {
+      await supabase.rpc("auto_allocate_shipment_from_china_warehouse", { p_shipment_id: shipmentId });
+    } catch {
+      /* best-effort */
+    }
+
     const savedVesselName = vesselName;
     if (savedVesselName) {
       const session = await supabase.auth.getSession();
@@ -722,6 +743,10 @@ export function ShipmentForm({
           <div className="sticky top-16 z-[15] flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-white/95 px-3 py-3 shadow-sm backdrop-blur-sm">
             <div className="flex flex-wrap items-center gap-3">
               <h2 className="font-bold">{ui("منتجات الشحنة")}</h2>
+              <label className="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                <input checked={chinaWarehouseOnly} onChange={(e) => setChinaWarehouseOnly(e.target.checked)} type="checkbox" />
+                {ui("مخزن الصين")}
+              </label>
               {cartonStats.target != null ? (
                 <span
                   className={`rounded-full px-3 py-1 text-xs font-semibold ${
