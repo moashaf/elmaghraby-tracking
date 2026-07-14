@@ -1,4 +1,5 @@
 import { CUSTOMS_RELEASE_DOC_TYPE } from "@/lib/storage-path";
+import { validateCloseShipmentRules } from "@/lib/close-shipment-rules";
 import { DEFAULT_SYSTEM_SETTINGS, type SystemSettings } from "@/lib/system-settings";
 import { jsonError, requireWriter } from "@/lib/supabase/server";
 
@@ -52,10 +53,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const settings = await loadSystemSettings(auth.adminClient);
   const isAlreadyClosed = shipment.status === "closed";
 
-  if (!isAlreadyClosed && settings.require_costs_before_close && totalCost <= 0) {
-    return jsonError("يجب إدخال المصاريف قبل إغلاق الشحنة.", 400);
-  }
-
   const { data: customsDoc } = await auth.adminClient
     .from("shipment_documents")
     .select("id")
@@ -64,9 +61,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     .limit(1)
     .maybeSingle();
 
-  if (!isAlreadyClosed && !customsDoc) {
-    return jsonError("ارفع ملف PDF للإفراج الجمركي قبل الإغلاق.", 400);
-  }
+  const validation = validateCloseShipmentRules({
+    isAlreadyClosed,
+    totalCost,
+    hasCustomsDocument: Boolean(customsDoc),
+    settings,
+  });
+  if (!validation.ok) return jsonError(validation.message, 400);
 
   const costPayload = {
     customs_cost: customsCost,

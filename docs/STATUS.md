@@ -1,38 +1,31 @@
-# حالة التنفيذ
-
-> آخر تحديث: 2026-05-22
-
-## المرحلة الحالية
-
-**مكتمل — تحسينات صلاحيات وتجربة موبايل (Phase 10)**
-
-## ما تم إنجازه
-
-- [x] Phases 0–9 (تأسيس → تقارير → PWA → Tauri → فئات/مستخدمين)
-- [x] Phase 10: `ProfileProvider` + `AdminGuard` + `canWrite` على الشحنات + بطاقات موبايل للمستخدمين + `docs/ARCHITECTURE.md`
-
-## الملفات الأخيرة
-
-- `src/lib/permissions.ts`
-- `src/context/profile-context.tsx`
-- `src/components/admin-guard.tsx`
-- `src/components/app-shell.tsx` (تصفية قائمة حسب الدور)
-- `src/app/users/page.tsx` (بطاقات موبايل)
-- `src/app/shipments/page.tsx` (إخفاء إجراءات الكتابة للمشاهد)
-- `docs/ARCHITECTURE.md`
-
-## التحقق
-
-- [x] `npm run type-check`
-- [x] `npm run lint`
-- [x] `npm run build`
-
-## الخطوة التالية
-
-→ تجربة production + Supabase migrations + رفع أول admin
-
-## ملاحظات
-
-- `.env.local`: `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` أو `ANON_KEY` + `SUPABASE_SERVICE_ROLE_KEY` لصفحة المستخدمين
-- لا ترفع المفاتيح إلى Git
-
+# حالة التنفيذ
+
+> آخر تحديث: 2026-07-14
+
+## المرحلة الحالية
+
+**مكتمل — أمان + إعادة تصميم UI + طبقة اختبارات**
+
+## ما تم إنجازه
+
+- [x] إصلاحات أمنية: `CRON_SECRET` deny-by-default، `require_customs_document`، RLS/redirect للمورد
+- [x] Design system + AppShell مجمّع + Dashboard / Shipments / تفاصيل الشحنة
+- [x] لمسة بصرية موحّدة (تقارير، فورم شحنة، Login tokens)
+- [x] Vitest + Playwright smoke + GitHub Actions CI
+
+## التحقق
+
+```bash
+npm run type-check
+npm run lint
+npm test
+npm run build
+# اختياري:
+npm run test:e2e
+```
+
+## ملاحظات
+
+- عيّن `CRON_SECRET` في بيئة التشغيل قبل استدعاء `GET /api/vessel-tracking/sync`
+- طبّق migration: `supabase/migrations/20260714000001_restrict_supplier_ops_read.sql`
+- لـ E2E المسجّل: `E2E_EMAIL` + `E2E_PASSWORD`

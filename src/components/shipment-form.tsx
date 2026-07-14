@@ -551,16 +551,16 @@ export function ShipmentForm({
 
   return (
     <>
-      <form className="card space-y-6 p-5" onSubmit={readOnly ? (event) => event.preventDefault() : submit}>
+      <form className="card relative space-y-6 p-5 pb-28" onSubmit={readOnly ? (event) => event.preventDefault() : submit}>
         {readOnly ? (
-          <p className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 text-sm text-[var(--muted)]">
+          <p className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] p-3 text-sm text-[var(--muted)]">
             {ui("وضع العرض فقط — اضغط «تعديل» أعلاه لتغيير البيانات.")}
           </p>
         ) : null}
         <ErrorMessage message={error} />
 
         <section className="space-y-3">
-          <h2 className="font-bold">{ui("البيانات الأساسية")}</h2>
+          <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--muted)]">{ui("بيانات أساسية")}</h2>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <label className="label">
               {ui("رقم ACID")}
@@ -708,7 +708,7 @@ export function ShipmentForm({
         <section className="space-y-3 border-t border-[var(--border)] pt-5">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="font-bold">{ui("الحاويات")}</h2>
+              <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--muted)]">{ui("الحاويات")}</h2>
               <p className="text-sm text-[var(--muted)]">{ui("أدخل اسم أو رقم كل حاوية فقط.")}</p>
             </div>
             {!readOnly ? (
@@ -742,7 +742,7 @@ export function ShipmentForm({
         <section className="space-y-3 border-t border-[var(--border)] pt-5">
           <div className="sticky top-16 z-[15] flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-white/95 px-3 py-3 shadow-sm backdrop-blur-sm">
             <div className="flex flex-wrap items-center gap-3">
-              <h2 className="font-bold">{ui("منتجات الشحنة")}</h2>
+              <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--muted)]">{ui("منتجات الشحنة")}</h2>
               <label className="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
                 <input checked={chinaWarehouseOnly} onChange={(e) => setChinaWarehouseOnly(e.target.checked)} type="checkbox" />
                 {ui("مخزن الصين")}
@@ -861,10 +861,12 @@ export function ShipmentForm({
         </section>
 
         {!readOnly ? (
-          <button className="btn" disabled={loading} type="submit">
-            <Save className="h-4 w-4" />
-            {loading ? ui("جاري الحفظ...") : ui("حفظ الشحنة")}
-          </button>
+          <div className="sticky bottom-16 z-20 -mx-5 border-t border-[var(--border)] bg-[var(--surface)]/95 px-5 py-3 backdrop-blur lg:bottom-4">
+            <button className="btn w-full sm:w-auto" disabled={loading} type="submit">
+              <Save className="h-4 w-4" />
+              {loading ? ui("جاري الحفظ...") : ui("حفظ الشحنة")}
+            </button>
+          </div>
         ) : null}
       </form>
 

@@ -89,7 +89,14 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 ```bash
 npm run type-check
 npm run lint
+npm test
 npm run build
+```
+
+اختبارات الواجهة (smoke):
+
+```bash
+npm run test:e2e
 ```
 
 ## النشر والديسكتوب
@@ -101,5 +108,6 @@ npm run build
 
 - لا تستخدم service role في المتصفح.
 - راجع سياسات RLS بعد إضافة أي جدول جديد.
+- عيّن `CRON_SECRET` — بدونها endpoint مزامنة السفن يرفض الطلبات.
 - التقارير تطبع PDF من المتصفح باستخدام print CSS.
 - `xlsx` قد يظهر في `npm audit` بسبب تحذيرات معروفة؛ راجع قرار الترقية بعناية قبل تغيير المكتبة.

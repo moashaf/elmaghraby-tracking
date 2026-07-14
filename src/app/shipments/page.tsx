@@ -4,10 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, FileSpreadsheet, Pencil, Plus, Printer, RefreshCw, Trash2 } from "lucide-react";
-import { ErrorMessage, PageHeader } from "@/components/ui";
+import { ActionsMenu } from "@/components/actions-menu";
+import { EmptyState, ErrorMessage, FilterBar, FilterChip, PageHeader, Skeleton } from "@/components/ui";
 import {
   getNextStatusAction,
-  SHIPMENT_STATUSES,
   type ShipmentStatus,
 } from "@/lib/constants";
 import { getNextActionLabel, getStatusLabel, languageToLocale } from "@/lib/i18n";
@@ -21,6 +21,7 @@ import { displayInvoiceNumber, invoiceMapFromDocuments, shipmentInvoiceLabel } f
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
 import { useSupabaseRealtimeReload } from "@/lib/supabase/use-realtime-reload";
+import { DEFAULT_SYSTEM_SETTINGS, isShipmentDelayed } from "@/lib/system-settings";
 import type { Shipment } from "@/lib/types";
 
 export default function ShipmentsPage() {
@@ -31,7 +32,7 @@ export default function ShipmentsPage() {
   const [status, setStatus] = useState<ShipmentStatus | "">(() => {
     if (typeof window === "undefined") return "";
     const value = new URLSearchParams(window.location.search).get("status");
-    return SHIPMENT_STATUSES.includes(value as ShipmentStatus) ? (value as ShipmentStatus) : "";
+    return value === "in_sea" || value === "customs" ? value : "";
   });
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -51,15 +52,12 @@ export default function ShipmentsPage() {
     if (!options?.silent) setLoading(true);
     try {
       const supabase = createClient();
-      let request = supabase
-        .from("shipments")
-        .select("*,companies(name_ar),suppliers(name_ar),shipment_containers(count)")
-        .order("created_at", { ascending: false });
-
-      if (status) request = request.eq("status", status);
-
       const [result, documentsResult] = await Promise.all([
-        request,
+        supabase
+          .from("shipments")
+          .select("*,companies(name_ar),suppliers(name_ar),shipment_containers(count)")
+          .neq("status", "closed")
+          .order("created_at", { ascending: false }),
         supabase
           .from("shipment_documents")
           .select("shipment_id,doc_type,file_name,uploaded_at")
@@ -89,19 +87,20 @@ export default function ShipmentsPage() {
     }
   }
 
-  const reloadSilently = useCallback(() => load({ silent: true }), [status, ui]);
+  const reloadSilently = useCallback(() => load({ silent: true }), [ui]);
 
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  }, []);
 
   useSupabaseRealtimeReload(reloadSilently, [{ table: "shipments" }, { table: "shipment_documents" }]);
 
   const filteredShipments = useMemo(() => {
     const term = query.trim().toLowerCase();
-    if (!term) return shipments;
     return shipments.filter((shipment) => {
+      if (status && shipment.status !== status) return false;
+      if (!term) return true;
       const invoice = invoiceByShipmentId.get(shipment.id);
       const invoiceLabel = invoice ? displayInvoiceNumber(invoice).toLowerCase() : "";
       return (
@@ -110,11 +109,13 @@ export default function ShipmentsPage() {
         invoiceLabel.includes(term)
       );
     });
-  }, [shipments, query, invoiceByShipmentId]);
+  }, [shipments, query, invoiceByShipmentId, status]);
+
+  const openStatusFilters = ["in_sea", "customs"] as const;
 
   const counts = useMemo(
     () =>
-      SHIPMENT_STATUSES.map((item) => ({
+      openStatusFilters.map((item) => ({
         status: item,
         count: shipments.filter((shipment) => shipment.status === item).length,
       })),
@@ -231,12 +232,12 @@ export default function ShipmentsPage() {
         <PageHeader
           title={tr("الشحنات", "Shipments", "货运")}
           description={tr(
-            "قائمة الشحنات مع فلترة الحالة وإجراءات سريعة لكل شحنة.",
-            "Shipments list with status filters and quick actions.",
-            "货运列表：支持按状态筛选，并提供快捷操作。"
+            "الشحنات المفتوحة فقط — المغلقة تظهر في تقرير الشحنات المغلقة.",
+            "Open shipments only — closed ones live in the closed shipments report.",
+            "仅显示未关闭货运 — 已关闭的在关闭货运报表中。"
           )}
           actions={
-            <div className="flex flex-wrap gap-2">
+            <>
               <button className="btn btn-secondary" onClick={() => void exportExcel()} type="button">
                 <FileSpreadsheet className="h-4 w-4" />
                 {tr("تصدير Excel", "Export Excel", "导出 Excel")}
@@ -251,7 +252,7 @@ export default function ShipmentsPage() {
                   {tr("شحنة جديدة", "New shipment", "新建货运")}
                 </Link>
               ) : null}
-            </div>
+            </>
           }
         />
       </div>
@@ -260,56 +261,90 @@ export default function ShipmentsPage() {
         <ErrorMessage message={error} />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3 print:hidden">
-        {counts.map((item) => (
-          <button
-            className={`card p-4 text-right transition hover:border-[#0f766e] ${status === item.status ? "border-[#0f766e]" : ""}`}
-            key={item.status}
-            onClick={() => setStatus(status === item.status ? "" : item.status)}
-            type="button"
-          >
-            <span className={`status-badge status-${item.status}`}>{statusLabel(item.status)}</span>
-            <div className="mt-3 text-3xl font-bold">{item.count}</div>
-          </button>
-        ))}
-      </div>
-
-      <div className="card grid gap-3 p-4 md:grid-cols-[1fr_220px_auto] print:hidden">
+      <FilterBar className="print:hidden">
         <input
-          className="input"
+          className="input min-w-0 flex-1"
           placeholder={ui("بحث برقم الفاتورة أو ACID")}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <select className="input" value={status} onChange={(event) => setStatus(event.target.value as ShipmentStatus | "")}>
-          <option value="">{ui("كل الحالات")}</option>
-          {SHIPMENT_STATUSES.map((item) => (
-            <option key={item} value={item}>
-              {statusLabel(item)}
-            </option>
+        <div className="flex flex-wrap gap-2">
+          <FilterChip active={!status} count={shipments.length} onClick={() => setStatus("")}>
+            {ui("كل الحالات")}
+          </FilterChip>
+          {counts.map((item) => (
+            <FilterChip
+              active={status === item.status}
+              count={item.count}
+              key={item.status}
+              onClick={() => setStatus(status === item.status ? "" : item.status)}
+            >
+              {statusLabel(item.status)}
+            </FilterChip>
           ))}
-        </select>
+        </div>
         <button className="btn btn-secondary" onClick={() => void load()} type="button">
           <RefreshCw className="h-4 w-4" />
-          تحديث
+          {ui("تحديث")}
         </button>
+      </FilterBar>
+
+      <div className="space-y-3 md:hidden print:hidden">
+        {loading ? (
+          Array.from({ length: 3 }).map((_, index) => <Skeleton className="h-28 w-full" key={index} />)
+        ) : filteredShipments.length ? (
+          filteredShipments.map((shipment) => {
+            const invoiceFile = invoiceByShipmentId.get(shipment.id);
+            const delayed = isShipmentDelayed(
+              shipment.eta,
+              shipment.status,
+              DEFAULT_SYSTEM_SETTINGS,
+              undefined,
+              shipment.shipped_at,
+              shipment.shipping_duration_days
+            );
+            return (
+              <Link
+                className={`card block p-4 ${delayed ? "row-delayed" : ""}`}
+                href={`/shipments/${shipment.id}`}
+                key={shipment.id}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="font-bold">
+                      {invoiceFile ? displayInvoiceNumber(invoiceFile) : shipment.shipment_number}
+                    </div>
+                    <div className="mt-1 text-sm text-[var(--muted)]">{shipment.companies?.name_ar ?? "-"}</div>
+                  </div>
+                  <span className={`status-badge status-${shipment.status}`}>{statusLabel(shipment.status)}</span>
+                </div>
+                <div className="mt-3 flex items-center justify-between text-sm text-[var(--muted)]">
+                  <span>ETA {formatDisplayDate(shipment.eta, lang)}</span>
+                  <span className="font-semibold text-[var(--foreground)]">{formatUsd(shipment.value_usd)}</span>
+                </div>
+              </Link>
+            );
+          })
+        ) : (
+          <EmptyState title={ui("لا توجد شحنات مطابقة.")} description={ui("غيّر الفلتر أو أضف شحنة جديدة.")} />
+        )}
       </div>
 
-      <div className="card overflow-hidden report-print-table-wrap">
+      <div className="card hidden overflow-hidden report-print-table-wrap md:block">
         <div className="overflow-auto">
           <table className={`report-print-table ${SHIPMENT_TABLE_CLASS}`}>
             <thead className="table-head">
               <tr>
                 <th className="table-actions-first text-right print:hidden">{ui("إجراءات")}</th>
-                <th className="text-right col-invoice">{ui("رقم الفاتورة")}</th>
-                <th className="text-right col-cargo-type">{ui("نوع البضاعة")}</th>
+                <th className="col-invoice text-right">{ui("رقم الفاتورة")}</th>
+                <th className="col-cargo-type text-right">{ui("نوع البضاعة")}</th>
                 <th className="text-right">{ui("عدد الكراتين")}</th>
                 <th className="text-right">{ui("عدد الحاويات")}</th>
                 <th className="text-right">{ui("موقع المركب")}</th>
-                <th className="text-right col-amount">{ui("قيمة الشحنة (USD)")}</th>
+                <th className="col-amount text-right">{ui("قيمة الشحنة (USD)")}</th>
                 <th className="text-right">{ui("تاريخ الشحن")}</th>
                 <th className="text-right">{ui("تاريخ الوصول المتوقع")}</th>
-                <th className="text-right col-acid">ACID</th>
+                <th className="col-acid text-right">ACID</th>
                 <th className="text-right">{ui("الحالة")}</th>
                 <th className="text-right">{ui("الشركة")}</th>
               </tr>
@@ -317,43 +352,76 @@ export default function ShipmentsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="p-4 text-[var(--muted)]" colSpan={12}>{ui("جاري التحميل...")}</td>
+                  <td className="p-4 text-[var(--muted)]" colSpan={12}>
+                    <Skeleton className="h-8 w-full" />
+                  </td>
                 </tr>
               ) : filteredShipments.length ? (
                 filteredShipments.map((shipment) => {
                   const action = getNextStatusAction(shipment.status);
                   const invoiceFile = invoiceByShipmentId.get(shipment.id);
+                  const delayed = isShipmentDelayed(
+                    shipment.eta,
+                    shipment.status,
+                    DEFAULT_SYSTEM_SETTINGS,
+                    undefined,
+                    shipment.shipped_at,
+                    shipment.shipping_duration_days
+                  );
                   return (
-                    <tr className="row-hover border-t border-[var(--border)]" key={shipment.id}>
+                    <tr
+                      className={`row-hover border-t border-[var(--border)] ${delayed ? "row-delayed" : ""}`}
+                      key={shipment.id}
+                    >
                       <td className="table-actions-first print:hidden">
-                        <div className="flex flex-wrap gap-1">
-                          <Link className="btn btn-secondary px-2 py-1 text-xs" href={`/shipments/${shipment.id}/report`} title={ui("تقرير / PDF")}>
+                        <ActionsMenu label={ui("إجراءات")}>
+                          <Link
+                            className="btn btn-ghost btn-sm w-full justify-start"
+                            href={`/shipments/${shipment.id}`}
+                          >
                             <Eye className="h-4 w-4" />
+                            {ui("عرض")}
+                          </Link>
+                          <Link
+                            className="btn btn-ghost btn-sm w-full justify-start"
+                            href={`/shipments/${shipment.id}/report`}
+                          >
+                            <Eye className="h-4 w-4" />
+                            {ui("تقرير / PDF")}
                           </Link>
                           {isAdmin ? (
                             <>
-                              <Link className="btn btn-secondary px-2 py-1 text-xs" href={`/shipments/${shipment.id}?edit=1`} title={ui("تعديل")}>
+                              <Link
+                                className="btn btn-ghost btn-sm w-full justify-start"
+                                href={`/shipments/${shipment.id}?edit=1`}
+                              >
                                 <Pencil className="h-4 w-4" />
+                                {ui("تعديل")}
                               </Link>
                               <button
-                                className="btn btn-secondary px-2 py-1 text-xs text-red-700"
+                                className="btn btn-ghost btn-sm w-full justify-start text-red-700"
                                 disabled={deleteLoading === shipment.id}
                                 onClick={() => removeShipment(shipment)}
-                                title={ui("حذف")}
                                 type="button"
                               >
                                 <Trash2 className="h-4 w-4" />
+                                {ui("حذف")}
                               </button>
                             </>
                           ) : null}
                           {action && canWrite ? (
-                            <button className="btn px-2 py-1 text-xs" disabled={actionLoading === shipment.id} onClick={() => transition(shipment)} type="button">
+                            <button
+                              className="btn btn-sm mt-1 w-full"
+                              disabled={actionLoading === shipment.id}
+                              onClick={() => transition(shipment)}
+                              type="button"
+                            >
                               {actionLoading === shipment.id ? "..." : getNextActionLabel(action, lang)}
                             </button>
                           ) : null}
-                        </div>
+                        </ActionsMenu>
                       </td>
-                      <td className="font-semibold col-invoice">
+                      <td className="col-invoice font-semibold">
                         {invoiceFile ? displayInvoiceNumber(invoiceFile) : "-"}
                       </td>
                       <td className="col-cargo-type" title={shipment.shipment_type || undefined}>
@@ -370,10 +438,10 @@ export default function ShipmentsPage() {
                           ? shipment.vessel_location_text
                           : "-"}
                       </td>
-                      <td className="font-semibold col-amount">{formatUsd(shipment.value_usd)}</td>
+                      <td className="col-amount font-semibold">{formatUsd(shipment.value_usd)}</td>
                       <td>{formatDisplayDate(shipment.shipped_at, lang)}</td>
                       <td>{formatDisplayDate(shipment.eta, lang)}</td>
-                      <td className="font-semibold col-acid" title={shipment.acid}>
+                      <td className="col-acid font-semibold" title={shipment.acid}>
                         {shipment.acid}
                       </td>
                       <td>
@@ -385,24 +453,26 @@ export default function ShipmentsPage() {
                 })
               ) : (
                 <tr>
-                  <td className="p-4 text-[var(--muted)]" colSpan={12}>{ui("لا توجد شحنات مطابقة.")}</td>
+                  <td className="p-4 text-[var(--muted)]" colSpan={12}>
+                    {ui("لا توجد شحنات مطابقة.")}
+                  </td>
                 </tr>
-            )}
-          </tbody>
-          {!loading && filteredShipments.length ? (
-            <tfoot className="table-head font-bold">
-              <tr>
-                <td className="print:hidden" />
-                <td>{ui("الإجمالي")}</td>
-                <td />
-                <td>{listTotals.cartons.toLocaleString(languageToLocale(lang))}</td>
-                <td>{listTotals.containers.toLocaleString(languageToLocale(lang))}</td>
-                <td />
-                <td colSpan={6} />
-              </tr>
-            </tfoot>
-          ) : null}
-        </table>
+              )}
+            </tbody>
+            {!loading && filteredShipments.length ? (
+              <tfoot className="table-head font-bold">
+                <tr>
+                  <td className="print:hidden" />
+                  <td>{ui("الإجمالي")}</td>
+                  <td />
+                  <td>{listTotals.cartons.toLocaleString(languageToLocale(lang))}</td>
+                  <td>{listTotals.containers.toLocaleString(languageToLocale(lang))}</td>
+                  <td />
+                  <td colSpan={6} />
+                </tr>
+              </tfoot>
+            ) : null}
+          </table>
         </div>
       </div>
     </div>

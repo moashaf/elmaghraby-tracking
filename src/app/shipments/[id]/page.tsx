@@ -7,7 +7,7 @@ import { ArrowRight, Coins, Download, Pencil, RefreshCw, X } from "lucide-react"
 import { ShipmentFiles } from "@/components/shipment-files";
 import { ShipmentForm } from "@/components/shipment-form";
 import { ShipmentAllocationsPanel } from "@/components/shipment-allocations";
-import { ErrorMessage, PageHeader } from "@/components/ui";
+import { ErrorMessage, MetaItem, PageHeader, Skeleton } from "@/components/ui";
 import { getNextStatusAction } from "@/lib/constants";
 import { useLanguage } from "@/context/language-context";
 import { getNextActionLabel, getStatusLabel } from "@/lib/i18n";
@@ -242,7 +242,13 @@ export default function ShipmentDetailsPage() {
   }
 
   if (loading) {
-    return <div className="card p-5 text-sm text-[var(--muted)]">{ui("جاري تحميل الشحنة...")}</div>;
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
   }
 
   if (!shipment) {
@@ -254,6 +260,22 @@ export default function ShipmentDetailsPage() {
   const invDoc = documents.find((doc) => doc.doc_type.toUpperCase() === "INV");
   const customsExit = addDaysToIsoDate(shipment.eta, CUSTOMS_CLEARANCE_DAYS);
   const canRevert = isAdmin && shipment.status === "customs" && new Date().toISOString().slice(0, 10) < shipment.eta;
+  const statusSteps = [
+    { id: "in_sea", label: getStatusLabel("in_sea", lang) },
+    { id: "customs", label: getStatusLabel("customs", lang) },
+    { id: "closed", label: getStatusLabel("closed", lang) },
+  ] as const;
+  const statusIndex = statusSteps.findIndex((step) => step.id === shipment.status);
+  const vesselLocationText =
+    shipment.status === "closed"
+      ? ui("الشحنة أغلقت")
+      : shipment.status === "customs"
+        ? shipment.vessel_location_text?.trim() || ui("في الجمارك")
+        : shipment.vessel_name?.trim()
+          ? shipment.vessel_location_text?.trim()
+            ? shipment.vessel_location_text
+            : ui("جاري التتبع...")
+          : ui("أضف اسم المركب أولا");
 
   return (
     <div className="space-y-5">
@@ -261,7 +283,7 @@ export default function ShipmentDetailsPage() {
         title={`${ui("شحنة")} ${invDoc ? displayInvoiceNumber(invDoc.file_name) : shipment.shipment_number}`}
         description={`${shipment.companies?.name_ar ?? ui("شركة غير محددة")} — ${shipment.suppliers?.name_ar ?? ui("مورد غير محدد")}`}
         actions={
-          <div className="flex flex-wrap gap-2">
+          <>
             <Link className="btn btn-secondary" href="/shipments">
               <ArrowRight className="h-4 w-4" />
               {ui("رجوع")}
@@ -289,37 +311,52 @@ export default function ShipmentDetailsPage() {
                 {saving ? "..." : getNextActionLabel(action, lang)}
               </button>
             ) : null}
-          </div>
+          </>
         }
       />
 
       <ErrorMessage message={error} />
 
-      <section className="grid gap-4 md:grid-cols-4">
-        <InfoCard label={ui("الحالة")} value={getStatusLabel(shipment.status, lang)} badge={`status-${shipment.status}`} />
-        <InfoCard label={ui("تاريخ الشحن")} value={shipment.shipped_at} />
-        <InfoCard label={ui("الوصول المتوقع")} value={shipment.eta} />
-        <InfoCard label={ui("خروج جمرك (+15 يوم)")} value={customsExit} />
-        <InfoCard label={ui("اسم المركب")} value={shipment.vessel_name?.trim() ? shipment.vessel_name : ui("غير محدد")} />
-        <InfoCard
-          label={ui("موقع المركب")}
-          value={
-            shipment.status === "closed"
-              ? ui("الشحنة أغلقت")
-              : shipment.status === "customs"
-                ? shipment.vessel_location_text?.trim() || ui("في الجمارك")
-                : shipment.vessel_name?.trim()
-                  ? shipment.vessel_location_text?.trim()
-                    ? shipment.vessel_location_text
-                    : ui("جاري التتبع...")
-                  : ui("أضف اسم المركب أولا")
-          }
-        />
-        <InfoCard label={ui("عدد الحاويات")} value={containers.length.toString()} />
+      <div className="progress-rail">
+        {statusSteps.map((step, index) => {
+          const stepClass =
+            index < statusIndex ? "progress-step-done" : index === statusIndex ? "progress-step-current" : "";
+          return (
+            <div className={`progress-step ${stepClass}`} key={step.id}>
+              {step.label}
+            </div>
+          );
+        })}
+      </div>
+
+      <section className="card p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-xs font-semibold text-[var(--muted)]">{ui("الحالة")}</div>
+            <div className="mt-1">
+              <span className={`status-badge status-${shipment.status}`}>{getStatusLabel(shipment.status, lang)}</span>
+            </div>
+          </div>
+          <div className="text-sm text-[var(--muted)]">
+            {shipment.shipping_port || "-"} → {shipment.arrival_port || "-"}
+          </div>
+        </div>
+        <div className="meta-grid mt-5">
+          <MetaItem label={ui("تاريخ الشحن")} value={shipment.shipped_at || "-"} />
+          <MetaItem label={ui("الوصول المتوقع")} value={shipment.eta || "-"} />
+          <MetaItem label={ui("خروج جمرك (+15 يوم)")} value={customsExit} />
+          <MetaItem label={ui("اسم المركب")} value={shipment.vessel_name?.trim() ? shipment.vessel_name : ui("غير محدد")} />
+          <MetaItem label={ui("عدد الحاويات")} value={containers.length.toString()} />
+          <MetaItem label="ACID" value={shipment.acid} />
+        </div>
+        <div className="mt-5 rounded-[var(--radius-sm)] border border-[rgb(13_148_136_/_20%)] bg-[rgb(13_148_136_/_6%)] p-4">
+          <div className="text-xs font-semibold text-[var(--muted)]">{ui("موقع المركب")}</div>
+          <div className="mt-1 text-base font-bold text-[var(--navy)] dark:text-[var(--foreground)]">{vesselLocationText}</div>
+        </div>
       </section>
 
       {canRevert ? (
-        <div className="card flex flex-wrap items-center justify-between gap-3 border-amber-200 bg-amber-50 p-4 text-sm">
+        <div className="card flex flex-wrap items-center justify-between gap-3 border-[rgb(217_119_6_/_30%)] bg-[var(--amber-soft)] p-4 text-sm">
           <div>
             <div className="font-semibold">{ui("تنبيه")}</div>
             <div className="text-[var(--muted)]">{ui("الشحنة في «الجمرك» قبل الـ ETA. يمكنك إرجاعها إلى «في البحر».")}</div>
@@ -343,10 +380,10 @@ export default function ShipmentDetailsPage() {
         </section>
       ) : null}
 
-      <div className="flex gap-2 overflow-auto border-b border-[var(--border)]">
+      <div className="tabs-underline">
         {tabs.map((tab) => (
           <button
-            className={`border-b-2 px-4 py-3 text-sm font-semibold ${activeTab === tab.id ? "border-[#0f766e] text-[#0f766e]" : "border-transparent text-[var(--muted)]"}`}
+            className={`tab-underline ${activeTab === tab.id ? "tab-underline-active" : ""}`}
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             type="button"
@@ -397,17 +434,6 @@ export default function ShipmentDetailsPage() {
           }}
         />
       ) : null}
-    </div>
-  );
-}
-
-function InfoCard({ label, value, badge }: { label: string; value: string; badge?: string }) {
-  return (
-    <div className="card p-4">
-      <div className="text-sm text-[var(--muted)]">{label}</div>
-      <div className="mt-2 font-bold">
-        {badge ? <span className={`status-badge ${badge}`}>{value}</span> : value}
-      </div>
     </div>
   );
 }

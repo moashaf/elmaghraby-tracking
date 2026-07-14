@@ -99,8 +99,8 @@ export default function LoginPage() {
       <div className="login-form-panel" dir="auto">
         <div className="w-full max-w-md space-y-4">
           <div className="login-hero-copy hidden text-center lg:block">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#0f766e]">Elmaghraby Tracing</p>
-            <h2 className="mt-2 text-2xl font-bold leading-snug text-[#1e293b]">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--primary)]">Elmaghraby Tracing</p>
+            <h2 className="mt-2 text-2xl font-bold leading-snug text-[var(--navy)]">
               {tr("نظام تتبع الشحنات والاستيراد", "Shipment & import tracking", "货运与进口跟踪系统")}
             </h2>
             <p className="mt-2 text-sm text-[var(--muted)]">
@@ -112,7 +112,7 @@ export default function LoginPage() {
           </div>
           <form className="card login-form-card w-full space-y-5 p-6" onSubmit={submit}>
             <div className="flex items-center gap-3">
-              <div className="grid h-12 w-12 place-items-center rounded-md bg-[#0f766e] text-white">
+              <div className="grid h-12 w-12 place-items-center rounded-lg bg-[var(--primary)] text-white">
                 <ShipWheel className="h-6 w-6" />
               </div>
               <div>

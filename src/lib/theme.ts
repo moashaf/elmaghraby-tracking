@@ -9,10 +9,10 @@ export type ThemeSettings = {
 
 export const DEFAULT_THEME: ThemeSettings = {
   primary: "#0f766e",
-  navy: "#123c5a",
-  background: "#f8fafc",
-  foreground: "#0f172a",
-  fontColor: "#0f172a",
+  navy: "#0a2740",
+  background: "#e9eef5",
+  foreground: "#0b1f33",
+  fontColor: "#0b1f33",
   darkMode: false,
 };
 
@@ -43,6 +43,7 @@ export function applyTheme(theme: ThemeSettings) {
   root.style.setProperty("--foreground", dark ? "#e2e8f0" : theme.fontColor || theme.foreground);
   root.style.setProperty("--surface", dark ? "#1e293b" : "#ffffff");
   root.style.setProperty("--muted", dark ? "#94a3b8" : "#64748b");
-  root.style.setProperty("--border", dark ? "#334155" : "#cbd5e1");
+  root.style.setProperty("--border", dark ? "#334155" : "rgb(10 39 64 / 12%)");
+  root.style.setProperty("--amber", "#d97706");
   root.classList.toggle("dark", dark);
 }

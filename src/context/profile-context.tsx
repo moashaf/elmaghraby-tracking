@@ -11,6 +11,7 @@ import {
 import { usePathname, useRouter } from "next/navigation";
 import type { Session, User } from "@supabase/supabase-js";
 import { canWrite, isAdmin, isSupplier, type UserRole } from "@/lib/permissions";
+import { isSupplierPathAllowed } from "@/lib/close-shipment-rules";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
 
@@ -162,8 +163,16 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
     if (user && isLogin) {
       router.replace(isSupplier(role) ? "/supplier" : "/");
+      return;
     }
-  }, [loading, user, isLogin, router, role]);
+
+    // Keep suppliers inside their portal (+ settings); staff pages are blocked in UI + RLS.
+    if (user && isSupplier(role) && !isLogin) {
+      if (!isSupplierPathAllowed(pathname)) {
+        router.replace("/supplier");
+      }
+    }
+  }, [loading, user, isLogin, router, role, pathname]);
 
   const refresh = async () => {
     if (!isSupabaseConfigured()) {

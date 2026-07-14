@@ -12,7 +12,7 @@ import {
   ShipWheel,
   TrendingUp,
 } from "lucide-react";
-import { ErrorMessage, PageHeader } from "@/components/ui";
+import { ErrorMessage, PageHeader, Skeleton, Stat } from "@/components/ui";
 import { useLanguage } from "@/context/language-context";
 import { getStatusLabel, languageToLocale } from "@/lib/i18n";
 import type { AppLanguage } from "@/lib/i18n";
@@ -113,6 +113,7 @@ export default function DashboardPage() {
         supabase
           .from("shipments")
           .select("*,companies(name_ar),suppliers(name_ar)")
+          .neq("status", "closed")
           .order("created_at", { ascending: false }),
         supabase.from("shipment_containers").select("id,shipment_id"),
         supabase
@@ -304,38 +305,58 @@ export default function DashboardPage() {
 
       <ErrorMessage message={error} />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-6">
-        {stats.map((item) => {
-          const Icon = item.icon;
-          return (
-            <Link
-              className="card group p-5 transition hover:-translate-y-0.5 hover:border-[#0f766e]"
-              href={item.href}
-              key={item.label}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className={`inline-flex items-center rounded-full border px-2 py-1 text-[11px] font-semibold ${item.tone}`}>
-                    {t(item.label)}
-                  </div>
-                  <div className="mt-3 text-4xl font-bold tracking-tight">{item.value}</div>
-                  <p className="mt-1 text-sm text-[var(--muted)]">{item.helper}</p>
-                </div>
-                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-slate-50 text-[#0f766e] ring-1 ring-slate-200 transition group-hover:bg-emerald-50 dark:bg-slate-800 dark:ring-slate-700">
-                  <Icon className="h-5 w-5" />
-                </div>
-              </div>
-            </Link>
-          );
-        })}
+      <section className="grid gap-3 sm:grid-cols-3">
+        <Stat
+          href="/reports/delayed"
+          label={t("alerts.overdue")}
+          tone="amber"
+          value={stats.find((s) => s.label === "alerts.overdue")?.value ?? 0}
+          hint={ui("يحتاج متابعة اليوم")}
+        />
+        <Stat
+          href="/shipments"
+          label={t("alerts.eta7")}
+          tone="primary"
+          value={etaSoonShipments.length}
+          hint={ui("يصل خلال 7 أيام")}
+        />
+        <Stat
+          href="/shipments?status=customs"
+          label={getStatusLabel("customs", lang)}
+          value={stats.find((s) => s.label === "status.customs")?.value ?? 0}
+          hint={ui("في الجمارك الآن")}
+        />
+      </section>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        {loading
+          ? Array.from({ length: 6 }).map((_, index) => (
+              <Skeleton className="h-28 w-full" key={index} />
+            ))
+          : stats.map((item) => (
+              <Stat
+                key={item.label}
+                href={item.href}
+                label={t(item.label)}
+                value={item.value}
+                hint={item.helper}
+                tone={
+                  item.label === "alerts.overdue"
+                    ? "amber"
+                    : item.label === "status.in_sea"
+                      ? "primary"
+                      : "default"
+                }
+              />
+            ))}
       </div>
 
       <section className="grid gap-4 lg:grid-cols-12">
-        <div className="lg:col-span-8 space-y-4">
+        <div className="space-y-4 lg:col-span-8">
           <div className="card overflow-hidden">
             <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
               <h2 className="font-bold">{t("dashboard.recentShipments")}</h2>
-              <Link className="text-sm font-semibold text-[#0f766e]" href="/shipments">
+              <Link className="text-sm font-semibold text-[var(--primary)]" href="/shipments">
                 {t("dashboard.viewAll")}
               </Link>
             </div>
@@ -344,16 +365,16 @@ export default function DashboardPage() {
                 <thead className="table-head">
                   <tr>
                     <th className="table-actions-first text-right">{t("actions.view")}</th>
-                    <th className="text-right w-8">{ui("م")}</th>
-                    <th className="text-right col-invoice">{t("shipment.number")}</th>
-                    <th className="text-right col-cargo-type">{ui("نوع البضاعة")}</th>
+                    <th className="w-8 text-right">{ui("م")}</th>
+                    <th className="col-invoice text-right">{t("shipment.number")}</th>
+                    <th className="col-cargo-type text-right">{ui("نوع البضاعة")}</th>
                     <th className="text-right">{ui("عدد الكراتين")}</th>
                     <th className="text-right">{ui("عدد الحاويات")}</th>
                     <th className="text-right">{ui("موقع المركب")}</th>
-                    <th className="text-right col-amount">{ui("قيمة الشحنة (USD)")}</th>
+                    <th className="col-amount text-right">{ui("قيمة الشحنة (USD)")}</th>
                     <th className="text-right">{ui("تاريخ الشحن")}</th>
                     <th className="text-right">{ui("تاريخ الوصول المتوقع")}</th>
-                    <th className="text-right col-acid">ACID</th>
+                    <th className="col-acid text-right">ACID</th>
                     <th className="text-right">{t("shipment.status")}</th>
                     <th className="text-right">{t("shipment.company")}</th>
                   </tr>
@@ -362,45 +383,56 @@ export default function DashboardPage() {
                   {loading ? (
                     <tr>
                       <td className="p-4 text-[var(--muted)]" colSpan={13}>
-                        {ui("جاري التحميل...")}
+                        <Skeleton className="h-8 w-full" />
                       </td>
                     </tr>
                   ) : recentShipments.length ? (
                     recentShipments.map((shipment, index) => {
                       const invoiceFile = invoiceByShipmentId.get(shipment.id);
+                      const delayed = isShipmentDelayed(
+                        shipment.eta,
+                        shipment.status,
+                        systemSettings,
+                        undefined,
+                        shipment.shipped_at,
+                        shipment.shipping_duration_days
+                      );
                       return (
-                      <tr className="row-hover border-t border-[var(--border)]" key={shipment.id}>
-                        <td className="table-actions-first">
-                          <Link className="btn btn-secondary px-2 py-1 text-xs" href={`/shipments/${shipment.id}`}>
-                            {t("actions.view")}
-                          </Link>
-                        </td>
-                        <td className="text-center text-[var(--muted)]">{index + 1}</td>
-                        <td className="font-semibold col-invoice">
-                          {invoiceFile ? displayInvoiceNumber(invoiceFile) : "-"}
-                        </td>
-                        <td className="col-cargo-type" title={shipment.shipment_type || undefined}>
-                          {shipment.shipment_type || "-"}
-                        </td>
-                        <td>{shipment.total_cartons ?? "-"}</td>
-                        <td>{containerCountByShipment.get(shipment.id) ?? 0}</td>
-                        <td className="text-[var(--muted)]" title={shipment.vessel_location_text ?? undefined}>
-                          {shipment.vessel_name?.trim() && shipment.vessel_location_text?.trim()
-                            ? shipment.vessel_location_text
-                            : "-"}
-                        </td>
-                        <td className="font-semibold col-amount">{formatUsd(shipment.value_usd)}</td>
-                        <td>{formatDate(shipment.shipped_at, lang)}</td>
-                        <td>{formatDate(shipment.eta, lang)}</td>
-                        <td className="font-semibold col-acid" title={shipment.acid}>
-                          <Link href={`/shipments/${shipment.id}`}>{shipment.acid}</Link>
-                        </td>
-                        <td>
-                          <StatusLabel status={shipment.status} lang={lang} />
-                        </td>
-                        <td>{shipment.companies?.name_ar ?? "-"}</td>
-                      </tr>
-                    );
+                        <tr
+                          className={`row-hover border-t border-[var(--border)] ${delayed ? "row-delayed" : ""}`}
+                          key={shipment.id}
+                        >
+                          <td className="table-actions-first">
+                            <Link className="btn btn-secondary btn-sm" href={`/shipments/${shipment.id}`}>
+                              {t("actions.view")}
+                            </Link>
+                          </td>
+                          <td className="text-center text-[var(--muted)]">{index + 1}</td>
+                          <td className="col-invoice font-semibold">
+                            {invoiceFile ? displayInvoiceNumber(invoiceFile) : "-"}
+                          </td>
+                          <td className="col-cargo-type" title={shipment.shipment_type || undefined}>
+                            {shipment.shipment_type || "-"}
+                          </td>
+                          <td>{shipment.total_cartons ?? "-"}</td>
+                          <td>{containerCountByShipment.get(shipment.id) ?? 0}</td>
+                          <td className="text-[var(--muted)]" title={shipment.vessel_location_text ?? undefined}>
+                            {shipment.vessel_name?.trim() && shipment.vessel_location_text?.trim()
+                              ? shipment.vessel_location_text
+                              : "-"}
+                          </td>
+                          <td className="col-amount font-semibold">{formatUsd(shipment.value_usd)}</td>
+                          <td>{formatDate(shipment.shipped_at, lang)}</td>
+                          <td>{formatDate(shipment.eta, lang)}</td>
+                          <td className="col-acid font-semibold" title={shipment.acid}>
+                            <Link href={`/shipments/${shipment.id}`}>{shipment.acid}</Link>
+                          </td>
+                          <td>
+                            <StatusLabel status={shipment.status} lang={lang} />
+                          </td>
+                          <td>{shipment.companies?.name_ar ?? "-"}</td>
+                        </tr>
+                      );
                     })
                   ) : (
                     <tr>
@@ -440,21 +472,21 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="lg:col-span-4 space-y-4">
+        <div className="space-y-4 lg:col-span-4">
           <div className="card overflow-hidden">
             <div className="border-b border-[var(--border)] px-4 py-3">
               <h2 className="font-bold">{t("dashboard.importantAlerts")}</h2>
             </div>
 
-            <div className="p-4 space-y-4">
+            <div className="space-y-4 p-4">
               <div>
                 <div className="mb-2 flex items-center justify-between text-sm">
                   <span className="font-bold">{t("alerts.overdue")}</span>
-                  <Link className="text-xs font-semibold text-[#0f766e]" href="/shipments">
+                  <Link className="text-xs font-semibold text-[var(--primary)]" href="/reports/delayed">
                     {t("actions.open")}
                   </Link>
                 </div>
-                <div className="divide-y divide-[var(--border)] rounded-md border border-[var(--border)] bg-white/60">
+                <div className="divide-y divide-[var(--border)] rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/60">
                   {overdueShipments.length ? (
                     overdueShipments.map((shipment) => (
                       <Link
@@ -465,7 +497,7 @@ export default function DashboardPage() {
                         <span className="font-semibold">
                           {shipmentInvoiceLabel(invoiceByShipmentId.get(shipment.id))}
                         </span>
-                        <span className="text-red-700">{formatDate(shipment.eta, lang)}</span>
+                        <span className="font-semibold text-[var(--amber)]">{formatDate(shipment.eta, lang)}</span>
                       </Link>
                     ))
                   ) : (
@@ -479,11 +511,11 @@ export default function DashboardPage() {
               <div>
                 <div className="mb-2 flex items-center justify-between text-sm">
                   <span className="font-bold">{t("alerts.eta7")}</span>
-                  <Link className="text-xs font-semibold text-[#0f766e]" href="/shipments">
+                  <Link className="text-xs font-semibold text-[var(--primary)]" href="/shipments">
                     {t("actions.open")}
                   </Link>
                 </div>
-                <div className="divide-y divide-[var(--border)] rounded-md border border-[var(--border)] bg-white/60">
+                <div className="divide-y divide-[var(--border)] rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/60">
                   {etaSoonShipments.length ? (
                     etaSoonShipments.map((shipment) => (
                       <Link
@@ -494,7 +526,7 @@ export default function DashboardPage() {
                         <span className="font-semibold">
                           {shipmentInvoiceLabel(invoiceByShipmentId.get(shipment.id))}
                         </span>
-                        <span className="text-[#0f766e]">{formatDate(shipment.eta, lang)}</span>
+                        <span className="text-[var(--primary)]">{formatDate(shipment.eta, lang)}</span>
                       </Link>
                     ))
                   ) : (
@@ -504,35 +536,13 @@ export default function DashboardPage() {
                   )}
                 </div>
               </div>
-
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <div className="rounded-lg border border-[var(--border)] bg-white/60 p-3">
-                  <div className="text-xs font-semibold text-[var(--muted)]">{t("alerts.incomingContainers")}</div>
-                  <div className="mt-2 text-2xl font-bold">{stats.find((s) => s.label === "alerts.incomingContainers")?.value ?? 0}</div>
-                  <div className="mt-1 text-xs text-[var(--muted)]">{lang === "ar" ? "ضمن الشحنات المفتوحة" : "Across open shipments"}</div>
-                </div>
-                <div className="rounded-lg border border-[var(--border)] bg-white/60 p-3">
-                  <div className="text-xs font-semibold text-[var(--muted)]">{t("alerts.newProducts")}</div>
-                  <div className="mt-2 text-2xl font-bold">{stats.find((s) => s.label === "alerts.newProducts")?.value ?? 0}</div>
-                  <div className="mt-1 text-xs text-[var(--muted)]">{lang === "ar" ? "منتجات واردة جديدة" : "Flagged as new incoming"}</div>
-                </div>
-                <div className="rounded-lg border border-[var(--border)] bg-white/60 p-3">
-                  <div className="text-xs font-semibold text-[var(--muted)]">{t("alerts.disassembledProducts")}</div>
-                  <div className="mt-2 text-2xl font-bold">
-                    {stats.find((s) => s.label === "alerts.disassembledProducts")?.value ?? 0}
-                  </div>
-                  <div className="mt-1 text-xs text-[var(--muted)]">{lang === "ar" ? "منتجات مفككة" : "Flagged as disassembled"}</div>
-                </div>
-              </div>
             </div>
           </div>
 
           <div className="card p-5">
-            <div className="flex items-center justify-between">
-              <h2 className="font-bold">{t("dashboard.quickActions")}</h2>
-            </div>
+            <h2 className="font-bold">{t("dashboard.quickActions")}</h2>
             <div className="mt-4 grid grid-cols-2 gap-3">
-              <Link className="btn btn-secondary justify-start" href="/shipments/new">
+              <Link className="btn justify-start" href="/shipments/new">
                 <Plus className="h-4 w-4" />
                 {t("nav.newShipment")}
               </Link>
@@ -540,17 +550,9 @@ export default function DashboardPage() {
                 <Package className="h-4 w-4" />
                 {t("nav.products")}
               </Link>
-              <Link className="btn btn-secondary justify-start" href="/suppliers">
-                <Boxes className="h-4 w-4" />
-                {t("nav.suppliers")}
-              </Link>
               <Link className="btn btn-secondary justify-start" href="/reports">
                 <AlertTriangle className="h-4 w-4" />
                 {t("nav.reports")}
-              </Link>
-              <Link className="btn btn-secondary justify-start" href="/shipping-routes">
-                <ShipWheel className="h-4 w-4" />
-                {t("nav.routes")}
               </Link>
               <Link className="btn btn-secondary justify-start" href="/shipments">
                 <Anchor className="h-4 w-4" />

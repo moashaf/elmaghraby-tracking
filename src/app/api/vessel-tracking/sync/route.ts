@@ -4,7 +4,8 @@ import { createAdminClient, jsonError, requireWriter } from "@/lib/supabase/serv
 
 function isCronAuthorized(request: Request) {
   const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) return true;
+  // Deny by default when CRON_SECRET is unset (never leave the endpoint open).
+  if (!secret) return false;
 
   const header = request.headers.get("x-cron-secret")?.trim();
   if (header && header === secret) return true;
