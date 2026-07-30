@@ -18,6 +18,16 @@ import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
 import { useSupabaseRealtimeReload } from "@/lib/supabase/use-realtime-reload";
 import { addDaysToIsoDate } from "@/lib/eta";
+import {
+  CLOSE_COST_GROUPS,
+  CLOSE_COST_ITEMS,
+  formStringsToLineItems,
+  lineItemsToFormStrings,
+  nonZeroCloseCostItems,
+  sumCloseCostLineItems,
+  toCloseCostRollups,
+  type CloseCostItemKey,
+} from "@/lib/close-cost-items";
 import { CUSTOMS_RELEASE_DOC_TYPE, shipmentCustomsReleasePath } from "@/lib/storage-path";
 import { displayUnitPerCarton } from "@/lib/shipment-product-quantity";
 import type { Shipment, ShipmentAllocation, ShipmentContainer, ShipmentCost, ShipmentDocument, ShipmentProduct, TimelineEvent } from "@/lib/types";
@@ -536,13 +546,20 @@ function Timeline({ rows }: { rows: TimelineEvent[] }) {
 
 function CostsPanel({ cost, onEdit }: { cost: ShipmentCost | null; onEdit: () => void }) {
   const { ui } = useLanguage();
-  const values = useMemo(() => cost ? [
-    [ui("جمارك"), cost.customs_cost],
-    [ui("تخليص"), cost.clearance_cost],
-    [ui("نقل داخلي"), cost.local_transport_cost],
-    [ui("مصروفات أخرى"), cost.other_expenses],
-    [ui("الإجمالي"), cost.total_cost],
-  ] : [], [cost, ui]);
+  const detailRows = useMemo(() => (cost ? nonZeroCloseCostItems(cost.line_items ?? {}) : []), [cost]);
+  const summaryValues = useMemo(
+    () =>
+      cost
+        ? [
+            [ui("جمارك"), cost.customs_cost],
+            [ui("تخليص"), cost.clearance_cost],
+            [ui("نقل داخلي"), cost.local_transport_cost],
+            [ui("مصروفات أخرى"), cost.other_expenses],
+            [ui("الإجمالي"), cost.total_cost],
+          ]
+        : [],
+    [cost, ui]
+  );
 
   if (!cost) {
     return (
@@ -557,17 +574,42 @@ function CostsPanel({ cost, onEdit }: { cost: ShipmentCost | null; onEdit: () =>
   }
 
   return (
-    <div className="card p-5">
-      <div className="grid gap-3 md:grid-cols-3">
-        {values.map(([label, value]) => (
-          <div className="rounded-md border border-[var(--border)] p-3" key={label}>
-            <div className="text-sm text-[var(--muted)]">{label}</div>
-            <div className="mt-1 font-bold">{Number(value).toLocaleString("ar-EG")}</div>
-          </div>
-        ))}
+    <div className="card space-y-4 p-5">
+      {detailRows.length ? (
+        <div className="space-y-2">
+          {CLOSE_COST_GROUPS.map((group) => {
+            const rows = detailRows.filter((row) => row.group === group.id);
+            if (!rows.length) return null;
+            return (
+              <div key={group.id}>
+                <h3 className="mb-2 text-sm font-bold text-[var(--navy)]">{group.labelAr}</h3>
+                <div className="grid gap-2 md:grid-cols-2">
+                  {rows.map((row) => (
+                    <div className="rounded-md border border-[var(--border)] px-3 py-2" key={row.key}>
+                      <div className="text-sm text-[var(--muted)]">{row.labelAr}</div>
+                      <div className="mt-1 font-bold">{row.amount.toLocaleString("ar-EG")}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-3">
+          {summaryValues.map(([label, value]) => (
+            <div className="rounded-md border border-[var(--border)] p-3" key={label}>
+              <div className="text-sm text-[var(--muted)]">{label}</div>
+              <div className="mt-1 font-bold">{Number(value).toLocaleString("ar-EG")}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="rounded-md border border-[rgb(15_118_110_/_25%)] bg-[rgb(15_118_110_/_6%)] px-3 py-2 text-sm font-bold">
+        {ui("الإجمالي")}: {Number(cost.total_cost).toLocaleString("ar-EG")}
       </div>
-      {cost.closing_notes ? <p className="mt-4 text-sm text-[var(--muted)]">{cost.closing_notes}</p> : null}
-      <button className="btn mt-4" onClick={onEdit} type="button">
+      {cost.closing_notes ? <p className="text-sm text-[var(--muted)]">{cost.closing_notes}</p> : null}
+      <button className="btn" onClick={onEdit} type="button">
         {ui("تعديل المصاريف")}
       </button>
     </div>
@@ -588,17 +630,14 @@ function CostsDialog({
   onSaved: () => void;
 }) {
   const { ui } = useLanguage();
-  const [form, setForm] = useState({
-    customs_cost: cost?.customs_cost?.toString() ?? "0",
-    clearance_cost: cost?.clearance_cost?.toString() ?? "0",
-    local_transport_cost: cost?.local_transport_cost?.toString() ?? "0",
-    other_expenses: cost?.other_expenses?.toString() ?? "0",
-    closing_notes: cost?.closing_notes ?? "",
-  });
+  const [lineForm, setLineForm] = useState(() => lineItemsToFormStrings(cost?.line_items ?? {}));
+  const [closingNotes, setClosingNotes] = useState(cost?.closing_notes ?? "");
   const [customsReleaseFile, setCustomsReleaseFile] = useState<File | null>(null);
   const [existingCustomsRelease, setExistingCustomsRelease] = useState<ShipmentDocument | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const totalPreview = useMemo(() => sumCloseCostLineItems(formStringsToLineItems(lineForm)), [lineForm]);
 
   useEffect(() => {
     if (!isSupabaseConfigured()) return;
@@ -644,7 +683,7 @@ function CostsDialog({
     setCustomsReleaseFile(null);
   }
 
-  async function closeViaApi(accessToken: string) {
+  async function closeViaApi(accessToken: string, lineItems: Record<CloseCostItemKey, number>, notes: string | null) {
     const response = await fetch(`/api/shipments/${shipmentId}/close-with-costs`, {
       method: "POST",
       headers: {
@@ -652,11 +691,8 @@ function CostsDialog({
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        customs_cost: Number(form.customs_cost) || 0,
-        clearance_cost: Number(form.clearance_cost) || 0,
-        local_transport_cost: Number(form.local_transport_cost) || 0,
-        other_expenses: Number(form.other_expenses) || 0,
-        closing_notes: form.closing_notes.trim() || null,
+        line_items: lineItems,
+        closing_notes: notes,
       }),
     });
 
@@ -690,9 +726,12 @@ function CostsDialog({
       }
     }
 
+    const lineItems = formStringsToLineItems(lineForm);
+    const rollups = toCloseCostRollups(lineItems);
+    const notes = closingNotes.trim() || null;
+
     setLoading(true);
     try {
-      // Only upload a newly chosen file; existing CUSTOMS_RELEASE is enough to close.
       if (customsReleaseFile) {
         await uploadCustomsRelease(customsReleaseFile);
       }
@@ -706,15 +745,15 @@ function CostsDialog({
         return;
       }
 
-      // Primary: direct Supabase RPC (works even if the Vercel API route fails).
       const { error: closeError } = await supabase.rpc("close_shipment_with_costs", {
         shipment_id: shipmentId,
-        customs_cost: Number(form.customs_cost) || 0,
+        customs_cost: rollups.customs_cost,
         shipping_cost: 0,
-        clearance_cost: Number(form.clearance_cost) || 0,
-        local_transport_cost: Number(form.local_transport_cost) || 0,
-        other_expenses: Number(form.other_expenses) || 0,
-        closing_notes: form.closing_notes.trim() || null,
+        clearance_cost: rollups.clearance_cost,
+        local_transport_cost: rollups.local_transport_cost,
+        other_expenses: rollups.other_expenses,
+        closing_notes: notes,
+        line_items: lineItems,
       });
 
       if (closeError) {
@@ -725,8 +764,7 @@ function CostsDialog({
           setError(closeError.message || ui("تعذر حفظ المصاريف."));
           return;
         }
-        // Fallback for projects that never applied the RPC migration.
-        await closeViaApi(session.access_token);
+        await closeViaApi(session.access_token, lineItems, notes);
       }
 
       onSaved();
@@ -739,21 +777,47 @@ function CostsDialog({
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4" onClick={onClose}>
-      <form className="card max-h-[90vh] w-full max-w-2xl space-y-4 overflow-auto p-5" onClick={(event) => event.stopPropagation()} onSubmit={submit}>
+      <form
+        className="card max-h-[90vh] w-full max-w-4xl space-y-4 overflow-auto p-5"
+        onClick={(event) => event.stopPropagation()}
+        onSubmit={submit}
+      >
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold">{ui("مصاريف الإغلاق")}</h2>
-          <button className="btn btn-secondary p-2" onClick={onClose} type="button"><X className="h-4 w-4" /></button>
+          <button className="btn btn-secondary p-2" onClick={onClose} type="button">
+            <X className="h-4 w-4" />
+          </button>
         </div>
         <ErrorMessage message={error} />
-        <div className="grid gap-3 md:grid-cols-2">
-          <CostInput label={ui("الجمارك")} name="customs_cost" form={form} setForm={setForm} />
-          <CostInput label={ui("التخليص")} name="clearance_cost" form={form} setForm={setForm} />
-          <CostInput label={ui("النقل الداخلي")} name="local_transport_cost" form={form} setForm={setForm} />
-          <CostInput label={ui("مصروفات أخرى")} name="other_expenses" form={form} setForm={setForm} />
+
+        {CLOSE_COST_GROUPS.map((group) => (
+          <section className="space-y-3 rounded-md border border-[var(--border)] p-3" key={group.id}>
+            <h3 className="text-sm font-bold text-[var(--navy)]">{group.labelAr}</h3>
+            <div className="grid gap-3 md:grid-cols-2">
+              {CLOSE_COST_ITEMS.filter((item) => item.group === group.id).map((item) => (
+                <label className="label" key={item.key}>
+                  {item.labelAr}
+                  <input
+                    className="input"
+                    min={0}
+                    step="0.01"
+                    type="number"
+                    value={lineForm[item.key]}
+                    onChange={(event) => setLineForm((prev) => ({ ...prev, [item.key]: event.target.value }))}
+                  />
+                </label>
+              ))}
+            </div>
+          </section>
+        ))}
+
+        <div className="rounded-md border border-[rgb(15_118_110_/_25%)] bg-[rgb(15_118_110_/_6%)] px-3 py-2 text-sm font-bold">
+          {ui("الإجمالي")}: {totalPreview.toLocaleString("ar-EG")}
         </div>
+
         <label className="label">
           {ui("ملاحظات الإغلاق")}
-          <textarea className="input min-h-24" value={form.closing_notes} onChange={(event) => setForm({ ...form, closing_notes: event.target.value })} />
+          <textarea className="input min-h-24" value={closingNotes} onChange={(event) => setClosingNotes(event.target.value)} />
         </label>
         <label className="label">
           {ui("الافراج الجمركي")} (PDF)
@@ -774,32 +838,5 @@ function CostsDialog({
         </button>
       </form>
     </div>
-  );
-}
-
-type CostsForm = {
-  customs_cost: string;
-  clearance_cost: string;
-  local_transport_cost: string;
-  other_expenses: string;
-  closing_notes: string;
-};
-
-function CostInput({
-  label,
-  name,
-  form,
-  setForm,
-}: {
-  label: string;
-  name: keyof Omit<CostsForm, "closing_notes">;
-  form: CostsForm;
-  setForm: React.Dispatch<React.SetStateAction<CostsForm>>;
-}) {
-  return (
-    <label className="label">
-      {label}
-      <input className="input" min={0} step="0.01" type="number" value={form[name]} onChange={(event) => setForm({ ...form, [name]: event.target.value })} />
-    </label>
   );
 }

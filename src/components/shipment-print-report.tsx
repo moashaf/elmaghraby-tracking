@@ -6,6 +6,7 @@ import { ArrowRight, Download, FileSpreadsheet, Printer } from "lucide-react";
 import { downloadExcelWithOptionalImages } from "@/lib/excel-export";
 import { ErrorMessage } from "@/components/ui";
 import { useLanguage } from "@/context/language-context";
+import { CLOSE_COST_GROUPS, nonZeroCloseCostItems } from "@/lib/close-cost-items";
 import { formatUsd } from "@/lib/format";
 import { getStatusLabel, languageToLocale } from "@/lib/i18n";
 import { displayUnitPerCarton } from "@/lib/shipment-product-quantity";
@@ -303,13 +304,52 @@ export function ShipmentPrintReport({ shipmentId }: { shipmentId: string }) {
       {cost ? (
         <section className="report-print-section card p-5 print-avoid">
           <h2 className="mb-3 text-base font-bold">{ui("مصاريف الإغلاق")}</h2>
-          <div className="grid gap-3 text-sm md:grid-cols-3">
-            <Field label={ui("جمارك")} value={Number(cost.customs_cost).toLocaleString(languageToLocale(lang))} />
-            <Field label={ui("تخليص")} value={Number(cost.clearance_cost).toLocaleString(languageToLocale(lang))} />
-            <Field label={ui("نقل داخلي")} value={Number(cost.local_transport_cost).toLocaleString(languageToLocale(lang))} />
-            <Field label={ui("مصروفات أخرى")} value={Number(cost.other_expenses).toLocaleString(languageToLocale(lang))} />
-            <Field label={ui("الإجمالي")} value={Number(cost.total_cost).toLocaleString(languageToLocale(lang))} />
-          </div>
+          {(() => {
+            const detailRows = nonZeroCloseCostItems(cost.line_items ?? {});
+            if (detailRows.length) {
+              return (
+                <div className="space-y-3 text-sm">
+                  {CLOSE_COST_GROUPS.map((group) => {
+                    const rows = detailRows.filter((row) => row.group === group.id);
+                    if (!rows.length) return null;
+                    return (
+                      <div key={group.id}>
+                        <h3 className="mb-2 font-semibold">{group.labelAr}</h3>
+                        <div className="grid gap-2 md:grid-cols-3">
+                          {rows.map((row) => (
+                            <Field
+                              key={row.key}
+                              label={row.labelAr}
+                              value={row.amount.toLocaleString(languageToLocale(lang))}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <Field
+                    label={ui("الإجمالي")}
+                    value={Number(cost.total_cost).toLocaleString(languageToLocale(lang))}
+                  />
+                </div>
+              );
+            }
+            return (
+              <div className="grid gap-3 text-sm md:grid-cols-3">
+                <Field label={ui("جمارك")} value={Number(cost.customs_cost).toLocaleString(languageToLocale(lang))} />
+                <Field label={ui("تخليص")} value={Number(cost.clearance_cost).toLocaleString(languageToLocale(lang))} />
+                <Field
+                  label={ui("نقل داخلي")}
+                  value={Number(cost.local_transport_cost).toLocaleString(languageToLocale(lang))}
+                />
+                <Field
+                  label={ui("مصروفات أخرى")}
+                  value={Number(cost.other_expenses).toLocaleString(languageToLocale(lang))}
+                />
+                <Field label={ui("الإجمالي")} value={Number(cost.total_cost).toLocaleString(languageToLocale(lang))} />
+              </div>
+            );
+          })()}
           {cost.closing_notes ? <p className="mt-3 text-sm text-[var(--muted)]">{cost.closing_notes}</p> : null}
         </section>
       ) : null}

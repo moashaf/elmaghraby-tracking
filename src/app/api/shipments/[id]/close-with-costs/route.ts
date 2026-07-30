@@ -1,4 +1,9 @@
 import { CUSTOMS_RELEASE_DOC_TYPE } from "@/lib/storage-path";
+import {
+  normalizeCloseCostLineItems,
+  toCloseCostRollups,
+  type CloseCostItemKey,
+} from "@/lib/close-cost-items";
 import { validateCloseShipmentRules } from "@/lib/close-shipment-rules";
 import { DEFAULT_SYSTEM_SETTINGS, type SystemSettings } from "@/lib/system-settings";
 import { jsonError, requireWriter } from "@/lib/supabase/server";
@@ -9,6 +14,7 @@ type CloseCostsBody = {
   local_transport_cost?: number;
   other_expenses?: number;
   closing_notes?: string | null;
+  line_items?: Partial<Record<CloseCostItemKey, number | string>> | null;
 };
 
 async function loadSystemSettings(adminClient: ReturnType<typeof import("@/lib/supabase/server").createAdminClient>) {
@@ -35,12 +41,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return jsonError("طلب غير صالح.", 400);
     }
 
-    const customsCost = Number(body.customs_cost) || 0;
-    const clearanceCost = Number(body.clearance_cost) || 0;
-    const localTransportCost = Number(body.local_transport_cost) || 0;
-    const otherExpenses = Number(body.other_expenses) || 0;
+    const lineItems = normalizeCloseCostLineItems(body.line_items ?? {});
+    const rollups = toCloseCostRollups(lineItems);
     const closingNotes = body.closing_notes?.trim() || null;
-    const totalCost = customsCost + clearanceCost + localTransportCost + otherExpenses;
 
     const { data: shipment, error: shipmentError } = await auth.adminClient
       .from("shipments")
@@ -64,19 +67,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const validation = validateCloseShipmentRules({
       isAlreadyClosed,
-      totalCost,
+      totalCost: rollups.total_cost,
       hasCustomsDocument: Boolean(customsDoc),
       settings,
     });
     if (!validation.ok) return jsonError(validation.message, 400);
 
     const costPayload = {
-      customs_cost: customsCost,
+      customs_cost: rollups.customs_cost,
       shipping_cost: 0,
-      clearance_cost: clearanceCost,
-      local_transport_cost: localTransportCost,
-      other_expenses: otherExpenses,
+      clearance_cost: rollups.clearance_cost,
+      local_transport_cost: rollups.local_transport_cost,
+      other_expenses: rollups.other_expenses,
       closing_notes: closingNotes,
+      line_items: lineItems,
       updated_at: new Date().toISOString(),
     };
 

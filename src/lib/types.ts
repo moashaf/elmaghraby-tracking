@@ -111,6 +111,7 @@ export type ShipmentCost = {
   other_expenses: number;
   total_cost: number;
   closing_notes: string | null;
+  line_items?: Record<string, number> | null;
   closed_by: string | null;
   closed_at: string;
   updated_at: string;
