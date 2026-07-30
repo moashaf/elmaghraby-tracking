@@ -13,6 +13,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { ErrorMessage, PageHeader, Skeleton, Stat } from "@/components/ui";
+import { VesselLocationLink } from "@/components/vessel-location-link";
 import { useLanguage } from "@/context/language-context";
 import { getStatusLabel, languageToLocale } from "@/lib/i18n";
 import type { AppLanguage } from "@/lib/i18n";
@@ -416,10 +417,12 @@ export default function DashboardPage() {
                           </td>
                           <td>{shipment.total_cartons ?? "-"}</td>
                           <td>{containerCountByShipment.get(shipment.id) ?? 0}</td>
-                          <td className="text-[var(--muted)]" title={shipment.vessel_location_text ?? undefined}>
-                            {shipment.vessel_name?.trim() && shipment.vessel_location_text?.trim()
-                              ? shipment.vessel_location_text
-                              : "-"}
+                          <td className="text-[var(--muted)]">
+                            {shipment.vessel_name?.trim() && shipment.vessel_location_text?.trim() ? (
+                              <VesselLocationLink shipment={shipment} />
+                            ) : (
+                              "-"
+                            )}
                           </td>
                           <td className="col-amount font-semibold">{formatUsd(shipment.value_usd)}</td>
                           <td>{formatDate(shipment.shipped_at, lang)}</td>

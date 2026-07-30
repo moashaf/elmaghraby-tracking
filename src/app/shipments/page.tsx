@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Eye, FileSpreadsheet, Pencil, Plus, Printer, RefreshCw, Trash2 } from "lucide-react";
 import { ActionsMenu } from "@/components/actions-menu";
 import { EmptyState, ErrorMessage, FilterBar, FilterChip, PageHeader, Skeleton } from "@/components/ui";
+import { VesselLocationLink } from "@/components/vessel-location-link";
 import {
   getNextStatusAction,
   type ShipmentStatus,
@@ -433,10 +434,12 @@ export default function ShipmentsPage() {
                           (shipment as Shipment & { shipment_containers?: unknown }).shipment_containers
                         )}
                       </td>
-                      <td className="text-[var(--muted)]" title={shipment.vessel_location_text ?? undefined}>
-                        {shipment.vessel_name?.trim() && shipment.vessel_location_text?.trim()
-                          ? shipment.vessel_location_text
-                          : "-"}
+                      <td className="text-[var(--muted)]">
+                        {shipment.vessel_name?.trim() && shipment.vessel_location_text?.trim() ? (
+                          <VesselLocationLink shipment={shipment} />
+                        ) : (
+                          "-"
+                        )}
                       </td>
                       <td className="col-amount font-semibold">{formatUsd(shipment.value_usd)}</td>
                       <td>{formatDisplayDate(shipment.shipped_at, lang)}</td>

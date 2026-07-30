@@ -23,105 +23,110 @@ async function loadSystemSettings(adminClient: ReturnType<typeof import("@/lib/s
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireWriter(request);
-  if (!auth.ok) return jsonError(auth.error, auth.status);
-
-  const { id: shipmentId } = await params;
-  let body: CloseCostsBody;
   try {
-    body = (await request.json()) as CloseCostsBody;
-  } catch {
-    return jsonError("طلب غير صالح.", 400);
-  }
+    const auth = await requireWriter(request);
+    if (!auth.ok) return jsonError(auth.error, auth.status);
 
-  const customsCost = Number(body.customs_cost) || 0;
-  const clearanceCost = Number(body.clearance_cost) || 0;
-  const localTransportCost = Number(body.local_transport_cost) || 0;
-  const otherExpenses = Number(body.other_expenses) || 0;
-  const closingNotes = body.closing_notes?.trim() || null;
-  const totalCost = customsCost + clearanceCost + localTransportCost + otherExpenses;
+    const { id: shipmentId } = await params;
+    let body: CloseCostsBody;
+    try {
+      body = (await request.json()) as CloseCostsBody;
+    } catch {
+      return jsonError("طلب غير صالح.", 400);
+    }
 
-  const { data: shipment, error: shipmentError } = await auth.adminClient
-    .from("shipments")
-    .select("id, status, closed_at")
-    .eq("id", shipmentId)
-    .maybeSingle();
+    const customsCost = Number(body.customs_cost) || 0;
+    const clearanceCost = Number(body.clearance_cost) || 0;
+    const localTransportCost = Number(body.local_transport_cost) || 0;
+    const otherExpenses = Number(body.other_expenses) || 0;
+    const closingNotes = body.closing_notes?.trim() || null;
+    const totalCost = customsCost + clearanceCost + localTransportCost + otherExpenses;
 
-  if (shipmentError) return jsonError(shipmentError.message, 500);
-  if (!shipment) return jsonError("الشحنة غير موجودة.", 404);
-
-  const settings = await loadSystemSettings(auth.adminClient);
-  const isAlreadyClosed = shipment.status === "closed";
-
-  const { data: customsDoc } = await auth.adminClient
-    .from("shipment_documents")
-    .select("id")
-    .eq("shipment_id", shipmentId)
-    .eq("doc_type", CUSTOMS_RELEASE_DOC_TYPE)
-    .limit(1)
-    .maybeSingle();
-
-  const validation = validateCloseShipmentRules({
-    isAlreadyClosed,
-    totalCost,
-    hasCustomsDocument: Boolean(customsDoc),
-    settings,
-  });
-  if (!validation.ok) return jsonError(validation.message, 400);
-
-  const costPayload = {
-    customs_cost: customsCost,
-    shipping_cost: 0,
-    clearance_cost: clearanceCost,
-    local_transport_cost: localTransportCost,
-    other_expenses: otherExpenses,
-    closing_notes: closingNotes,
-    updated_at: new Date().toISOString(),
-  };
-
-  const { data: existingCost } = await auth.adminClient
-    .from("shipment_costs")
-    .select("id")
-    .eq("shipment_id", shipmentId)
-    .maybeSingle();
-
-  const costResult = existingCost
-    ? await auth.adminClient.from("shipment_costs").update(costPayload).eq("id", existingCost.id).select("id").single()
-    : await auth.adminClient
-        .from("shipment_costs")
-        .insert({
-          shipment_id: shipmentId,
-          ...costPayload,
-          closed_by: auth.user.id,
-          closed_at: new Date().toISOString(),
-        })
-        .select("id")
-        .single();
-
-  if (costResult.error) return jsonError(costResult.error.message, 500);
-
-  if (!isAlreadyClosed) {
-    const { error: closeError } = await auth.adminClient
+    const { data: shipment, error: shipmentError } = await auth.adminClient
       .from("shipments")
-      .update({
-        status: "closed",
-        previous_status: shipment.status,
-        closed_at: shipment.closed_at ?? new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", shipmentId);
+      .select("id, status, closed_at")
+      .eq("id", shipmentId)
+      .maybeSingle();
 
-    if (closeError) return jsonError(closeError.message, 500);
+    if (shipmentError) return jsonError(shipmentError.message, 500);
+    if (!shipment) return jsonError("الشحنة غير موجودة.", 404);
 
-    await auth.adminClient.from("shipment_timeline_events").insert({
-      shipment_id: shipmentId,
-      event_type: "closed_with_costs",
-      title_ar: "إغلاق الشحنة",
-      description_ar: "تم حفظ المصاريف وإغلاق الشحنة",
-      metadata: { cost_id: costResult.data.id },
-      created_by: auth.user.id,
+    const settings = await loadSystemSettings(auth.adminClient);
+    const isAlreadyClosed = shipment.status === "closed";
+
+    const { data: customsDoc } = await auth.adminClient
+      .from("shipment_documents")
+      .select("id")
+      .eq("shipment_id", shipmentId)
+      .eq("doc_type", CUSTOMS_RELEASE_DOC_TYPE)
+      .limit(1)
+      .maybeSingle();
+
+    const validation = validateCloseShipmentRules({
+      isAlreadyClosed,
+      totalCost,
+      hasCustomsDocument: Boolean(customsDoc),
+      settings,
     });
-  }
+    if (!validation.ok) return jsonError(validation.message, 400);
 
-  return Response.json({ ok: true, cost_id: costResult.data.id });
+    const costPayload = {
+      customs_cost: customsCost,
+      shipping_cost: 0,
+      clearance_cost: clearanceCost,
+      local_transport_cost: localTransportCost,
+      other_expenses: otherExpenses,
+      closing_notes: closingNotes,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data: existingCost } = await auth.adminClient
+      .from("shipment_costs")
+      .select("id")
+      .eq("shipment_id", shipmentId)
+      .maybeSingle();
+
+    const costResult = existingCost
+      ? await auth.adminClient.from("shipment_costs").update(costPayload).eq("id", existingCost.id).select("id").single()
+      : await auth.adminClient
+          .from("shipment_costs")
+          .insert({
+            shipment_id: shipmentId,
+            ...costPayload,
+            closed_by: auth.user.id,
+            closed_at: new Date().toISOString(),
+          })
+          .select("id")
+          .single();
+
+    if (costResult.error) return jsonError(costResult.error.message, 500);
+
+    if (!isAlreadyClosed) {
+      const { error: closeError } = await auth.adminClient
+        .from("shipments")
+        .update({
+          status: "closed",
+          previous_status: shipment.status,
+          closed_at: shipment.closed_at ?? new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", shipmentId);
+
+      if (closeError) return jsonError(closeError.message, 500);
+
+      await auth.adminClient.from("shipment_timeline_events").insert({
+        shipment_id: shipmentId,
+        event_type: "closed_with_costs",
+        title_ar: "إغلاق الشحنة",
+        description_ar: "تم حفظ المصاريف وإغلاق الشحنة",
+        metadata: { cost_id: costResult.data.id },
+        created_by: auth.user.id,
+      });
+    }
+
+    return Response.json({ ok: true, cost_id: costResult.data.id });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "تعذر إغلاق الشحنة.";
+    return jsonError(message, 500);
+  }
 }

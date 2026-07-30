@@ -8,12 +8,14 @@ import { ShipmentFiles } from "@/components/shipment-files";
 import { ShipmentForm } from "@/components/shipment-form";
 import { ShipmentAllocationsPanel } from "@/components/shipment-allocations";
 import { ErrorMessage, MetaItem, PageHeader, Skeleton } from "@/components/ui";
+import { VesselLocationLink } from "@/components/vessel-location-link";
 import { getNextStatusAction } from "@/lib/constants";
 import { useLanguage } from "@/context/language-context";
 import { getNextActionLabel, getStatusLabel } from "@/lib/i18n";
 import { useProfile } from "@/context/profile-context";
 import { displayInvoiceNumber } from "@/lib/shipment-invoice-number";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
 import { useSupabaseRealtimeReload } from "@/lib/supabase/use-realtime-reload";
 import { addDaysToIsoDate } from "@/lib/eta";
 import { CUSTOMS_RELEASE_DOC_TYPE, shipmentCustomsReleasePath } from "@/lib/storage-path";
@@ -349,9 +351,15 @@ export default function ShipmentDetailsPage() {
           <MetaItem label={ui("عدد الحاويات")} value={containers.length.toString()} />
           <MetaItem label="ACID" value={shipment.acid} />
         </div>
-        <div className="mt-5 rounded-[var(--radius-sm)] border border-[rgb(13_148_136_/_20%)] bg-[rgb(13_148_136_/_6%)] p-4">
+        <div className="mt-5 rounded-[var(--radius-sm)] border border-[rgb(15_118_110_/_20%)] bg-[rgb(15_118_110_/_6%)] p-4">
           <div className="text-xs font-semibold text-[var(--muted)]">{ui("موقع المركب")}</div>
-          <div className="mt-1 text-base font-bold text-[var(--navy)] dark:text-[var(--foreground)]">{vesselLocationText}</div>
+          <div className="mt-1 text-base font-bold text-[var(--navy)] dark:text-[var(--foreground)]">
+            <VesselLocationLink
+              className="text-base font-bold"
+              shipment={shipment}
+              text={vesselLocationText}
+            />
+          </div>
         </div>
       </section>
 
@@ -612,6 +620,8 @@ function CostsDialog({
     const {
       data: { user },
     } = await supabase.auth.getUser();
+    if (!user) throw new Error(ui("سجل الدخول أولا."));
+
     const path = shipmentCustomsReleasePath(shipmentId, file.name);
     const uploadResult = await supabase.storage.from(bucket).upload(path, file, { upsert: false });
     if (uploadResult.error) throw new Error(uploadResult.error.message);
@@ -625,13 +635,41 @@ function CostsDialog({
         storage_path: uploadResult.data.path,
         mime_type: file.type || "application/pdf",
         size_bytes: file.size,
-        uploaded_by: user?.id ?? null,
+        uploaded_by: user.id,
       })
       .select("*")
       .single();
     if (insertResult.error) throw new Error(insertResult.error.message);
     setExistingCustomsRelease(insertResult.data as ShipmentDocument);
     setCustomsReleaseFile(null);
+  }
+
+  async function closeViaApi(accessToken: string) {
+    const response = await fetch(`/api/shipments/${shipmentId}/close-with-costs`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        customs_cost: Number(form.customs_cost) || 0,
+        clearance_cost: Number(form.clearance_cost) || 0,
+        local_transport_cost: Number(form.local_transport_cost) || 0,
+        other_expenses: Number(form.other_expenses) || 0,
+        closing_notes: form.closing_notes.trim() || null,
+      }),
+    });
+
+    let payload: { error?: string } = {};
+    try {
+      payload = (await response.json()) as { error?: string };
+    } catch {
+      /* empty or non-JSON body */
+    }
+
+    if (!response.ok) {
+      throw new Error(payload.error || ui("تعذر حفظ المصاريف."));
+    }
   }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -654,6 +692,7 @@ function CostsDialog({
 
     setLoading(true);
     try {
+      // Only upload a newly chosen file; existing CUSTOMS_RELEASE is enough to close.
       if (customsReleaseFile) {
         await uploadCustomsRelease(customsReleaseFile);
       }
@@ -667,30 +706,32 @@ function CostsDialog({
         return;
       }
 
-      const response = await fetch(`/api/shipments/${shipmentId}/close-with-costs`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          customs_cost: Number(form.customs_cost) || 0,
-          clearance_cost: Number(form.clearance_cost) || 0,
-          local_transport_cost: Number(form.local_transport_cost) || 0,
-          other_expenses: Number(form.other_expenses) || 0,
-          closing_notes: form.closing_notes.trim() || null,
-        }),
+      // Primary: direct Supabase RPC (works even if the Vercel API route fails).
+      const { error: closeError } = await supabase.rpc("close_shipment_with_costs", {
+        shipment_id: shipmentId,
+        customs_cost: Number(form.customs_cost) || 0,
+        shipping_cost: 0,
+        clearance_cost: Number(form.clearance_cost) || 0,
+        local_transport_cost: Number(form.local_transport_cost) || 0,
+        other_expenses: Number(form.other_expenses) || 0,
+        closing_notes: form.closing_notes.trim() || null,
       });
 
-      const payload = (await response.json()) as { error?: string };
-      if (!response.ok) {
-        setError(payload.error ?? ui("تعذر حفظ المصاريف."));
-        return;
+      if (closeError) {
+        const missingFn =
+          /could not find|does not exist|PGRST202|42883/i.test(closeError.message) ||
+          closeError.code === "PGRST202";
+        if (!missingFn) {
+          setError(closeError.message || ui("تعذر حفظ المصاريف."));
+          return;
+        }
+        // Fallback for projects that never applied the RPC migration.
+        await closeViaApi(session.access_token);
       }
 
       onSaved();
-    } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : ui("تعذر رفع ملف الإفراج الجمركي."));
+    } catch (closeError) {
+      setError(getSupabaseErrorMessage(closeError) || ui("تعذر حفظ المصاريف وإغلاق الشحنة."));
     } finally {
       setLoading(false);
     }
