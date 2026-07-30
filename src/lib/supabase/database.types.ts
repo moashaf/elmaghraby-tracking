@@ -91,6 +91,7 @@ export interface Database {
           id: string;
           shipment_number: string;
           acid: string;
+          customs_certificate_number: string | null;
           company_id: string;
           supplier_id: string;
           shipping_port: string;
@@ -115,6 +116,7 @@ export interface Database {
         Insert: {
           shipment_number?: string;
           acid: string;
+          customs_certificate_number?: string | null;
           company_id: string;
           supplier_id: string;
           shipping_port: string;

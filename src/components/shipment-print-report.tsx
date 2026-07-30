@@ -179,6 +179,10 @@ export function ShipmentPrintReport({ shipmentId }: { shipmentId: string }) {
         <div className="grid gap-3 text-sm md:grid-cols-3">
           <Field label={ui("رقم الفاتورة")} value={invDoc ? displayInvoiceNumber(invDoc.file_name) : "-"} />
           <Field label="ACID" value={shipment.acid} />
+          <Field
+            label={ui("رقم الشهادة الجمركية")}
+            value={shipment.customs_certificate_number?.trim() || "-"}
+          />
           <Field label={ui("الحالة")} value={getStatusLabel(shipment.status, lang)} />
           <Field label={ui("نوع البضاعة")} value={shipment.shipment_type ?? "-"} />
           <Field label={ui("ميناء الشحن")} value={shipment.shipping_port} />

@@ -52,6 +52,7 @@ export type Shipment = {
   id: string;
   shipment_number: string;
   acid: string;
+  customs_certificate_number?: string | null;
   company_id: string;
   supplier_id: string;
   shipping_port: string;
@@ -150,6 +151,7 @@ export type ShipmentDocument = {
 
 export type ShipmentFormValues = {
   acid: string;
+  customs_certificate_number: string;
   company_id: string;
   supplier_id: string;
   shipping_port: string;

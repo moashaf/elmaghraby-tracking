@@ -360,6 +360,7 @@ export default function ShipmentDetailsPage() {
           <MetaItem label={ui("اسم المركب")} value={shipment.vessel_name?.trim() ? shipment.vessel_name : ui("غير محدد")} />
           <MetaItem label={ui("عدد الحاويات")} value={containers.length.toString()} />
           <MetaItem label="ACID" value={shipment.acid} />
+          <MetaItem label={ui("رقم الشهادة الجمركية")} value={shipment.customs_certificate_number?.trim() || "-"} />
         </div>
         <div className="mt-5 rounded-[var(--radius-sm)] border border-[rgb(15_118_110_/_20%)] bg-[rgb(15_118_110_/_6%)] p-4">
           <div className="text-xs font-semibold text-[var(--muted)]">{ui("موقع المركب")}</div>

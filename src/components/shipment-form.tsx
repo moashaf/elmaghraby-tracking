@@ -36,6 +36,7 @@ const CUSTOMS_CLEARANCE_DAYS = 15;
 
 const emptyForm: ShipmentFormValues = {
   acid: "",
+  customs_certificate_number: "",
   company_id: "",
   supplier_id: "",
   shipping_port: "",
@@ -75,6 +76,7 @@ function formFromShipment(shipment?: Shipment): ShipmentFormValues {
 
   return {
     acid: shipment.acid,
+    customs_certificate_number: shipment.customs_certificate_number ?? "",
     company_id: shipment.company_id,
     supplier_id: shipment.supplier_id,
     shipping_port: shipment.shipping_port,
@@ -375,6 +377,7 @@ export function ShipmentForm({
     const vesselName = form.vessel_name.trim() || null;
     const shipmentPayload = {
       acid: form.acid.trim(),
+      customs_certificate_number: form.customs_certificate_number.trim() || null,
       company_id: form.company_id,
       supplier_id: form.supplier_id,
       shipping_port: form.shipping_port.trim(),
@@ -565,6 +568,17 @@ export function ShipmentForm({
             <label className="label">
               {ui("رقم ACID")}
               <input className={fieldClass} required readOnly={readOnly} disabled={disabled} value={form.acid} onChange={(event) => setField("acid", event.target.value)} />
+            </label>
+            <label className="label">
+              {ui("رقم الشهادة الجمركية")}
+              <input
+                className={fieldClass}
+                readOnly={readOnly}
+                disabled={disabled}
+                value={form.customs_certificate_number}
+                onChange={(event) => setField("customs_certificate_number", event.target.value)}
+                placeholder={ui("اختياري")}
+              />
             </label>
             <label className="label">
               {ui("الشركة")}
