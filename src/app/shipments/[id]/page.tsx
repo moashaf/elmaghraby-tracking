@@ -777,12 +777,8 @@ function CostsDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4" onClick={onClose}>
-      <form
-        className="card max-h-[90vh] w-full max-w-4xl space-y-4 overflow-auto p-5"
-        onClick={(event) => event.stopPropagation()}
-        onSubmit={submit}
-      >
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4">
+      <form className="card max-h-[90vh] w-full max-w-4xl space-y-4 overflow-auto p-5" onSubmit={submit}>
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold">{ui("مصاريف الإغلاق")}</h2>
           <button className="btn btn-secondary p-2" onClick={onClose} type="button">
