@@ -222,8 +222,6 @@ export function ShipmentForm({
     [suppliers]
   );
 
-  const productById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
-
   useEffect(() => {
     async function loadLookups() {
       if (!isSupabaseConfigured()) {
@@ -335,15 +333,22 @@ export function ShipmentForm({
 
   function startEditCommittedProduct(index: number) {
     if (editingProductIndex === index) return;
-    if (!isProductDraftEmpty(productDraft) && !isProductDraftValid(productDraft)) {
-      setError(ui("كمّل بيانات المنتج فوق أولاً أو امسحه قبل تعديل صنف آخر."));
-      return;
+
+    let nextCommitted = committedProducts;
+    if (!isProductDraftEmpty(productDraft)) {
+      if (!isProductDraftValid(productDraft)) {
+        setError(ui("كمّل بيانات المنتج فوق أولاً أو امسحه قبل تعديل صنف آخر."));
+        return;
+      }
+      nextCommitted =
+        editingProductIndex == null
+          ? [...committedProducts, productDraft]
+          : committedProducts.map((row, rowIndex) => (rowIndex === editingProductIndex ? productDraft : row));
+      setCommittedProducts(nextCommitted);
     }
-    if (!isProductDraftEmpty(productDraft) && isProductDraftValid(productDraft)) {
-      if (!commitProductDraft()) return;
-    }
+
     setEditingProductIndex(index);
-    setProductDraft({ ...committedProducts[index] });
+    setProductDraft({ ...nextCommitted[index] });
     setError("");
   }
 
@@ -944,45 +949,52 @@ export function ShipmentForm({
           <div className="space-y-3">
             {committedProducts.length ? (
               committedProducts.map((row, index) => {
-                const selected = productById.get(row.product_id);
                 const isEditing = editingProductIndex === index;
                 return (
                   <div
-                    className={`grid gap-3 rounded-md border p-3 md:grid-cols-[1fr_auto] ${
+                    className={`grid cursor-pointer gap-3 rounded-md border p-3 md:grid-cols-[1fr_100px_100px_110px_220px_auto] ${
                       isEditing ? "border-[var(--navy)] bg-[rgb(15_118_110_/_8%)]" : "border-[var(--border)]"
                     }`}
                     key={`${row.product_id}-${index}`}
+                    onClick={() => {
+                      if (!readOnly) startEditCommittedProduct(index);
+                    }}
                   >
-                    <button
-                      className="grid gap-2 text-right md:grid-cols-[1fr_90px_90px_100px_180px]"
-                      disabled={readOnly}
-                      onClick={() => startEditCommittedProduct(index)}
-                      type="button"
-                    >
-                      <div className="font-semibold">
-                        {selected ? `${selected.sku} — ${selected.name_ar}` : ui("منتج")}
-                      </div>
-                      <div className="text-sm text-[var(--muted)]">
-                        {ui("كراتين")}: {row.cartons_count || "0"}
-                      </div>
-                      <div className="text-sm text-[var(--muted)]">
-                        {ui("وحدة")}: {row.unit_quantity || "0"}
-                      </div>
-                      <div className="text-sm text-[var(--muted)]">
-                        {ui("إجمالي")}: {row.quantity || "0"}
-                      </div>
-                      <div className="text-xs text-[var(--muted)]">
-                        {row.is_new_incoming_product ? ui("وارد جديد") : ""}
-                        {row.is_new_incoming_product && row.is_disassembled ? " · " : ""}
-                        {row.is_disassembled ? ui("مفكك") : ""}
-                        {row.notes ? ` · ${row.notes}` : ""}
-                      </div>
-                    </button>
+                    <SearchableSelect
+                      options={productOptions}
+                      disabled
+                      value={row.product_id}
+                      onChange={() => undefined}
+                      placeholder={ui("ابحث عن المنتج (SKU أو الاسم)")}
+                    />
+                    <input className="input bg-slate-50" readOnly tabIndex={-1} value={row.cartons_count} />
+                    <input className="input bg-slate-50" readOnly tabIndex={-1} value={row.unit_quantity} />
+                    <input className="input bg-slate-50" readOnly tabIndex={-1} value={row.quantity} />
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[var(--muted)]">
+                      <label className="flex items-center gap-2">
+                        <input checked={row.is_new_incoming_product} disabled type="checkbox" />
+                        {ui("منتج وارد جديد")}
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input checked={row.is_disassembled} disabled type="checkbox" />
+                        {ui("مفكك")}
+                      </label>
+                    </div>
                     {!readOnly ? (
-                      <button className="btn btn-secondary px-2" onClick={() => removeCommittedProduct(index)} type="button">
+                      <button
+                        className="btn btn-secondary px-2"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          removeCommittedProduct(index);
+                        }}
+                        type="button"
+                      >
                         <Trash2 className="h-4 w-4" />
                       </button>
-                    ) : null}
+                    ) : (
+                      <span />
+                    )}
+                    {row.notes ? <input className="input bg-slate-50 md:col-span-5" readOnly tabIndex={-1} value={row.notes} /> : null}
                   </div>
                 );
               })

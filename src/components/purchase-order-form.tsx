@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Save, Trash2 } from "lucide-react";
+import { ArrowDown, Plus, Save, Trash2 } from "lucide-react";
 import { QuickProductModal } from "@/components/quick-product-modal";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage } from "@/components/ui";
@@ -40,6 +40,21 @@ function toPositiveNumber(value: string) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
+function isItemDraftEmpty(row: PurchaseOrderItemDraft) {
+  return (
+    !row.product_id &&
+    !row.cartons_count.trim() &&
+    !row.unit_quantity.trim() &&
+    !row.notes.trim() &&
+    !row.is_new_incoming_product &&
+    !row.is_disassembled
+  );
+}
+
+function isItemDraftValid(row: PurchaseOrderItemDraft) {
+  return Boolean(row.product_id) && toPositiveNumber(row.cartons_count) > 0 && toPositiveNumber(row.unit_quantity) > 0;
+}
+
 function findDefaultSupplier(suppliers: Supplier[]) {
   return suppliers.find((row) => {
     const normalized = row.name_ar.replace(/\s/g, "");
@@ -55,7 +70,9 @@ type Props = {
 export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
   const { ui } = useLanguage();
   const [form, setForm] = useState<PurchaseOrderFormValues>(emptyForm);
-  const [items, setItems] = useState<PurchaseOrderItemDraft[]>([{ ...emptyItem }]);
+  const [committedItems, setCommittedItems] = useState<PurchaseOrderItemDraft[]>([]);
+  const [itemDraft, setItemDraft] = useState<PurchaseOrderItemDraft>({ ...emptyItem });
+  const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
@@ -114,27 +131,80 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
       })),
     [products]
   );
-  const productById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
-
   const cartonStats = useMemo(() => {
-    const entered = items.reduce((sum, row) => sum + toPositiveNumber(row.cartons_count), 0);
+    const rows =
+      isItemDraftValid(itemDraft)
+        ? editingItemIndex == null
+          ? [...committedItems, itemDraft]
+          : committedItems.map((row, index) => (index === editingItemIndex ? itemDraft : row))
+        : committedItems;
+    const entered = rows.reduce((sum, row) => sum + toPositiveNumber(row.cartons_count), 0);
     return { entered };
-  }, [items]);
+  }, [committedItems, itemDraft, editingItemIndex]);
 
-  function updateItem(index: number, value: PurchaseOrderItemDraft) {
-    setItems((current) => current.map((row, i) => (i === index ? value : row)));
+  function itemsForSave() {
+    if (isItemDraftValid(itemDraft)) {
+      if (editingItemIndex == null) return [...committedItems, itemDraft];
+      return committedItems.map((row, index) => (index === editingItemIndex ? itemDraft : row));
+    }
+    return committedItems;
+  }
+
+  function commitItemDraft() {
+    if (!isItemDraftValid(itemDraft)) {
+      setError(ui("أضف منتجا مع كرتين ووحدة صحيحة قبل التنزيل."));
+      return false;
+    }
+    setCommittedItems((current) => {
+      if (editingItemIndex == null) return [...current, itemDraft];
+      return current.map((row, index) => (index === editingItemIndex ? itemDraft : row));
+    });
+    setItemDraft({ ...emptyItem });
+    setEditingItemIndex(null);
+    setError("");
+    return true;
+  }
+
+  function startEditCommittedItem(index: number) {
+    if (editingItemIndex === index) return;
+    let nextCommitted = committedItems;
+    if (!isItemDraftEmpty(itemDraft)) {
+      if (!isItemDraftValid(itemDraft)) {
+        setError(ui("كمّل بيانات المنتج فوق أولاً أو امسحه قبل تعديل صنف آخر."));
+        return;
+      }
+      nextCommitted =
+        editingItemIndex == null
+          ? [...committedItems, itemDraft]
+          : committedItems.map((row, rowIndex) => (rowIndex === editingItemIndex ? itemDraft : row));
+      setCommittedItems(nextCommitted);
+    }
+    setEditingItemIndex(index);
+    setItemDraft({ ...nextCommitted[index] });
+    setError("");
+  }
+
+  function removeCommittedItem(index: number) {
+    setCommittedItems((current) => current.filter((_, rowIndex) => rowIndex !== index));
+    if (editingItemIndex == null) return;
+    if (editingItemIndex === index) {
+      setItemDraft({ ...emptyItem });
+      setEditingItemIndex(null);
+      return;
+    }
+    if (editingItemIndex > index) setEditingItemIndex(editingItemIndex - 1);
   }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
 
-    const validItems = items.filter((row) => {
-      if (!row.product_id) return false;
-      const cartons = toPositiveNumber(row.cartons_count);
-      const unit = toPositiveNumber(row.unit_quantity);
-      return cartons > 0 && unit > 0;
-    });
+    if (!isItemDraftEmpty(itemDraft) && !isItemDraftValid(itemDraft)) {
+      setError(ui("كمّل بيانات المنتج فوق أو نزّله قبل حفظ أمر الشراء."));
+      return;
+    }
+
+    const validItems = itemsForSave();
 
     if (!form.supplier_id) {
       setError(ui("اختر المورد."));
@@ -254,101 +324,131 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
                 <Plus className="h-4 w-4" />
                 {ui("منتج جديد")}
               </button>
-              <button
-                className="btn btn-secondary text-sm"
-                onClick={() => setItems((current) => [...current, { ...emptyItem }])}
-                type="button"
-              >
-                <Plus className="h-4 w-4" />
-                {ui("سطر منتج")}
-              </button>
             </div>
           </div>
 
+          <div
+            className="grid gap-3 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 md:grid-cols-[1fr_100px_100px_110px_220px_auto]"
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+              event.preventDefault();
+              commitItemDraft();
+            }}
+          >
+            <SearchableSelect
+              options={productOptions}
+              value={itemDraft.product_id}
+              onChange={(value) => setItemDraft((current) => ({ ...current, product_id: value }))}
+              placeholder={ui("ابحث عن المنتج (SKU أو الاسم)")}
+            />
+            <input
+              className="input"
+              min={0}
+              placeholder={ui("الكرتين")}
+              type="number"
+              value={itemDraft.cartons_count}
+              onChange={(event) =>
+                setItemDraft((current) => syncProductQuantityFields({ ...current, cartons_count: event.target.value }))
+              }
+            />
+            <input
+              className="input"
+              min={0}
+              placeholder={ui("الوحدة")}
+              type="number"
+              value={itemDraft.unit_quantity}
+              onChange={(event) =>
+                setItemDraft((current) => syncProductQuantityFields({ ...current, unit_quantity: event.target.value }))
+              }
+            />
+            <input
+              className="input bg-slate-50 text-[var(--foreground)]"
+              placeholder={ui("إجمالي القطع")}
+              readOnly
+              tabIndex={-1}
+              type="number"
+              value={itemDraft.quantity}
+            />
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[var(--muted)]">
+              <label className="flex items-center gap-2">
+                <input
+                  checked={itemDraft.is_new_incoming_product}
+                  onChange={(event) =>
+                    setItemDraft((current) => ({ ...current, is_new_incoming_product: event.target.checked }))
+                  }
+                  type="checkbox"
+                />
+                {ui("منتج وارد جديد")}
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  checked={itemDraft.is_disassembled}
+                  onChange={(event) => setItemDraft((current) => ({ ...current, is_disassembled: event.target.checked }))}
+                  type="checkbox"
+                />
+                {ui("مفكك")}
+              </label>
+            </div>
+            <button className="btn px-2" onClick={() => commitItemDraft()} type="button">
+              <ArrowDown className="h-4 w-4" />
+            </button>
+            <input
+              className="input md:col-span-5"
+              placeholder={ui("ملاحظات المنتج")}
+              value={itemDraft.notes}
+              onChange={(event) => setItemDraft((current) => ({ ...current, notes: event.target.value }))}
+            />
+          </div>
+
           <div className="space-y-3">
-            {items.map((row, index) => {
-              const selected = productById.get(row.product_id);
-              return (
-                <div
-                  className="grid gap-3 rounded-md border border-[var(--border)] p-3 md:grid-cols-[1fr_100px_100px_110px_220px_auto]"
-                  key={index}
-                >
-                  <SearchableSelect
-                    options={productOptions}
-                    value={row.product_id}
-                    onChange={(value) => updateItem(index, { ...row, product_id: value })}
-                    placeholder={ui("ابحث عن المنتج (SKU أو الاسم)")}
-                  />
-                  <input
-                    className="input"
-                    min={0}
-                    placeholder={ui("الكرتين")}
-                    type="number"
-                    value={row.cartons_count}
-                    onChange={(event) =>
-                      updateItem(index, syncProductQuantityFields({ ...row, cartons_count: event.target.value }))
-                    }
-                  />
-                  <input
-                    className="input"
-                    min={0}
-                    placeholder={ui("الوحدة")}
-                    type="number"
-                    value={row.unit_quantity}
-                    onChange={(event) =>
-                      updateItem(index, syncProductQuantityFields({ ...row, unit_quantity: event.target.value }))
-                    }
-                  />
-                  <input
-                    className="input bg-slate-50 text-[var(--foreground)]"
-                    placeholder={ui("إجمالي القطع")}
-                    readOnly
-                    tabIndex={-1}
-                    type="number"
-                    value={row.quantity}
-                  />
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[var(--muted)]">
-                    <label className="flex items-center gap-2">
-                      <input
-                        checked={row.is_new_incoming_product}
-                        onChange={(event) =>
-                          updateItem(index, { ...row, is_new_incoming_product: event.target.checked })
-                        }
-                        type="checkbox"
-                      />
-                      {ui("منتج وارد جديد")}
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <input
-                        checked={row.is_disassembled}
-                        onChange={(event) => updateItem(index, { ...row, is_disassembled: event.target.checked })}
-                        type="checkbox"
-                      />
-                      {ui("مفكك")}
-                    </label>
-                  </div>
-                  <button
-                    className="btn btn-secondary px-2"
-                    onClick={() =>
-                      setItems((current) =>
-                        current.length === 1 ? [{ ...emptyItem }] : current.filter((_, rowIndex) => rowIndex !== index)
-                      )
-                    }
-                    type="button"
+            {committedItems.length ? (
+              committedItems.map((row, index) => {
+                const isEditing = editingItemIndex === index;
+                return (
+                  <div
+                    className={`grid cursor-pointer gap-3 rounded-md border p-3 md:grid-cols-[1fr_100px_100px_110px_220px_auto] ${
+                      isEditing ? "border-[var(--navy)] bg-[rgb(15_118_110_/_8%)]" : "border-[var(--border)]"
+                    }`}
+                    key={`${row.product_id}-${index}`}
+                    onClick={() => startEditCommittedItem(index)}
                   >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                  {selected ? (
-                    <input
-                      className="input md:col-span-5"
-                      placeholder={ui("ملاحظات المنتج")}
-                      value={row.notes}
-                      onChange={(event) => updateItem(index, { ...row, notes: event.target.value })}
+                    <SearchableSelect
+                      options={productOptions}
+                      disabled
+                      value={row.product_id}
+                      onChange={() => undefined}
+                      placeholder={ui("ابحث عن المنتج (SKU أو الاسم)")}
                     />
-                  ) : null}
-                </div>
-              );
-            })}
+                    <input className="input bg-slate-50" readOnly tabIndex={-1} value={row.cartons_count} />
+                    <input className="input bg-slate-50" readOnly tabIndex={-1} value={row.unit_quantity} />
+                    <input className="input bg-slate-50" readOnly tabIndex={-1} value={row.quantity} />
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[var(--muted)]">
+                      <label className="flex items-center gap-2">
+                        <input checked={row.is_new_incoming_product} disabled type="checkbox" />
+                        {ui("منتج وارد جديد")}
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input checked={row.is_disassembled} disabled type="checkbox" />
+                        {ui("مفكك")}
+                      </label>
+                    </div>
+                    <button
+                      className="btn btn-secondary px-2"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        removeCommittedItem(index);
+                      }}
+                      type="button"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                    {row.notes ? <input className="input bg-slate-50 md:col-span-5" readOnly tabIndex={-1} value={row.notes} /> : null}
+                  </div>
+                );
+              })
+            ) : (
+              <p className="text-sm text-[var(--muted)]">{ui("لا توجد أصناف بعد. أدخل المنتج فوق ثم Enter أو السهم لتحت.")}</p>
+            )}
           </div>
         </section>
 
@@ -371,13 +471,7 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
           onClose={() => setShowProductModal(false)}
           onCreated={(product) => {
             setProducts((current) => [product, ...current]);
-            setItems((current) => {
-              const next =
-                current.length === 1 && !current[0].product_id
-                  ? [{ ...current[0], product_id: product.id }]
-                  : [...current, { ...emptyItem, product_id: product.id }];
-              return next;
-            });
+            setItemDraft((current) => ({ ...current, product_id: product.id }));
             setShowProductModal(false);
           }}
         />
