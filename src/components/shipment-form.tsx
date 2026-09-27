@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Save, Trash2, X, ImagePlus } from "lucide-react";
+import { ArrowDown, Plus, Save, Trash2, X, ImagePlus } from "lucide-react";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage } from "@/components/ui";
 import { toEntityOptions } from "@/lib/entity-options";
@@ -107,7 +107,7 @@ function containerDrafts(rows?: ShipmentContainer[]): ContainerDraft[] {
 }
 
 function productDrafts(rows?: ShipmentProduct[]): ShipmentProductDraft[] {
-  if (!rows?.length) return [{ ...emptyProduct }];
+  if (!rows?.length) return [];
 
   return rows.map((row) => ({
     product_id: row.product_id,
@@ -118,6 +118,21 @@ function productDrafts(rows?: ShipmentProduct[]): ShipmentProductDraft[] {
     is_new_incoming_product: row.is_new_incoming_product,
     is_disassembled: row.is_disassembled ?? false,
   }));
+}
+
+function isProductDraftEmpty(row: ShipmentProductDraft) {
+  return (
+    !row.product_id &&
+    !row.cartons_count.trim() &&
+    !row.unit_quantity.trim() &&
+    !row.notes.trim() &&
+    !row.is_new_incoming_product &&
+    !row.is_disassembled
+  );
+}
+
+function isProductDraftValid(row: ShipmentProductDraft) {
+  return Boolean(row.product_id) && toPositiveNumber(row.cartons_count) > 0 && toPositiveNumber(row.unit_quantity) > 0;
 }
 
 function toNullableNumber(value: string) {
@@ -160,7 +175,9 @@ export function ShipmentForm({
   const [containers, setContainers] = useState<ContainerDraft[]>(() =>
     containerDrafts(initialContainers).length ? containerDrafts(initialContainers) : [{ ...emptyContainer }]
   );
-  const [shipmentProducts, setShipmentProducts] = useState<ShipmentProductDraft[]>(() => productDrafts(initialProducts));
+  const [committedProducts, setCommittedProducts] = useState<ShipmentProductDraft[]>(() => productDrafts(initialProducts));
+  const [productDraft, setProductDraft] = useState<ShipmentProductDraft>({ ...emptyProduct });
+  const [editingProductIndex, setEditingProductIndex] = useState<number | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -292,8 +309,53 @@ export function ShipmentForm({
     setContainers((current) => current.map((row, rowIndex) => (rowIndex === index ? value : row)));
   }
 
-  function updateShipmentProduct(index: number, value: ShipmentProductDraft) {
-    setShipmentProducts((current) => current.map((row, rowIndex) => (rowIndex === index ? value : row)));
+  function productsForSave() {
+    if (isProductDraftValid(productDraft)) {
+      if (editingProductIndex == null) return [...committedProducts, productDraft];
+      return committedProducts.map((row, index) => (index === editingProductIndex ? productDraft : row));
+    }
+    return committedProducts;
+  }
+
+  function commitProductDraft() {
+    if (!isProductDraftValid(productDraft)) {
+      setError(ui("أضف منتجا مع كرتين ووحدة صحيحة قبل التنزيل."));
+      return false;
+    }
+
+    setCommittedProducts((current) => {
+      if (editingProductIndex == null) return [...current, productDraft];
+      return current.map((row, index) => (index === editingProductIndex ? productDraft : row));
+    });
+    setProductDraft({ ...emptyProduct });
+    setEditingProductIndex(null);
+    setError("");
+    return true;
+  }
+
+  function startEditCommittedProduct(index: number) {
+    if (editingProductIndex === index) return;
+    if (!isProductDraftEmpty(productDraft) && !isProductDraftValid(productDraft)) {
+      setError(ui("كمّل بيانات المنتج فوق أولاً أو امسحه قبل تعديل صنف آخر."));
+      return;
+    }
+    if (!isProductDraftEmpty(productDraft) && isProductDraftValid(productDraft)) {
+      if (!commitProductDraft()) return;
+    }
+    setEditingProductIndex(index);
+    setProductDraft({ ...committedProducts[index] });
+    setError("");
+  }
+
+  function removeCommittedProduct(index: number) {
+    setCommittedProducts((current) => current.filter((_, rowIndex) => rowIndex !== index));
+    if (editingProductIndex == null) return;
+    if (editingProductIndex === index) {
+      setProductDraft({ ...emptyProduct });
+      setEditingProductIndex(null);
+      return;
+    }
+    if (editingProductIndex > index) setEditingProductIndex(editingProductIndex - 1);
   }
 
   async function uploadStorage(path: string, file: File) {
@@ -322,13 +384,13 @@ export function ShipmentForm({
       return;
     }
 
+    if (!isProductDraftEmpty(productDraft) && !isProductDraftValid(productDraft)) {
+      setError(ui("كمّل بيانات المنتج فوق أو نزّله قبل حفظ الشحنة."));
+      return;
+    }
+
     const validContainers = containers.filter((container) => container.container_number.trim());
-    const validProducts = shipmentProducts.filter((row) => {
-      if (!row.product_id) return false;
-      const cartons = toPositiveNumber(row.cartons_count);
-      const unit = toPositiveNumber(row.unit_quantity);
-      return cartons > 0 && unit > 0;
-    });
+    const validProducts = productsForSave();
 
     if (!validContainers.length) {
       setError(ui("أضف حاوية واحدة على الأقل."));
@@ -536,7 +598,13 @@ export function ShipmentForm({
   const disabled = readOnly || loading;
 
   const cartonStats = useMemo(() => {
-    const entered = shipmentProducts.reduce((sum, row) => {
+    const rows =
+      isProductDraftValid(productDraft)
+        ? editingProductIndex == null
+          ? [...committedProducts, productDraft]
+          : committedProducts.map((row, index) => (index === editingProductIndex ? productDraft : row))
+        : committedProducts;
+    const entered = rows.reduce((sum, row) => {
       const value = Number(row.cartons_count);
       return sum + (Number.isFinite(value) && value > 0 ? value : 0);
     }, 0);
@@ -545,7 +613,7 @@ export function ShipmentForm({
       entered,
       target: Number.isFinite(target) && target > 0 ? target : null,
     };
-  }, [form.total_cartons, shipmentProducts]);
+  }, [form.total_cartons, committedProducts, productDraft, editingProductIndex]);
 
   const customsExitDate = useMemo(() => {
     if (!form.eta) return "";
@@ -782,95 +850,145 @@ export function ShipmentForm({
               )}
             </div>
             {!readOnly ? (
-              <div className="flex flex-wrap gap-2">
-                <button className="btn btn-secondary text-sm" onClick={() => setShowProductModal(true)} type="button">
-                  <Plus className="h-4 w-4" />
-                  {ui("منتج جديد")}
-                </button>
-                <button className="btn btn-secondary text-sm" onClick={() => setShipmentProducts((current) => [...current, { ...emptyProduct }])} type="button">
-                  <Plus className="h-4 w-4" />
-                  {ui("سطر منتج")}
-                </button>
-              </div>
+              <button className="btn btn-secondary text-sm" onClick={() => setShowProductModal(true)} type="button">
+                <Plus className="h-4 w-4" />
+                {ui("منتج جديد")}
+              </button>
             ) : null}
           </div>
+
+          {!readOnly ? (
+            <div
+              className="grid gap-3 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 md:grid-cols-[1fr_100px_100px_110px_220px_auto]"
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+                event.preventDefault();
+                commitProductDraft();
+              }}
+            >
+              <SearchableSelect
+                options={productOptions}
+                disabled={disabled}
+                value={productDraft.product_id}
+                onChange={(value) => setProductDraft((current) => ({ ...current, product_id: value }))}
+                placeholder={ui("ابحث عن المنتج (SKU أو الاسم)")}
+              />
+              <input
+                className={fieldClass}
+                min={0}
+                placeholder={ui("الكرتين")}
+                type="number"
+                value={productDraft.cartons_count}
+                onChange={(event) =>
+                  setProductDraft((current) => syncProductQuantityFields({ ...current, cartons_count: event.target.value }))
+                }
+              />
+              <input
+                className={fieldClass}
+                min={0}
+                placeholder={ui("الوحدة")}
+                type="number"
+                value={productDraft.unit_quantity}
+                onChange={(event) =>
+                  setProductDraft((current) => syncProductQuantityFields({ ...current, unit_quantity: event.target.value }))
+                }
+              />
+              <input
+                className="input bg-slate-50 text-[var(--foreground)]"
+                placeholder={ui("إجمالي القطع")}
+                readOnly
+                tabIndex={-1}
+                type="number"
+                value={productDraft.quantity}
+              />
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[var(--muted)]">
+                <label className="flex items-center gap-2">
+                  <input
+                    checked={productDraft.is_new_incoming_product}
+                    disabled={disabled}
+                    onChange={(event) =>
+                      setProductDraft((current) => ({ ...current, is_new_incoming_product: event.target.checked }))
+                    }
+                    type="checkbox"
+                  />
+                  {ui("منتج وارد جديد")}
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    checked={productDraft.is_disassembled}
+                    disabled={disabled}
+                    onChange={(event) => setProductDraft((current) => ({ ...current, is_disassembled: event.target.checked }))}
+                    type="checkbox"
+                  />
+                  {ui("مفكك")}
+                </label>
+              </div>
+              <button
+                className="btn px-2"
+                disabled={disabled}
+                onClick={() => commitProductDraft()}
+                title={editingProductIndex == null ? ui("تنزيل الصنف") : ui("تحديث الصنف")}
+                type="button"
+              >
+                <ArrowDown className="h-4 w-4" />
+              </button>
+              <input
+                className="input md:col-span-5"
+                placeholder={ui("ملاحظات المنتج")}
+                value={productDraft.notes}
+                onChange={(event) => setProductDraft((current) => ({ ...current, notes: event.target.value }))}
+              />
+            </div>
+          ) : null}
+
           <div className="space-y-3">
-            {shipmentProducts.map((row, index) => {
-              const selected = productById.get(row.product_id);
-              return (
-                <div className="grid gap-3 rounded-md border border-[var(--border)] p-3 md:grid-cols-[1fr_100px_100px_110px_220px_auto]" key={index}>
-                  <SearchableSelect
-                    options={productOptions}
-                    disabled={readOnly}
-                    value={row.product_id}
-                    onChange={(value) => updateShipmentProduct(index, { ...row, product_id: value })}
-                    placeholder={ui("ابحث عن المنتج (SKU أو الاسم)")}
-                  />
-                  <input
-                    className={fieldClass}
-                    min={0}
-                    placeholder={ui("الكرتين")}
-                    readOnly={readOnly}
-                    type="number"
-                    value={row.cartons_count}
-                    onChange={(event) =>
-                      updateShipmentProduct(
-                        index,
-                        syncProductQuantityFields({ ...row, cartons_count: event.target.value })
-                      )
-                    }
-                  />
-                  <input
-                    className={fieldClass}
-                    min={0}
-                    placeholder={ui("الوحدة")}
-                    readOnly={readOnly}
-                    type="number"
-                    value={row.unit_quantity}
-                    onChange={(event) =>
-                      updateShipmentProduct(
-                        index,
-                        syncProductQuantityFields({ ...row, unit_quantity: event.target.value })
-                      )
-                    }
-                  />
-                  <input
-                    className="input bg-slate-50 text-[var(--foreground)]"
-                    placeholder={ui("إجمالي القطع")}
-                    readOnly
-                    tabIndex={-1}
-                    type="number"
-                    value={row.quantity}
-                  />
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[var(--muted)]">
-                    <label className="flex items-center gap-2">
-                      <input
-                        checked={row.is_new_incoming_product}
-                        disabled={readOnly}
-                        onChange={(event) =>
-                          updateShipmentProduct(index, { ...row, is_new_incoming_product: event.target.checked })
-                        }
-                        type="checkbox"
-                      />
-                      {ui("منتج وارد جديد")}
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <input
-                        checked={row.is_disassembled}
-                        disabled={readOnly}
-                        onChange={(event) => updateShipmentProduct(index, { ...row, is_disassembled: event.target.checked })}
-                        type="checkbox"
-                      />
-                      {ui("مفكك")}
-                    </label>
+            {committedProducts.length ? (
+              committedProducts.map((row, index) => {
+                const selected = productById.get(row.product_id);
+                const isEditing = editingProductIndex === index;
+                return (
+                  <div
+                    className={`grid gap-3 rounded-md border p-3 md:grid-cols-[1fr_auto] ${
+                      isEditing ? "border-[var(--navy)] bg-[rgb(15_118_110_/_8%)]" : "border-[var(--border)]"
+                    }`}
+                    key={`${row.product_id}-${index}`}
+                  >
+                    <button
+                      className="grid gap-2 text-right md:grid-cols-[1fr_90px_90px_100px_180px]"
+                      disabled={readOnly}
+                      onClick={() => startEditCommittedProduct(index)}
+                      type="button"
+                    >
+                      <div className="font-semibold">
+                        {selected ? `${selected.sku} — ${selected.name_ar}` : ui("منتج")}
+                      </div>
+                      <div className="text-sm text-[var(--muted)]">
+                        {ui("كراتين")}: {row.cartons_count || "0"}
+                      </div>
+                      <div className="text-sm text-[var(--muted)]">
+                        {ui("وحدة")}: {row.unit_quantity || "0"}
+                      </div>
+                      <div className="text-sm text-[var(--muted)]">
+                        {ui("إجمالي")}: {row.quantity || "0"}
+                      </div>
+                      <div className="text-xs text-[var(--muted)]">
+                        {row.is_new_incoming_product ? ui("وارد جديد") : ""}
+                        {row.is_new_incoming_product && row.is_disassembled ? " · " : ""}
+                        {row.is_disassembled ? ui("مفكك") : ""}
+                        {row.notes ? ` · ${row.notes}` : ""}
+                      </div>
+                    </button>
+                    {!readOnly ? (
+                      <button className="btn btn-secondary px-2" onClick={() => removeCommittedProduct(index)} type="button">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    ) : null}
                   </div>
-                  <button className="btn btn-secondary px-2" disabled={readOnly} onClick={() => setShipmentProducts((current) => current.length === 1 ? [{ ...emptyProduct }] : current.filter((_, rowIndex) => rowIndex !== index))} type="button">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                  {selected ? <input className="input md:col-span-5" placeholder={ui("ملاحظات المنتج")} value={row.notes} onChange={(event) => updateShipmentProduct(index, { ...row, notes: event.target.value })} /> : null}
-                </div>
-              );
-            })}
+                );
+              })
+            ) : (
+              <p className="text-sm text-[var(--muted)]">{ui("لا توجد أصناف بعد. أدخل المنتج فوق ثم Enter أو السهم لتحت.")}</p>
+            )}
           </div>
         </section>
 
@@ -890,10 +1008,7 @@ export function ShipmentForm({
           onClose={() => setShowProductModal(false)}
           onCreated={(product) => {
             setProducts((current) => [product, ...current]);
-            setShipmentProducts((current) => {
-              const next = current.length === 1 && !current[0].product_id ? [{ ...current[0], product_id: product.id }] : [...current, { ...emptyProduct, product_id: product.id }];
-              return next;
-            });
+            setProductDraft((current) => ({ ...current, product_id: product.id }));
             setShowProductModal(false);
           }}
         />
