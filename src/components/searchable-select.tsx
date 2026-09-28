@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useId, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { ChevronDown, Search } from "lucide-react";
 
 export type SearchableOption = {
@@ -18,22 +18,30 @@ type Props = {
   disabled?: boolean;
   className?: string;
   emptyMessage?: string;
+  onAdvance?: () => void;
 };
 
-export function SearchableSelect({
-  options,
-  value,
-  onChange,
-  placeholder = "اختر...",
-  required,
-  disabled,
-  className = "",
-  emptyMessage = "لا توجد نتائج",
-}: Props) {
+export const SearchableSelect = forwardRef<HTMLButtonElement, Props>(function SearchableSelect(
+  {
+    options,
+    value,
+    onChange,
+    placeholder = "اختر...",
+    required,
+    disabled,
+    className = "",
+    emptyMessage = "لا توجد نتائج",
+    onAdvance,
+  },
+  ref
+) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [term, setTerm] = useState("");
+
+  useImperativeHandle(ref, () => buttonRef.current as HTMLButtonElement);
 
   const selected = options.find((option) => option.value === value);
 
@@ -54,12 +62,30 @@ export function SearchableSelect({
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
+  function advance() {
+    setOpen(false);
+    setTerm("");
+    onAdvance?.();
+  }
+
   return (
     <div className={`relative ${className}`} ref={rootRef}>
       <button
         className="input flex items-center justify-between gap-2 text-right"
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+          if (open) return;
+          if (!value) {
+            event.preventDefault();
+            setOpen(true);
+            return;
+          }
+          event.preventDefault();
+          advance();
+        }}
+        ref={buttonRef}
         type="button"
       >
         <span className={selected ? "" : "text-[var(--muted)]"}>{selected?.label ?? placeholder}</span>
@@ -89,6 +115,16 @@ export function SearchableSelect({
                 placeholder="بحث..."
                 value={term}
                 onChange={(event) => setTerm(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+                  event.preventDefault();
+                  if (filtered.length === 1) {
+                    onChange(filtered[0].value);
+                    advance();
+                    return;
+                  }
+                  if (value) advance();
+                }}
               />
             </div>
           </div>
@@ -119,4 +155,4 @@ export function SearchableSelect({
       ) : null}
     </div>
   );
-}
+});

@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { ImagePlus, Plus, Save, Trash2, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ImagePlus, X } from "lucide-react";
+import { AppModal } from "@/components/app-modal";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage } from "@/components/ui";
 import { buildCategorySelectOptions } from "@/lib/category-options";
 import { fileFromClipboardEvent } from "@/lib/clipboard-image";
 import { uploadProductImage } from "@/lib/product-images";
-import { syncProductQuantityFields } from "@/lib/shipment-product-quantity";
 import { useLanguage } from "@/context/language-context";
 import { createClient } from "@/lib/supabase/client";
 import type { Product, ProductCategory } from "@/lib/types";
@@ -94,8 +94,11 @@ export function QuickProductModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4" onClick={onClose}>
-      <form className="card w-full max-w-lg space-y-4 p-5" onClick={(event) => event.stopPropagation()} onSubmit={submit}>
+    <AppModal>
+      <form
+        className="card my-auto w-full max-w-lg space-y-4 overflow-auto p-5 max-h-[min(90dvh,calc(100dvh-6rem))]"
+        onSubmit={submit}
+      >
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold">{ui("منتج جديد")}</h2>
           <button className="btn btn-secondary p-2" onClick={onClose} type="button">
@@ -161,6 +164,6 @@ export function QuickProductModal({
           {loading ? ui("جاري الحفظ...") : ui("حفظ المنتج")}
         </button>
       </form>
-    </div>
+    </AppModal>
   );
 }

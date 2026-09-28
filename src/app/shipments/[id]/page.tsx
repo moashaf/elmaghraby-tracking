@@ -8,6 +8,7 @@ import { ShipmentFiles } from "@/components/shipment-files";
 import { ShipmentForm } from "@/components/shipment-form";
 import { ShipmentAllocationsPanel } from "@/components/shipment-allocations";
 import { ErrorMessage, MetaItem, PageHeader, Skeleton } from "@/components/ui";
+import { AppModal } from "@/components/app-modal";
 import { VesselLocationLink } from "@/components/vessel-location-link";
 import { getNextStatusAction } from "@/lib/constants";
 import { useLanguage } from "@/context/language-context";
@@ -777,8 +778,8 @@ function CostsDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4">
-      <form className="card max-h-[90vh] w-full max-w-4xl space-y-4 overflow-auto p-5" onSubmit={submit}>
+    <AppModal>
+      <form className="card my-auto max-h-[min(90dvh,calc(100dvh-6rem))] w-full max-w-4xl space-y-4 overflow-auto p-5" onSubmit={submit}>
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold">{ui("مصاريف الإغلاق")}</h2>
           <button className="btn btn-secondary p-2" onClick={onClose} type="button">
@@ -834,6 +835,6 @@ function CostsDialog({
           {loading ? ui("جاري الحفظ...") : isClosed ? ui("حفظ المصاريف") : ui("حفظ وإغلاق")}
         </button>
       </form>
-    </div>
+    </AppModal>
   );
 }

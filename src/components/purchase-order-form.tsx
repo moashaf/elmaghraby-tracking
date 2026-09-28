@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, Plus, Save, Trash2 } from "lucide-react";
 import { QuickProductModal } from "@/components/quick-product-modal";
 import { SearchableSelect } from "@/components/searchable-select";
@@ -73,6 +73,11 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
   const [committedItems, setCommittedItems] = useState<PurchaseOrderItemDraft[]>([]);
   const [itemDraft, setItemDraft] = useState<PurchaseOrderItemDraft>({ ...emptyItem });
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
+  const productSelectRef = useRef<HTMLButtonElement>(null);
+  const cartonsRef = useRef<HTMLInputElement>(null);
+  const unitRef = useRef<HTMLInputElement>(null);
+  const disassembledRef = useRef<HTMLInputElement>(null);
+  const newIncomingRef = useRef<HTMLInputElement>(null);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
@@ -162,6 +167,7 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
     setItemDraft({ ...emptyItem });
     setEditingItemIndex(null);
     setError("");
+    queueMicrotask(() => productSelectRef.current?.focus());
     return true;
   }
 
@@ -327,17 +333,12 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
             </div>
           </div>
 
-          <div
-            className="grid gap-3 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 md:grid-cols-[1fr_100px_100px_110px_220px_auto]"
-            onKeyDown={(event) => {
-              if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
-              event.preventDefault();
-              commitItemDraft();
-            }}
-          >
+          <div className="grid grid-cols-1 gap-3 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 sm:grid-cols-2 min-[1100px]:grid-cols-[minmax(0,1fr)_6.5rem_6.5rem_7rem_minmax(12rem,auto)_auto]">
             <SearchableSelect
+              ref={productSelectRef}
               options={productOptions}
               value={itemDraft.product_id}
+              onAdvance={() => cartonsRef.current?.focus()}
               onChange={(value) => setItemDraft((current) => ({ ...current, product_id: value }))}
               placeholder={ui("ابحث عن المنتج (SKU أو الاسم)")}
             />
@@ -345,21 +346,33 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
               className="input"
               min={0}
               placeholder={ui("الكرتين")}
+              ref={cartonsRef}
               type="number"
               value={itemDraft.cartons_count}
               onChange={(event) =>
                 setItemDraft((current) => syncProductQuantityFields({ ...current, cartons_count: event.target.value }))
               }
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+                event.preventDefault();
+                unitRef.current?.focus();
+              }}
             />
             <input
               className="input"
               min={0}
               placeholder={ui("الوحدة")}
+              ref={unitRef}
               type="number"
               value={itemDraft.unit_quantity}
               onChange={(event) =>
                 setItemDraft((current) => syncProductQuantityFields({ ...current, unit_quantity: event.target.value }))
               }
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+                event.preventDefault();
+                disassembledRef.current?.focus();
+              }}
             />
             <input
               className="input bg-slate-50 text-[var(--foreground)]"
@@ -372,28 +385,40 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[var(--muted)]">
               <label className="flex items-center gap-2">
                 <input
-                  checked={itemDraft.is_new_incoming_product}
-                  onChange={(event) =>
-                    setItemDraft((current) => ({ ...current, is_new_incoming_product: event.target.checked }))
-                  }
-                  type="checkbox"
-                />
-                {ui("منتج وارد جديد")}
-              </label>
-              <label className="flex items-center gap-2">
-                <input
                   checked={itemDraft.is_disassembled}
+                  ref={disassembledRef}
                   onChange={(event) => setItemDraft((current) => ({ ...current, is_disassembled: event.target.checked }))}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+                    event.preventDefault();
+                    newIncomingRef.current?.focus();
+                  }}
                   type="checkbox"
                 />
                 {ui("مفكك")}
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  checked={itemDraft.is_new_incoming_product}
+                  ref={newIncomingRef}
+                  onChange={(event) =>
+                    setItemDraft((current) => ({ ...current, is_new_incoming_product: event.target.checked }))
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+                    event.preventDefault();
+                    commitItemDraft();
+                  }}
+                  type="checkbox"
+                />
+                {ui("منتج وارد جديد")}
               </label>
             </div>
             <button className="btn px-2" onClick={() => commitItemDraft()} type="button">
               <ArrowDown className="h-4 w-4" />
             </button>
             <input
-              className="input md:col-span-5"
+              className="input sm:col-span-2 min-[1100px]:col-span-5"
               placeholder={ui("ملاحظات المنتج")}
               value={itemDraft.notes}
               onChange={(event) => setItemDraft((current) => ({ ...current, notes: event.target.value }))}
@@ -406,7 +431,7 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
                 const isEditing = editingItemIndex === index;
                 return (
                   <div
-                    className={`grid cursor-pointer gap-3 rounded-md border p-3 md:grid-cols-[1fr_100px_100px_110px_220px_auto] ${
+                    className={`grid cursor-pointer grid-cols-1 gap-3 rounded-md border p-3 sm:grid-cols-2 min-[1100px]:grid-cols-[minmax(0,1fr)_6.5rem_6.5rem_7rem_minmax(12rem,auto)_auto] ${
                       isEditing ? "border-[var(--navy)] bg-[rgb(15_118_110_/_8%)]" : "border-[var(--border)]"
                     }`}
                     key={`${row.product_id}-${index}`}
@@ -424,12 +449,12 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
                     <input className="input bg-slate-50" readOnly tabIndex={-1} value={row.quantity} />
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[var(--muted)]">
                       <label className="flex items-center gap-2">
-                        <input checked={row.is_new_incoming_product} disabled type="checkbox" />
-                        {ui("منتج وارد جديد")}
-                      </label>
-                      <label className="flex items-center gap-2">
                         <input checked={row.is_disassembled} disabled type="checkbox" />
                         {ui("مفكك")}
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input checked={row.is_new_incoming_product} disabled type="checkbox" />
+                        {ui("منتج وارد جديد")}
                       </label>
                     </div>
                     <button
@@ -442,7 +467,7 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
-                    {row.notes ? <input className="input bg-slate-50 md:col-span-5" readOnly tabIndex={-1} value={row.notes} /> : null}
+                    {row.notes ? <input className="input bg-slate-50 sm:col-span-2 min-[1100px]:col-span-5" readOnly tabIndex={-1} value={row.notes} /> : null}
                   </div>
                 );
               })
@@ -473,6 +498,7 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
             setProducts((current) => [product, ...current]);
             setItemDraft((current) => ({ ...current, product_id: product.id }));
             setShowProductModal(false);
+            queueMicrotask(() => cartonsRef.current?.focus());
           }}
         />
       ) : null}

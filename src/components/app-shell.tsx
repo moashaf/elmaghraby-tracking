@@ -195,7 +195,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative min-h-screen bg-[var(--background)]">
       <AppWaveBackground />
-      <aside className="fixed right-0 top-0 z-10 hidden h-screen w-72 border-l border-white/10 bg-gradient-to-b from-[var(--navy)] to-[#071f31] text-white shadow-[inset_1px_0_0_rgb(255_255_255_/_6%)] lg:block print:hidden">
+      <aside className="fixed right-0 top-0 z-10 hidden h-screen w-72 border-l border-white/10 bg-gradient-to-b from-[var(--navy)] to-[#071f31] text-white shadow-[inset_1px_0_0_rgb(255_255_255_/_6%)] min-[900px]:block print:hidden">
         <div className="flex h-16 items-center gap-3 border-b border-white/10 px-5">
           <div className="grid h-10 w-10 place-items-center rounded-lg bg-[var(--primary)]">
             <ShipWheel className="h-5 w-5" />
@@ -216,11 +216,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <div className="lg:mr-72 print:mr-0">
-        <header className="app-shell-header sticky top-0 z-20 flex h-16 items-center justify-between border-b px-4 lg:px-8 print:hidden dark:bg-slate-900/95">
+      <div className="min-[900px]:mr-72 print:mr-0">
+        <header className="app-shell-header sticky top-0 z-20 flex h-16 items-center justify-between border-b px-4 min-[900px]:px-8 print:hidden dark:bg-slate-900/95">
           <div className="flex min-w-0 items-center gap-2">
             <button
-              className="btn btn-secondary shrink-0 px-2 lg:hidden"
+              className="btn btn-secondary shrink-0 px-2 min-[900px]:hidden"
               onClick={() => setMobileMenuOpen(true)}
               type="button"
               aria-label={ui("فتح القائمة")}
@@ -260,14 +260,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </button>
           </div>
         </header>
-        <main className="app-main-content mx-auto max-w-7xl p-4 pb-24 lg:p-8 lg:pb-8">{children}</main>
+        <main className="app-main-content mx-auto max-w-7xl p-4 pb-24 min-[900px]:p-8 min-[900px]:pb-8">{children}</main>
         <footer className="app-shell-footer mx-auto max-w-7xl border-t px-4 py-3 text-center text-xs text-[var(--muted)] print:hidden">
           Powered by <span className="font-semibold text-[var(--foreground)]">{APP_CREDIT_NAME}</span>
         </footer>
       </div>
 
       {mobileMenuOpen ? (
-        <div className="fixed inset-0 z-40 bg-slate-950/40 lg:hidden" onClick={() => setMobileMenuOpen(false)}>
+        <div className="fixed inset-0 z-40 bg-slate-950/40 min-[900px]:hidden" onClick={() => setMobileMenuOpen(false)}>
           <aside
             className="ms-auto flex h-full w-80 max-w-[86vw] flex-col bg-[var(--navy)] p-4 text-white shadow-2xl"
             onClick={(event) => event.stopPropagation()}
@@ -288,7 +288,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       ) : null}
 
-      <nav className="app-shell-header fixed inset-x-0 bottom-0 z-30 border-t px-1 py-2 shadow-[0_-8px_24px_rgb(15_23_42_/_8%)] lg:hidden safe-area-pb print:hidden">
+      <nav className="app-shell-header fixed inset-x-0 bottom-0 z-30 border-t px-1 py-2 shadow-[0_-8px_24px_rgb(15_23_42_/_8%)] min-[900px]:hidden safe-area-pb print:hidden">
         <div className="grid grid-cols-5 gap-1">
           {mobileNavItems.map((item) => {
             const Icon = item.icon;

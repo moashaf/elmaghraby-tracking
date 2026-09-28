@@ -665,7 +665,6 @@ html.dark .table-head {
 
 .app-main-content {
   position: relative;
-  z-index: 1;
 }
 
 .app-shell-header {
