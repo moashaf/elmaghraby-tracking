@@ -406,7 +406,7 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
               </label>
             </div>
             <input
-              className="input sm:col-span-2 min-[1100px]:col-span-5"
+              className="input"
               placeholder={ui("ملاحظات المنتج")}
               ref={notesRef}
               value={itemDraft.notes}
@@ -417,7 +417,7 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
                 commitItemDraft();
               }}
             />
-            <button className="btn px-2 sm:col-span-2 min-[1100px]:col-span-1" onClick={() => commitItemDraft()} type="button">
+            <button className="btn px-2 sm:col-span-2 min-[1100px]:col-auto" onClick={() => commitItemDraft()} type="button">
               <ArrowDown className="h-4 w-4" />
             </button>
           </div>

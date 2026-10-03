@@ -944,7 +944,7 @@ export function ShipmentForm({
                 </label>
               </div>
               <input
-                className="input sm:col-span-2 min-[1100px]:col-span-5"
+                className="input"
                 placeholder={ui("ملاحظات المنتج")}
                 ref={notesRef}
                 value={productDraft.notes}
@@ -956,7 +956,7 @@ export function ShipmentForm({
                 }}
               />
               <button
-                className="btn px-2 sm:col-span-2 min-[1100px]:col-span-1"
+                className="btn px-2 sm:col-span-2 min-[1100px]:col-auto"
                 disabled={disabled}
                 onClick={() => commitProductDraft()}
                 title={editingProductIndex == null ? ui("تنزيل الصنف") : ui("تحديث الصنف")}
