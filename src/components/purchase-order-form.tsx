@@ -6,7 +6,7 @@ import { QuickProductModal } from "@/components/quick-product-modal";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage } from "@/components/ui";
 import { toEntityOptions } from "@/lib/entity-options";
-import { syncProductQuantityFields } from "@/lib/shipment-product-quantity";
+import { syncProductQuantityFields, mergeOrAppendProductLine } from "@/lib/shipment-product-quantity";
 import { useLanguage } from "@/context/language-context";
 import { createClient } from "@/lib/supabase/client";
 import { fetchAllFromTable } from "@/lib/supabase/fetch-all";
@@ -137,20 +137,16 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
     [products]
   );
   const cartonStats = useMemo(() => {
-    const rows =
-      isItemDraftValid(itemDraft)
-        ? editingItemIndex == null
-          ? [...committedItems, itemDraft]
-          : committedItems.map((row, index) => (index === editingItemIndex ? itemDraft : row))
-        : committedItems;
+    const rows = isItemDraftValid(itemDraft)
+      ? mergeOrAppendProductLine(committedItems, itemDraft, editingItemIndex)
+      : committedItems;
     const entered = rows.reduce((sum, row) => sum + toPositiveNumber(row.cartons_count), 0);
     return { entered };
   }, [committedItems, itemDraft, editingItemIndex]);
 
   function itemsForSave() {
     if (isItemDraftValid(itemDraft)) {
-      if (editingItemIndex == null) return [...committedItems, itemDraft];
-      return committedItems.map((row, index) => (index === editingItemIndex ? itemDraft : row));
+      return mergeOrAppendProductLine(committedItems, itemDraft, editingItemIndex);
     }
     return committedItems;
   }
@@ -160,10 +156,7 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
       setError(ui("أضف منتجا مع كرتين ووحدة صحيحة قبل التنزيل."));
       return false;
     }
-    setCommittedItems((current) => {
-      if (editingItemIndex == null) return [...current, itemDraft];
-      return current.map((row, index) => (index === editingItemIndex ? itemDraft : row));
-    });
+    setCommittedItems((current) => mergeOrAppendProductLine(current, itemDraft, editingItemIndex));
     setItemDraft({ ...emptyItem });
     setEditingItemIndex(null);
     setError("");
@@ -179,10 +172,7 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
         setError(ui("كمّل بيانات المنتج فوق أولاً أو امسحه قبل تعديل صنف آخر."));
         return;
       }
-      nextCommitted =
-        editingItemIndex == null
-          ? [...committedItems, itemDraft]
-          : committedItems.map((row, rowIndex) => (rowIndex === editingItemIndex ? itemDraft : row));
+      nextCommitted = mergeOrAppendProductLine(committedItems, itemDraft, editingItemIndex);
       setCommittedItems(nextCommitted);
     }
     setEditingItemIndex(index);

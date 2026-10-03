@@ -9,7 +9,7 @@ import { ErrorMessage } from "@/components/ui";
 import { toEntityOptions } from "@/lib/entity-options";
 import { PORT_SELECT_OPTIONS } from "@/lib/port-options";
 import { addDaysToIsoDate, findRouteDuration } from "@/lib/eta";
-import { syncProductQuantityFields, unitFromCartonsAndTotal } from "@/lib/shipment-product-quantity";
+import { syncProductQuantityFields, unitFromCartonsAndTotal, mergeOrAppendProductLine } from "@/lib/shipment-product-quantity";
 import { useLanguage } from "@/context/language-context";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { fetchAllFromTable } from "@/lib/supabase/fetch-all";
@@ -312,8 +312,7 @@ export function ShipmentForm({
 
   function productsForSave() {
     if (isProductDraftValid(productDraft)) {
-      if (editingProductIndex == null) return [...committedProducts, productDraft];
-      return committedProducts.map((row, index) => (index === editingProductIndex ? productDraft : row));
+      return mergeOrAppendProductLine(committedProducts, productDraft, editingProductIndex);
     }
     return committedProducts;
   }
@@ -324,10 +323,7 @@ export function ShipmentForm({
       return false;
     }
 
-    setCommittedProducts((current) => {
-      if (editingProductIndex == null) return [...current, productDraft];
-      return current.map((row, index) => (index === editingProductIndex ? productDraft : row));
-    });
+    setCommittedProducts((current) => mergeOrAppendProductLine(current, productDraft, editingProductIndex));
     setProductDraft({ ...emptyProduct });
     setEditingProductIndex(null);
     setError("");
@@ -345,9 +341,7 @@ export function ShipmentForm({
         return;
       }
       nextCommitted =
-        editingProductIndex == null
-          ? [...committedProducts, productDraft]
-          : committedProducts.map((row, rowIndex) => (rowIndex === editingProductIndex ? productDraft : row));
+        mergeOrAppendProductLine(committedProducts, productDraft, editingProductIndex);
       setCommittedProducts(nextCommitted);
     }
 
@@ -607,12 +601,9 @@ export function ShipmentForm({
   const disabled = readOnly || loading;
 
   const cartonStats = useMemo(() => {
-    const rows =
-      isProductDraftValid(productDraft)
-        ? editingProductIndex == null
-          ? [...committedProducts, productDraft]
-          : committedProducts.map((row, index) => (index === editingProductIndex ? productDraft : row))
-        : committedProducts;
+    const rows = isProductDraftValid(productDraft)
+      ? mergeOrAppendProductLine(committedProducts, productDraft, editingProductIndex)
+      : committedProducts;
     const entered = rows.reduce((sum, row) => {
       const value = Number(row.cartons_count);
       return sum + (Number.isFinite(value) && value > 0 ? value : 0);

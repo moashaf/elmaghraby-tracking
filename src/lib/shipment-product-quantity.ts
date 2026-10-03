@@ -28,3 +28,51 @@ export function syncProductQuantityFields<T extends { cartons_count: string; uni
   const total = totalFromCartonsAndUnit(Number(row.cartons_count), Number(row.unit_quantity));
   return { ...row, quantity: total };
 }
+
+function toPositiveQuantity(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+export type ProductLineSpecs = {
+  product_id: string;
+  cartons_count: string;
+  unit_quantity: string;
+  quantity: string;
+  notes: string;
+  is_new_incoming_product: boolean;
+  is_disassembled: boolean;
+};
+
+export function sameProductLineSpecs(a: ProductLineSpecs, b: ProductLineSpecs) {
+  return (
+    a.product_id === b.product_id &&
+    toPositiveQuantity(a.unit_quantity) === toPositiveQuantity(b.unit_quantity) &&
+    Boolean(a.is_disassembled) === Boolean(b.is_disassembled) &&
+    Boolean(a.is_new_incoming_product) === Boolean(b.is_new_incoming_product) &&
+    a.notes.trim() === b.notes.trim()
+  );
+}
+
+export function mergeOrAppendProductLine<T extends ProductLineSpecs>(
+  list: T[],
+  draft: T,
+  replaceIndex: number | null = null
+): T[] {
+  if (replaceIndex != null) {
+    return list.map((row, index) => (index === replaceIndex ? draft : row));
+  }
+
+  const matchIndex = list.findIndex((row) => sameProductLineSpecs(row, draft));
+  if (matchIndex < 0) return [...list, draft];
+
+  const current = list[matchIndex];
+  const mergedCartons = toPositiveQuantity(current.cartons_count) + toPositiveQuantity(draft.cartons_count);
+  const merged = syncProductQuantityFields({
+    ...current,
+    cartons_count: String(mergedCartons),
+    notes: current.notes.trim() || draft.notes.trim(),
+  });
+  return list.map((row, index) => (index === matchIndex ? merged : row));
+}
+
