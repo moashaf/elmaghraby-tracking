@@ -78,6 +78,7 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
   const unitRef = useRef<HTMLInputElement>(null);
   const disassembledRef = useRef<HTMLInputElement>(null);
   const newIncomingRef = useRef<HTMLInputElement>(null);
+  const notesRef = useRef<HTMLInputElement>(null);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
@@ -397,22 +398,28 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
                   onKeyDown={(event) => {
                     if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
                     event.preventDefault();
-                    commitItemDraft();
+                    notesRef.current?.focus();
                   }}
                   type="checkbox"
                 />
                 {ui("منتج وارد جديد")}
               </label>
             </div>
-            <button className="btn px-2" onClick={() => commitItemDraft()} type="button">
-              <ArrowDown className="h-4 w-4" />
-            </button>
             <input
               className="input sm:col-span-2 min-[1100px]:col-span-5"
               placeholder={ui("ملاحظات المنتج")}
+              ref={notesRef}
               value={itemDraft.notes}
               onChange={(event) => setItemDraft((current) => ({ ...current, notes: event.target.value }))}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+                event.preventDefault();
+                commitItemDraft();
+              }}
             />
+            <button className="btn px-2 sm:col-span-2 min-[1100px]:col-span-1" onClick={() => commitItemDraft()} type="button">
+              <ArrowDown className="h-4 w-4" />
+            </button>
           </div>
 
           <div className="space-y-3">

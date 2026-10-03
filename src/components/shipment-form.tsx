@@ -181,6 +181,7 @@ export function ShipmentForm({
   const unitRef = useRef<HTMLInputElement>(null);
   const disassembledRef = useRef<HTMLInputElement>(null);
   const newIncomingRef = useRef<HTMLInputElement>(null);
+  const notesRef = useRef<HTMLInputElement>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -935,15 +936,27 @@ export function ShipmentForm({
                     onKeyDown={(event) => {
                       if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
                       event.preventDefault();
-                      commitProductDraft();
+                      notesRef.current?.focus();
                     }}
                     type="checkbox"
                   />
                   {ui("منتج وارد جديد")}
                 </label>
               </div>
+              <input
+                className="input sm:col-span-2 min-[1100px]:col-span-5"
+                placeholder={ui("ملاحظات المنتج")}
+                ref={notesRef}
+                value={productDraft.notes}
+                onChange={(event) => setProductDraft((current) => ({ ...current, notes: event.target.value }))}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+                  event.preventDefault();
+                  commitProductDraft();
+                }}
+              />
               <button
-                className="btn px-2"
+                className="btn px-2 sm:col-span-2 min-[1100px]:col-span-1"
                 disabled={disabled}
                 onClick={() => commitProductDraft()}
                 title={editingProductIndex == null ? ui("تنزيل الصنف") : ui("تحديث الصنف")}
@@ -951,12 +964,6 @@ export function ShipmentForm({
               >
                 <ArrowDown className="h-4 w-4" />
               </button>
-              <input
-                className="input sm:col-span-2 min-[1100px]:col-span-5"
-                placeholder={ui("ملاحظات المنتج")}
-                value={productDraft.notes}
-                onChange={(event) => setProductDraft((current) => ({ ...current, notes: event.target.value }))}
-              />
             </div>
           ) : null}
 
