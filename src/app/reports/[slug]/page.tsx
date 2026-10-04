@@ -69,6 +69,7 @@ export default function ReportDetailPage() {
   const [totalRows, setTotalRows] = useState(0);
   const [printSnapshot, setPrintSnapshot] = useState<ReportRow[] | null>(null);
   const [printImageUrls, setPrintImageUrls] = useState<Map<string, string>>(new Map());
+  const [exporting, setExporting] = useState(false);
 
   const paginatedReport = supportsReportPagination(params.slug);
 
@@ -285,6 +286,9 @@ export default function ReportDetailPage() {
   }
 
   async function exportExcel() {
+    setError("");
+    setExporting(true);
+    try {
     const exportResult = paginatedReport
       ? await load(page, { exportAll: true, forExcel: true })
       : null;
@@ -342,25 +346,25 @@ export default function ReportDetailPage() {
       exportRows.push(summaryRow, containerRow);
     }
 
-    let imageUrlList: Array<string | null | undefined> | undefined;
+    let imageStoragePaths: Array<string | null | undefined> | undefined;
     if (showImages) {
-      const paths = sourceRows.map((row) => row._imagePath).filter((path): path is string => Boolean(path));
-      const urlMap =
-        paginatedReport && exportResult && !("error" in exportResult)
-          ? await signedProductImageUrls(paths)
-          : imageUrls;
-      imageUrlList = sourceRows.map((row) => (row._imagePath ? urlMap.get(row._imagePath) : null));
+      imageStoragePaths = exportRows.map((_, index) => sourceRows[index]?._imagePath ?? null);
     }
 
     await downloadExcelWithOptionalImages({
       filename: `${params.slug}-${todayIso()}.xlsx`,
       sheetName: report?.title ?? "Report",
       rows: exportRows,
-      imageUrls: imageUrlList,
+      imageStoragePaths,
       linkColumn: showDocumentLinks ? "الرابط" : undefined,
       linkUrls,
       linkLabel: ui("فتح الملف"),
     });
+    } catch (exportError) {
+      setError(exportError instanceof Error ? exportError.message : ui("تعذر سحب ملف Excel."));
+    } finally {
+      setExporting(false);
+    }
   }
 
   if (!report) {
@@ -382,9 +386,9 @@ export default function ReportDetailPage() {
           <RefreshCw className="h-4 w-4" />
           {ui("تحديث")}
         </button>
-        <button className="btn btn-secondary" onClick={() => void exportExcel()} type="button">
+        <button className="btn btn-secondary" disabled={exporting} onClick={() => void exportExcel()} type="button">
           <FileSpreadsheet className="h-4 w-4" />
-          Excel
+          {exporting ? ui("جاري تجهيز Excel…") : "Excel"}
         </button>
         <button className="btn" onClick={() => void handlePrint()} type="button">
           <Printer className="h-4 w-4" />

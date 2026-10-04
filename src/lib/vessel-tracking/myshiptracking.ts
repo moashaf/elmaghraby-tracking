@@ -2,6 +2,7 @@ export type MyShipTrackingPosition = {
   lat: number;
   lon: number;
   area?: string;
+  etaIso?: string | null;
 };
 
 export function parseMyShipTrackingHtml(html: string): MyShipTrackingPosition | null {
@@ -15,7 +16,10 @@ export function parseMyShipTrackingHtml(html: string): MyShipTrackingPosition | 
   const areaMatch = html.match(/<th>\s*Area\s*<\/th>\s*<td>([^<]+)<\/td>/i);
   const area = areaMatch?.[1]?.trim() || undefined;
 
-  return { lat, lon, area };
+  const etaMatch = html.match(/ETA<\/small>[\s\S]{0,180}?<span class="line">(\d{4}-\d{2}-\d{2})<\/span>/i);
+  const etaIso = etaMatch?.[1] ?? null;
+
+  return { lat, lon, area, etaIso };
 }
 
 export async function fetchMyShipTrackingPosition(mmsi: string): Promise<MyShipTrackingPosition | null> {

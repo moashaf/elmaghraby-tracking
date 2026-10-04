@@ -6,6 +6,14 @@ export function addDaysToIsoDate(isoDate: string, days: number): string {
   return base.toISOString().slice(0, 10);
 }
 
+/** Whole calendar days from `fromIso` to `toIso` (YYYY-MM-DD). Can be negative. */
+export function daysBetweenIsoDates(fromIso: string, toIso: string): number | null {
+  const from = new Date(`${fromIso}T12:00:00`);
+  const to = new Date(`${toIso}T12:00:00`);
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return null;
+  return Math.round((to.getTime() - from.getTime()) / 86_400_000);
+}
+
 export type ShippingRouteLookup = {
   shipping_port: string;
   arrival_port: string;

@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { daysBetweenIsoDates } from "@/lib/eta";
+import { resolveArrivalEtaFromVoyage } from "@/lib/vessel-tracking/announced-eta";
 import { isVesselAtArrivalPort } from "@/lib/vessel-tracking/arrival-detection";
 import { trackVesselByName } from "@/lib/vessel-tracking/track";
 
@@ -6,6 +8,7 @@ export type VesselSyncShipment = {
   id: string;
   vessel_name: string | null;
   arrival_port?: string | null;
+  shipped_at?: string | null;
   status?: string | null;
 };
 
@@ -72,6 +75,22 @@ export async function syncShipmentVesselTracking(
       vessel_tracked_at: trackedAt,
       updated_at: trackedAt,
     };
+
+    const etaIso = resolveArrivalEtaFromVoyage({
+      arrivalPort: shipment.arrival_port,
+      destination: result.destination,
+      currentEtaIso: result.etaIso,
+      portCalls: result.portCalls,
+    });
+
+    if (etaIso) {
+      updatePayload.eta = etaIso;
+      const shippedAt = (shipment.shipped_at ?? "").trim();
+      const duration = shippedAt ? daysBetweenIsoDates(shippedAt, etaIso) : null;
+      if (duration != null) {
+        updatePayload.shipping_duration_days = Math.max(0, duration);
+      }
+    }
 
     if (shipment.status === "in_sea" && atPort) {
       updatePayload.status = "customs";

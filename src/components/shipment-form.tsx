@@ -8,7 +8,7 @@ import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage } from "@/components/ui";
 import { toEntityOptions } from "@/lib/entity-options";
 import { PORT_SELECT_OPTIONS } from "@/lib/port-options";
-import { addDaysToIsoDate, findRouteDuration } from "@/lib/eta";
+import { addDaysToIsoDate, daysBetweenIsoDates } from "@/lib/eta";
 import { syncProductQuantityFields, unitFromCartonsAndTotal, mergeOrAppendProductLine } from "@/lib/shipment-product-quantity";
 import { useLanguage } from "@/context/language-context";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
@@ -24,7 +24,6 @@ import type {
   ShipmentFormValues,
   ShipmentProduct,
   ShipmentProductDraft,
-  ShippingRoute,
   Supplier,
 } from "@/lib/types";
 
@@ -188,11 +187,15 @@ export function ShipmentForm({
   const [chinaWarehouseOnly, setChinaWarehouseOnly] = useState(false);
   const [chinaWarehouseProductIds, setChinaWarehouseProductIds] = useState<Set<string>>(new Set());
   const [categories, setCategories] = useState<ProductCategory[]>([]);
-  const [routes, setRoutes] = useState<ShippingRoute[]>([]);
   const [invFile, setInvFile] = useState<File | null>(null);
   const [showProductModal, setShowProductModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [vesselAnnouncement, setVesselAnnouncement] = useState<{ destination: string | null; eta: string | null } | null>(
+    null
+  );
+  const [vesselEtaLoading, setVesselEtaLoading] = useState(false);
+  const etaManualRef = useRef(false);
 
   const productOptions = useMemo(() => {
     const source = chinaWarehouseOnly
@@ -234,12 +237,11 @@ export function ShipmentForm({
       }
 
       const supabase = createClient();
-      const [companiesResult, suppliersResult, productsResult, categoriesResult, routesResult] = await Promise.all([
+      const [companiesResult, suppliersResult, productsResult, categoriesResult] = await Promise.all([
         supabase.from("companies").select("id,name_ar,name_en,code,is_active").eq("is_active", true).order("name_ar"),
         supabase.from("suppliers").select("id,name_ar,code,country,contact_phone,is_active").eq("is_active", true).order("name_ar"),
         fetchAllFromTable(supabase, "products", "id,sku,name_ar,name_en,category,category_id,unit,is_active", { column: "name_ar" }),
         fetchAllFromTable(supabase, "product_categories", "id,name_ar,code,parent_id,is_active", { column: "name_ar" }),
-        supabase.from("shipping_routes").select("id,shipping_port,arrival_port,duration_days,is_active").eq("is_active", true),
       ]);
 
       if (companiesResult.error || suppliersResult.error || productsResult.error || categoriesResult.error) {
@@ -253,15 +255,10 @@ export function ShipmentForm({
         return;
       }
 
-      if (routesResult.error) {
-        console.warn("[routes]", routesResult.error.message);
-      }
-
       setCompanies((companiesResult.data ?? []) as Company[]);
       setSuppliers((suppliersResult.data ?? []) as Supplier[]);
       setProducts((productsResult.data ?? []) as Product[]);
       setCategories((categoriesResult.data ?? []) as ProductCategory[]);
-      setRoutes((routesResult.data ?? []) as ShippingRoute[]);
 
       const stock = await supabase
         .from("china_warehouse_stock")
@@ -278,22 +275,71 @@ export function ShipmentForm({
   }, []);
 
   useEffect(() => {
-    const duration = findRouteDuration(routes, form.shipping_port, form.arrival_port);
-    if (!duration || !form.shipped_at) return;
-
-    const nextEta = addDaysToIsoDate(form.shipped_at, duration);
+    if (!form.shipped_at || !form.eta) return;
+    const days = daysBetweenIsoDates(form.shipped_at, form.eta);
+    if (days == null) return;
+    const value = String(Math.max(0, days));
     queueMicrotask(() => {
-      setForm((current) => {
-        // Keep ETA always aligned with sea-duration to avoid status/date drift.
-        if (current.shipping_duration_days === String(duration) && current.eta === nextEta) return current;
-        return {
-          ...current,
-          shipping_duration_days: String(duration),
-          eta: nextEta,
-        };
-      });
+      setForm((current) =>
+        current.shipping_duration_days === value ? current : { ...current, shipping_duration_days: value }
+      );
     });
-  }, [form.shipping_port, form.arrival_port, form.shipped_at, routes]);
+  }, [form.shipped_at, form.eta]);
+
+  useEffect(() => {
+    if (readOnly) return;
+    const vesselName = form.vessel_name.trim();
+    etaManualRef.current = false;
+    if (vesselName.length < 3) {
+      setVesselAnnouncement(null);
+      setVesselEtaLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setVesselEtaLoading(true);
+      try {
+        const supabase = createClient();
+        const session = await supabase.auth.getSession();
+        const token = session.data.session?.access_token;
+        if (!token || cancelled) return;
+
+        const response = await fetch("/api/vessel-tracking/lookup", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ vesselName, arrivalPort: form.arrival_port }),
+        });
+        if (!response.ok || cancelled) return;
+
+        const payload = (await response.json()) as {
+          destination?: string | null;
+          eta?: string | null;
+        };
+        if (cancelled) return;
+
+        const announcedEta = payload.eta?.trim() || null;
+        const destination = payload.destination?.trim() || null;
+        setVesselAnnouncement({ destination, eta: announcedEta });
+
+        if (announcedEta && !etaManualRef.current) {
+          setForm((current) => (current.eta === announcedEta ? current : { ...current, eta: announcedEta }));
+        }
+      } catch {
+        /* best-effort AIS lookup */
+      } finally {
+        if (!cancelled) setVesselEtaLoading(false);
+      }
+    }, 700);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [form.vessel_name, form.arrival_port, readOnly]);
 
   useEffect(() => {
     const count = Number(form.containers_count);
@@ -436,9 +482,7 @@ export function ShipmentForm({
     }
 
     const user = await supabase.auth.getUser();
-    const routeDuration = findRouteDuration(routes, form.shipping_port, form.arrival_port);
-    const etaValue =
-      routeDuration && form.shipped_at ? addDaysToIsoDate(form.shipped_at, routeDuration) : form.eta;
+    const durationDays = form.shipping_duration_days ? Number(form.shipping_duration_days) : null;
 
     const vesselName = form.vessel_name.trim() || null;
     const shipmentPayload = {
@@ -449,7 +493,7 @@ export function ShipmentForm({
       shipping_port: form.shipping_port.trim(),
       arrival_port: form.arrival_port.trim(),
       shipped_at: form.shipped_at,
-      eta: etaValue,
+      eta: form.eta,
       vessel_name: vesselName,
       ...(vesselName
         ? {}
@@ -461,7 +505,7 @@ export function ShipmentForm({
             vessel_tracked_at: null,
             vessel_tracking_status: "pending",
           }),
-      shipping_duration_days: routeDuration ?? (form.shipping_duration_days ? Number(form.shipping_duration_days) : null),
+      shipping_duration_days: Number.isFinite(durationDays) ? durationDays : null,
       shipment_type: form.shipment_type.trim() || "—",
       total_weight_kg: toNullableNumber(form.total_weight_kg),
       total_cartons: toNullableNumber(form.total_cartons),
@@ -722,7 +766,25 @@ export function ShipmentForm({
             </label>
             <label className="label">
               {ui("تاريخ الوصول المتوقع")}
-              <input className="input bg-slate-50" required readOnly type="date" value={form.eta} />
+              <input
+                className="input"
+                required
+                type="date"
+                value={form.eta}
+                onChange={(event) => {
+                  etaManualRef.current = true;
+                  setField("eta", event.target.value);
+                }}
+              />
+              <span className="mt-1 text-xs text-[var(--muted)]">
+                {vesselEtaLoading
+                  ? ui("جاري قراءة معاد الوصول المعلن للمركب…")
+                  : vesselAnnouncement?.eta
+                    ? `${ui("من إعلان المركب")}${
+                        vesselAnnouncement.destination ? `: ${vesselAnnouncement.destination}` : ""
+                      } — ${vesselAnnouncement.eta}`
+                    : ui("يُؤخذ من إعلان المركب (AIS) عند توفر اسم المركب، ويختلف من سفينة لأخرى.")}
+              </span>
             </label>
             <label className="label">
               {ui("خروج جمرك (بعد 15 يوم)")}
@@ -730,7 +792,7 @@ export function ShipmentForm({
             </label>
             <label className="label">
               {ui("مدة الشحن بالأيام")}
-              <input className="input" min={0} readOnly type="number" value={form.shipping_duration_days} />
+              <input className="input bg-slate-50" min={0} readOnly type="number" value={form.shipping_duration_days} />
             </label>
             <label className="label">
               {ui("وزن الشحنة الكلي (كجم)")}

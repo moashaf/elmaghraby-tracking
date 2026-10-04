@@ -1,6 +1,6 @@
 import { fetchMyShipTrackingPosition } from "@/lib/vessel-tracking/myshiptracking";
 import { formatVesselLocationText, nearestCountry } from "@/lib/vessel-tracking/nearest-country";
-import { fetchVesselLocationByImo } from "@/lib/vessel-tracking/vesselfinder";
+import { fetchVesselLocationByImo, type VesselFinderPortCall } from "@/lib/vessel-tracking/vesselfinder";
 import { weiyunResolveShip, type WeiyunShipHit } from "@/lib/vessel-tracking/weiyun";
 
 export type VesselTrackResult = {
@@ -8,19 +8,33 @@ export type VesselTrackResult = {
   locationText: string | null;
   lat: number | null;
   lon: number | null;
+  destination: string | null;
+  etaIso: string | null;
+  portCalls: VesselFinderPortCall[];
   trackingStatus: "ok" | "not_found" | "pending" | "error";
+};
+
+const emptyResult: VesselTrackResult = {
+  hit: null,
+  locationText: null,
+  lat: null,
+  lon: null,
+  destination: null,
+  etaIso: null,
+  portCalls: [],
+  trackingStatus: "not_found",
 };
 
 export async function trackVesselByName(shipName: string): Promise<VesselTrackResult> {
   const trimmed = shipName.trim();
   if (!trimmed) {
-    return { hit: null, locationText: null, lat: null, lon: null, trackingStatus: "not_found" };
+    return { ...emptyResult, trackingStatus: "not_found" };
   }
 
   try {
     const hit = await weiyunResolveShip(trimmed);
     if (!hit) {
-      return { hit: null, locationText: null, lat: null, lon: null, trackingStatus: "not_found" };
+      return { ...emptyResult, trackingStatus: "not_found" };
     }
 
     const [vfLocation, mstPosition] = await Promise.all([
@@ -30,6 +44,9 @@ export async function trackVesselByName(shipName: string): Promise<VesselTrackRe
 
     const seaArea = mstPosition?.area || vfLocation?.area || null;
     const nearest = mstPosition ? nearestCountry(mstPosition.lat, mstPosition.lon, seaArea) : null;
+    const destination = vfLocation?.destination?.trim() || null;
+    const etaIso = vfLocation?.etaIso || mstPosition?.etaIso || null;
+    const portCalls = vfLocation?.portCalls ?? [];
 
     const locationText = formatVesselLocationText({
       seaArea,
@@ -40,7 +57,16 @@ export async function trackVesselByName(shipName: string): Promise<VesselTrackRe
     const lon = mstPosition?.lon ?? null;
 
     if (!locationText) {
-      return { hit, locationText: null, lat, lon, trackingStatus: "pending" };
+      return {
+        hit,
+        locationText: null,
+        lat,
+        lon,
+        destination,
+        etaIso,
+        portCalls,
+        trackingStatus: "pending",
+      };
     }
 
     return {
@@ -48,9 +74,12 @@ export async function trackVesselByName(shipName: string): Promise<VesselTrackRe
       locationText,
       lat,
       lon,
+      destination,
+      etaIso,
+      portCalls,
       trackingStatus: "ok",
     };
   } catch {
-    return { hit: null, locationText: null, lat: null, lon: null, trackingStatus: "error" };
+    return { ...emptyResult, trackingStatus: "error" };
   }
 }

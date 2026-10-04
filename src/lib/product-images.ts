@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { mapPool } from "@/lib/map-pool";
 import { PRODUCT_IMAGES_BUCKET, productImagePath } from "@/lib/storage-path";
 
 export async function uploadProductImage(productId: string, file: File) {
@@ -21,8 +22,6 @@ export async function signedProductImageUrl(path: string, expiresIn = 3600) {
 
 export async function signedProductImageUrls(paths: string[]) {
   const unique = [...new Set(paths.filter(Boolean))];
-  const entries = await Promise.all(
-    unique.map(async (path) => [path, await signedProductImageUrl(path)] as const)
-  );
+  const entries = await mapPool(unique, 10, async (path) => [path, await signedProductImageUrl(path)] as const);
   return new Map(entries.filter(([, url]) => url).map(([path, url]) => [path, url!]));
 }
