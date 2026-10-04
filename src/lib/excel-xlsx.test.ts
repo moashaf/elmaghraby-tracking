@@ -14,9 +14,10 @@ describe("packXlsxWithEmbeddedImages", () => {
       imagesByRow: [TINY_JPEG],
     });
 
-    expect(file.subarray(0, 2).toString()).toBe("PK");
-    expect(file.includes(Buffer.from("xl/media/"))).toBe(true);
-    expect(file.includes(Buffer.from("<html"))).toBe(false);
-    expect(file.includes(Buffer.from("vnd.ms-excel"))).toBe(false);
+    const text = Buffer.from(file).toString("latin1");
+    expect(text.slice(0, 2)).toBe("PK");
+    expect(text.includes("xl/media/")).toBe(true);
+    expect(text.includes("<html")).toBe(false);
+    expect(text.includes("vnd.ms-excel")).toBe(false);
   });
 });

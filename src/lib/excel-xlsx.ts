@@ -2,11 +2,42 @@ import ExcelJS from "exceljs";
 
 export type ExcelSheetRow = Record<string, string | number | null>;
 
+function safeSheetName(name: string) {
+  const cleaned = name.replace(/[\\/?*[\]:]/g, " ").trim();
+  return cleaned.slice(0, 31) || "Report";
+}
+
+function uint8ToBase64(bytes: Uint8Array) {
+  if (typeof Buffer !== "undefined") return Buffer.from(bytes).toString("base64");
+  let binary = "";
+  const chunk = 0x2000;
+  for (let offset = 0; offset < bytes.length; offset += chunk) {
+    const slice = bytes.subarray(offset, offset + chunk);
+    binary += String.fromCharCode(...slice);
+  }
+  return btoa(binary);
+}
+
+function toUint8(value: Uint8Array | ArrayBuffer) {
+  if (value instanceof Uint8Array) return value;
+  return new Uint8Array(value);
+}
+
+function looksLikeZip(bytes: Uint8Array) {
+  return bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4b;
+}
+
+function containsMedia(bytes: Uint8Array) {
+  const marker = "xl/media/";
+  const text = typeof Buffer !== "undefined" ? Buffer.from(bytes).toString("latin1") : new TextDecoder("latin1").decode(bytes);
+  return text.includes(marker);
+}
+
 export async function packXlsxWithEmbeddedImages(options: {
   sheetName: string;
   rows: ExcelSheetRow[];
   imageColumnLabel?: string;
-  imagesByRow?: Array<Buffer | null | undefined>;
+  imagesByRow?: Array<Uint8Array | null | undefined>;
   linkColumn?: string;
   linkUrls?: Array<string | null | undefined>;
   linkLabel?: string;
@@ -23,7 +54,7 @@ export async function packXlsxWithEmbeddedImages(options: {
 
   const hasImages = Boolean(imagesByRow?.some((image) => image && image.length));
   const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet(sheetName || "Report");
+  const worksheet = workbook.addWorksheet(safeSheetName(sheetName));
   const columns = rows.length ? Object.keys(rows[0] ?? {}) : [];
   const headers = hasImages ? [...columns, imageColumnLabel] : columns;
 
@@ -51,11 +82,11 @@ export async function packXlsxWithEmbeddedImages(options: {
     const image = imagesByRow?.[index];
     if (!image?.length) continue;
 
-    const fingerprint = `${image.length}:${image.subarray(0, 24).toString("hex")}`;
+    const fingerprint = `${image.length}:${image[0]}:${image[1]}:${image[2]}:${image[10] ?? 0}:${image[20] ?? 0}`;
     let imageId = imageIdByFingerprint.get(fingerprint);
     if (imageId == null) {
       imageId = workbook.addImage({
-        base64: image.toString("base64"),
+        base64: uint8ToBase64(image),
         extension: "jpeg",
       });
       imageIdByFingerprint.set(fingerprint, imageId);
@@ -69,12 +100,12 @@ export async function packXlsxWithEmbeddedImages(options: {
     });
   }
 
-  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
-  if (buffer[0] !== 0x50 || buffer[1] !== 0x4b) {
+  const bytes = toUint8(await workbook.xlsx.writeBuffer() as Uint8Array | ArrayBuffer);
+  if (!looksLikeZip(bytes)) {
     throw new Error("Excel workbook did not produce an .xlsx zip.");
   }
-  if (hasImages && !buffer.includes(Buffer.from("xl/media/"))) {
+  if (hasImages && !containsMedia(bytes)) {
     throw new Error("Excel workbook is missing embedded image media.");
   }
-  return buffer;
+  return bytes;
 }
