@@ -1,5 +1,4 @@
 import { jsonError, requireWriter } from "@/lib/supabase/server";
-import { buildExcelWithImagesBuffer, type ExcelExportPayload } from "@/lib/excel-export.server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,9 +17,9 @@ export async function POST(request: Request) {
   const writer = await requireWriter(request);
   if (!writer.ok) return jsonError(writer.error, writer.status);
 
-  let body: ExcelExportPayload;
+  let body: Record<string, unknown>;
   try {
-    body = (await request.json()) as ExcelExportPayload;
+    body = (await request.json()) as Record<string, unknown>;
   } catch {
     return jsonError("طلب غير صالح.", 400);
   }
@@ -30,8 +29,9 @@ export async function POST(request: Request) {
   }
 
   try {
-    const file = await buildExcelWithImagesBuffer(writer.adminClient, body);
-    const filename = safeFilename(body.filename || "report.xlsx");
+    const { buildExcelWithImagesBuffer } = await import("@/lib/excel-export.server");
+    const file = await buildExcelWithImagesBuffer(writer.adminClient, body as never);
+    const filename = safeFilename(typeof body.filename === "string" ? body.filename : "report.xlsx");
     return new Response(new Uint8Array(file), {
       status: 200,
       headers: {
