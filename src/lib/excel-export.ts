@@ -10,6 +10,15 @@ const IMAGE_DECODE_MS = 2000;
 const MAX_IMAGE_BYTES = 4500;
 const TOTAL_IMAGES_BUDGET = 8 * 1024 * 1024;
 
+function uint8ToBase64(bytes: Uint8Array) {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
 function triggerDownload(buffer: ArrayBuffer | Uint8Array, filename: string) {
   const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
   const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
@@ -186,7 +195,7 @@ export async function downloadExcelWithOptionalImages(options: {
     imageIdByKey.set(
       key,
       workbook.addImage({
-        buffer: image as unknown as ExcelJS.Buffer,
+        base64: uint8ToBase64(image),
         extension: "jpeg",
       })
     );
@@ -217,9 +226,13 @@ export async function downloadExcelWithOptionalImages(options: {
     worksheet.addImage(imageId, {
       tl: { col: columns.length, row: rowNumber - 1 },
       ext: { width: 64, height: 46 },
+      editAs: "oneCell",
     });
   }
 
   const buffer = await workbook.xlsx.writeBuffer();
-  triggerDownload(buffer as ArrayBuffer, filename.endsWith(".xlsx") ? filename : `${filename}.xlsx`);
+  const downloadName = filename.toLowerCase().endsWith(".xlsx")
+    ? filename
+    : filename.replace(/\.xls$/i, ".xlsx");
+  triggerDownload(buffer as ArrayBuffer, downloadName.endsWith(".xlsx") ? downloadName : `${downloadName}.xlsx`);
 }
