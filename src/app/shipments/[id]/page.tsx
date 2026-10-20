@@ -18,7 +18,7 @@ import { displayInvoiceNumber } from "@/lib/shipment-invoice-number";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
 import { useSupabaseRealtimeReload } from "@/lib/supabase/use-realtime-reload";
-import { addDaysToIsoDate, canTransitionToCustoms } from "@/lib/eta";
+import { addDaysToIsoDate, canTransitionToCustoms, todayIsoDate } from "@/lib/eta";
 import {
   CLOSE_COST_GROUPS,
   CLOSE_COST_ITEMS,
@@ -202,7 +202,7 @@ export default function ShipmentDetailsPage() {
     }
     const refreshed = await createClient()
       .from("shipments")
-      .select("id, eta, status")
+      .select("id, eta, status, shipped_at")
       .eq("id", shipment.id)
       .maybeSingle();
     if (refreshed.data?.status === "customs") {
@@ -211,7 +211,8 @@ export default function ShipmentDetailsPage() {
       return;
     }
     const eta = refreshed.data?.eta ?? shipment.eta;
-    if (!canTransitionToCustoms(eta)) {
+    const shippedAt = refreshed.data?.shipped_at ?? shipment.shipped_at;
+    if (!canTransitionToCustoms(eta, todayIsoDate(), shippedAt)) {
       setSaving(false);
       setError(ui("لا يمكن تحويل الشحنة إلى «في الجمرك» قبل تاريخ الوصول المتوقع (ETA)."));
       return;

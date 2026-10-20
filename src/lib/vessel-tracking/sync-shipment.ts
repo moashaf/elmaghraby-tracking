@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { daysBetweenIsoDates } from "@/lib/eta";
+import { cargoEtaAfterVoyageWindow, daysBetweenIsoDates, etaRolledIntoNextVoyage, todayIsoDate } from "@/lib/eta";
 import { resolveArrivalEtaFromVoyage, voyageShowsArrivalAtPort } from "@/lib/vessel-tracking/announced-eta";
 import { isVesselAtArrivalPort } from "@/lib/vessel-tracking/arrival-detection";
 import { trackVesselByName } from "@/lib/vessel-tracking/track";
@@ -9,6 +9,7 @@ export type VesselSyncShipment = {
   vessel_name: string | null;
   arrival_port?: string | null;
   shipped_at?: string | null;
+  eta?: string | null;
   status?: string | null;
 };
 
@@ -28,6 +29,35 @@ function canCheckPortPosition(
   return lat != null && lon != null && (arrivalPort ?? "").trim() !== "";
 }
 
+function applyRolledEtaArrival(
+  shipment: VesselSyncShipment,
+  updatePayload: Record<string, unknown>,
+  etaIso: string | null,
+  cargoArrived: boolean
+) {
+  const today = todayIsoDate();
+  const shippedAt = (shipment.shipped_at ?? "").trim();
+  let nextEta = etaIso;
+  let arrived = cargoArrived;
+
+  if (nextEta) {
+    nextEta = cargoEtaAfterVoyageWindow(nextEta, shippedAt, today) || nextEta;
+  }
+
+  if (!arrived && etaRolledIntoNextVoyage(shipment.eta, shippedAt, today)) {
+    nextEta = cargoEtaAfterVoyageWindow(shipment.eta, shippedAt, today);
+    arrived = true;
+  }
+
+  if (nextEta) {
+    updatePayload.eta = nextEta;
+    const duration = shippedAt ? daysBetweenIsoDates(shippedAt, nextEta) : null;
+    if (duration != null) updatePayload.shipping_duration_days = Math.max(0, duration);
+  }
+
+  return arrived;
+}
+
 export async function syncShipmentVesselTracking(
   supabase: SupabaseClient,
   shipment: VesselSyncShipment
@@ -36,11 +66,33 @@ export async function syncShipmentVesselTracking(
   if (!vesselName) return "skipped";
   if (shipment.status !== "in_sea") return "skipped";
 
+  const trackedAt = new Date().toISOString();
+
+  const moveFromRolledEta = async () => {
+    if (!etaRolledIntoNextVoyage(shipment.eta, shipment.shipped_at)) return false;
+    const etaIso = cargoEtaAfterVoyageWindow(shipment.eta, shipment.shipped_at);
+    const shippedAt = (shipment.shipped_at ?? "").trim();
+    const duration = shippedAt && etaIso ? daysBetweenIsoDates(shippedAt, etaIso) : null;
+    await supabase
+      .from("shipments")
+      .update({
+        eta: etaIso,
+        ...(duration != null ? { shipping_duration_days: Math.max(0, duration) } : {}),
+        status: "customs",
+        previous_status: "in_sea",
+        auto_moved_to_customs_at: trackedAt,
+        vessel_location_text: `في الجمارك — ${(shipment.arrival_port ?? "").trim() || "الميناء"}`,
+        updated_at: trackedAt,
+      })
+      .eq("id", shipment.id);
+    return true;
+  };
+
   try {
     const result = await trackVesselByName(vesselName);
-    const trackedAt = new Date().toISOString();
 
     if (result.trackingStatus === "not_found") {
+      if (await moveFromRolledEta()) return "moved_to_customs";
       await supabase
         .from("shipments")
         .update({
@@ -52,6 +104,7 @@ export async function syncShipmentVesselTracking(
     }
 
     if (result.trackingStatus === "error" || !result.hit) {
+      if (await moveFromRolledEta()) return "moved_to_customs";
       await supabase
         .from("shipments")
         .update({
@@ -90,16 +143,9 @@ export async function syncShipmentVesselTracking(
           portCalls: result.portCalls,
         });
 
-    if (etaIso) {
-      updatePayload.eta = etaIso;
-      const shippedAt = (shipment.shipped_at ?? "").trim();
-      const duration = shippedAt ? daysBetweenIsoDates(shippedAt, etaIso) : null;
-      if (duration != null) {
-        updatePayload.shipping_duration_days = Math.max(0, duration);
-      }
-    }
+    const arrived = applyRolledEtaArrival(shipment, updatePayload, etaIso, cargoArrived);
 
-    if (shipment.status === "in_sea" && cargoArrived) {
+    if (shipment.status === "in_sea" && arrived) {
       updatePayload.status = "customs";
       updatePayload.previous_status = "in_sea";
       updatePayload.auto_moved_to_customs_at = trackedAt;
@@ -108,9 +154,10 @@ export async function syncShipmentVesselTracking(
 
     await supabase.from("shipments").update(updatePayload).eq("id", shipment.id);
 
-    if (shipment.status === "in_sea" && cargoArrived) return "moved_to_customs";
+    if (shipment.status === "in_sea" && arrived) return "moved_to_customs";
     return "updated";
   } catch {
+    if (await moveFromRolledEta()) return "moved_to_customs";
     await supabase
       .from("shipments")
       .update({

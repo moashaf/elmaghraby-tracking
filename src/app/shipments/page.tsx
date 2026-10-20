@@ -16,7 +16,7 @@ import { downloadExcelWithOptionalImages } from "@/lib/excel-export";
 import { SHIPMENT_TABLE_CLASS } from "@/lib/reports/constants";
 import { useLanguage } from "@/context/language-context";
 import { useProfile } from "@/context/profile-context";
-import { canTransitionToCustoms } from "@/lib/eta";
+import { canTransitionToCustoms, todayIsoDate } from "@/lib/eta";
 import { formatUsd, formatDisplayDate } from "@/lib/format";
 import { readEmbeddedContainerCount } from "@/lib/shipment-container-count";
 import { displayInvoiceNumber, invoiceMapFromDocuments, shipmentInvoiceLabel } from "@/lib/shipment-invoice-number";
@@ -166,7 +166,7 @@ export default function ShipmentsPage() {
     }
     const refreshed = await createClient()
       .from("shipments")
-      .select("id, eta, status")
+      .select("id, eta, status, shipped_at")
       .eq("id", shipment.id)
       .maybeSingle();
     if (refreshed.data?.status === "customs") {
@@ -175,7 +175,8 @@ export default function ShipmentsPage() {
       return;
     }
     const eta = refreshed.data?.eta ?? shipment.eta;
-    if (!canTransitionToCustoms(eta)) {
+    const shippedAt = refreshed.data?.shipped_at ?? shipment.shipped_at;
+    if (!canTransitionToCustoms(eta, todayIsoDate(), shippedAt)) {
       setActionLoading(null);
       setError(ui("لا يمكن تحويل الشحنة إلى «في الجمرك» قبل تاريخ الوصول المتوقع (ETA)."));
       return;
