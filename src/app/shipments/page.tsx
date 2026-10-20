@@ -16,6 +16,7 @@ import { downloadExcelWithOptionalImages } from "@/lib/excel-export";
 import { SHIPMENT_TABLE_CLASS } from "@/lib/reports/constants";
 import { useLanguage } from "@/context/language-context";
 import { useProfile } from "@/context/profile-context";
+import { canTransitionToCustoms } from "@/lib/eta";
 import { formatUsd, formatDisplayDate } from "@/lib/format";
 import { readEmbeddedContainerCount } from "@/lib/shipment-container-count";
 import { displayInvoiceNumber, invoiceMapFromDocuments, shipmentInvoiceLabel } from "@/lib/shipment-invoice-number";
@@ -144,13 +145,42 @@ export default function ShipmentsPage() {
       return;
     }
 
-    const todayIso = new Date().toISOString().slice(0, 10);
-    if (shipment.eta && todayIso < shipment.eta) {
+    setActionLoading(shipment.id);
+    if (shipment.vessel_name?.trim()) {
+      try {
+        const session = await createClient().auth.getSession();
+        const token = session.data.session?.access_token;
+        if (token) {
+          await fetch("/api/vessel-tracking/sync", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ shipmentId: shipment.id }),
+          });
+        }
+      } catch {
+        // Keep the manual transition path even if AIS is unreachable.
+      }
+    }
+    const refreshed = await createClient()
+      .from("shipments")
+      .select("id, eta, status")
+      .eq("id", shipment.id)
+      .maybeSingle();
+    if (refreshed.data?.status === "customs") {
+      setActionLoading(null);
+      await load();
+      return;
+    }
+    const eta = refreshed.data?.eta ?? shipment.eta;
+    if (!canTransitionToCustoms(eta)) {
+      setActionLoading(null);
       setError(ui("لا يمكن تحويل الشحنة إلى «في الجمرك» قبل تاريخ الوصول المتوقع (ETA)."));
       return;
     }
 
-    setActionLoading(shipment.id);
     const result = await createClient().rpc("transition_shipment_status", {
       shipment_id: shipment.id,
       target_status: "customs",

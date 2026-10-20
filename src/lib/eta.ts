@@ -1,3 +1,19 @@
+/** YYYY-MM-DD only, ignoring time suffixes from the database. */
+export function isoDateOnly(value: string | null | undefined) {
+  const match = String(value ?? "").match(/^(\d{4}-\d{2}-\d{2})/);
+  return match?.[1] ?? "";
+}
+
+export function todayIsoDate(now = new Date()) {
+  return now.toISOString().slice(0, 10);
+}
+
+/** Manual in_sea → customs is allowed on/after the cargo ETA date. */
+export function canTransitionToCustoms(eta: string | null | undefined, today = todayIsoDate()) {
+  const date = isoDateOnly(eta);
+  return !date || today >= date;
+}
+
 /** Add calendar days to YYYY-MM-DD */
 export function addDaysToIsoDate(isoDate: string, days: number): string {
   const base = new Date(`${isoDate}T12:00:00`);

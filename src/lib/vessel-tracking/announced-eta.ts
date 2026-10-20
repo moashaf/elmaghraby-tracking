@@ -37,8 +37,17 @@ function toIsoDate(year: number, monthIndex: number, day: number): string | null
   return date.toISOString().slice(0, 10);
 }
 
-/** Parse AIS-style arrival text ("Oct 13, 17:00" or "2026-10-13") to YYYY-MM-DD. */
-export function parseAnnouncedEtaToIsoDate(raw: string, now = new Date()): string | null {
+/**
+ * Parse AIS-style dates ("Oct 13, 17:00" or "2026-10-13") to YYYY-MM-DD.
+ * `eta` rolls a yearless past date into next year (upcoming voyage).
+ * `actual` keeps ATA/ATD in the current/previous year so a call that already
+ * happened is not treated as next year's ETA.
+ */
+export function parseAnnouncedEtaToIsoDate(
+  raw: string,
+  now = new Date(),
+  mode: "eta" | "actual" = "eta"
+): string | null {
   const text = raw.replace(/&nbsp;/gi, " ").replace(/\s+/g, " ").trim();
   if (!text || /^(?:n\/?a|unknown|-|—|–)$/i.test(text)) return null;
 
@@ -67,6 +76,15 @@ export function parseAnnouncedEtaToIsoDate(raw: string, now = new Date()): strin
 
   const candidate = new Date(`${thisYear}T12:00:00`);
   const fourteenDaysMs = 14 * 24 * 60 * 60 * 1000;
+  const sixtyDaysMs = 60 * 24 * 60 * 60 * 1000;
+
+  if (mode === "actual") {
+    if (candidate.getTime() > now.getTime() + sixtyDaysMs) {
+      return toIsoDate(currentYear - 1, monthIndex, day);
+    }
+    return thisYear;
+  }
+
   if (candidate.getTime() < now.getTime() - fourteenDaysMs) {
     return toIsoDate(currentYear + 1, monthIndex, day);
   }
@@ -130,31 +148,56 @@ export type VoyagePortCall = {
   dateIso: string;
 };
 
+function cargoPortCalls(arrivalPort: string, calls: VoyagePortCall[]) {
+  const matching = calls.filter((call) => destinationMatchesArrivalPort(call.port, arrivalPort));
+  if (matching.length) return matching;
+  if (arrivalPort && isEgyptPort(arrivalPort)) {
+    return calls.filter((call) => isEgyptPort(call.port));
+  }
+  return [];
+}
+
+function pickCargoDate(list: VoyagePortCall[], todayIso: string) {
+  const pastArrivals = list
+    .filter((call) => (call.kind === "ATA" || call.kind === "ATD") && call.dateIso.slice(0, 10) <= todayIso)
+    .sort((a, b) => b.dateIso.localeCompare(a.dateIso));
+  if (pastArrivals[0]) return pastArrivals[0].dateIso;
+
+  const upcomingEta = list
+    .filter((call) => call.kind === "ETA")
+    .sort((a, b) => a.dateIso.localeCompare(b.dateIso));
+  if (upcomingEta[0]) return upcomingEta[0].dateIso;
+
+  return list.find((call) => call.kind === "ATA")?.dateIso ?? list.find((call) => call.kind === "ATD")?.dateIso ?? null;
+}
+
+export function voyageShowsArrivalAtPort(input: {
+  arrivalPort?: string | null;
+  portCalls?: VoyagePortCall[];
+  todayIso?: string;
+}) {
+  const arrivalPort = (input.arrivalPort ?? "").trim();
+  const todayIso = input.todayIso ?? new Date().toISOString().slice(0, 10);
+  const list = cargoPortCalls(arrivalPort, input.portCalls ?? []);
+  const pastArrivals = list
+    .filter((call) => (call.kind === "ATA" || call.kind === "ATD") && call.dateIso.slice(0, 10) <= todayIso)
+    .sort((a, b) => b.dateIso.localeCompare(a.dateIso));
+  if (pastArrivals[0]) return { arrived: true, arrivalDateIso: pastArrivals[0].dateIso };
+  return { arrived: false, arrivalDateIso: null };
+}
+
 export function resolveArrivalEtaFromVoyage(input: {
   arrivalPort?: string | null;
   destination?: string | null;
   currentEtaIso?: string | null;
   portCalls?: VoyagePortCall[];
+  todayIso?: string;
 }): string | null {
   const arrivalPort = (input.arrivalPort ?? "").trim();
+  const todayIso = input.todayIso ?? new Date().toISOString().slice(0, 10);
   const calls = input.portCalls ?? [];
-  const matching = calls.filter((call) => destinationMatchesArrivalPort(call.port, arrivalPort));
-  const pick = (list: VoyagePortCall[]) => {
-    const eta = list.find((call) => call.kind === "ETA");
-    if (eta) return eta.dateIso;
-    const ata = list.find((call) => call.kind === "ATA");
-    if (ata) return ata.dateIso;
-    return list.find((call) => call.kind === "ATD")?.dateIso ?? null;
-  };
-
-  const matchedDate = pick(matching);
-  if (matchedDate) return matchedDate;
-
-  if (arrivalPort && isEgyptPort(arrivalPort)) {
-    const egyptCalls = calls.filter((call) => isEgyptPort(call.port));
-    const egyptDate = pick(egyptCalls);
-    if (egyptDate) return egyptDate;
-  }
+  const cargoDate = pickCargoDate(cargoPortCalls(arrivalPort, calls), todayIso);
+  if (cargoDate) return cargoDate;
 
   if (
     input.destination &&

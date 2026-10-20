@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { daysBetweenIsoDates } from "@/lib/eta";
-import { parseAnnouncedEtaToIsoDate, resolveArrivalEtaFromVoyage } from "@/lib/vessel-tracking/announced-eta";
+import { parseAnnouncedEtaToIsoDate, resolveArrivalEtaFromVoyage, voyageShowsArrivalAtPort } from "@/lib/vessel-tracking/announced-eta";
 import { parseMyShipTrackingHtml } from "@/lib/vessel-tracking/myshiptracking";
 import { parseVesselFinderLocationHtml, parseVesselFinderPortCalls } from "@/lib/vessel-tracking/vesselfinder";
 
@@ -13,6 +13,11 @@ describe("parseAnnouncedEtaToIsoDate", () => {
   it("rolls yearless dates into next year when they are well in the past", () => {
     const now = new Date("2026-10-03T12:00:00");
     expect(parseAnnouncedEtaToIsoDate("Jan 05, 08:00", now)).toBe("2027-01-05");
+  });
+
+  it("keeps yearless ATA/ATD dates in this year after the vessel has already called", () => {
+    const now = new Date("2026-10-20T12:00:00");
+    expect(parseAnnouncedEtaToIsoDate("Oct 1, 16:25 UTC", now, "actual")).toBe("2026-10-01");
   });
 
   it("parses ISO dates", () => {
@@ -64,6 +69,30 @@ describe("resolveArrivalEtaFromVoyage", () => {
     expect(eta).toBe("2026-10-01");
   });
 
+  it("treats a past Sokhna ATD as arrived even if the vessel already left", () => {
+    expect(
+      voyageShowsArrivalAtPort({
+        arrivalPort: "السخنة، مصر",
+        todayIso: "2026-10-20",
+        portCalls: [{ port: "Sokhna, Egypt", kind: "ATD", dateIso: "2026-10-01" }],
+      })
+    ).toEqual({ arrived: true, arrivalDateIso: "2026-10-01" });
+  });
+
+  it("keeps the actual Sokhna call instead of the next rotation ETA", () => {
+    const eta = resolveArrivalEtaFromVoyage({
+      arrivalPort: "السخنة، مصر",
+      destination: "Singapore",
+      currentEtaIso: "2027-10-01",
+      todayIso: "2026-10-20",
+      portCalls: [
+        { port: "Sokhna, Egypt", kind: "ATD", dateIso: "2026-10-01" },
+        { port: "Sokhna, Egypt", kind: "ETA", dateIso: "2027-10-01" },
+      ],
+    });
+    expect(eta).toBe("2026-10-01");
+  });
+
   it("falls back to an Egypt port call when Sokhna is not listed", () => {
     const eta = resolveArrivalEtaFromVoyage({
       arrivalPort: "السخنة، مصر",
@@ -80,6 +109,15 @@ describe("parseVesselFinderPortCalls", () => {
     const html =
       '<a class="_npNa" href="/ports/EGSOK001">Sokhna, Egypt</a> <div class="_value">ATD: Oct 1, 16:25 UTC</div>';
     const now = new Date("2026-10-03T12:00:00");
+    expect(parseVesselFinderPortCalls(html, now)).toEqual([
+      { port: "Sokhna, Egypt", kind: "ATD", dateIso: "2026-10-01" },
+    ]);
+  });
+
+  it("does not roll a past Sokhna ATD into next year", () => {
+    const html =
+      '<a class="_npNa" href="/ports/EGSOK001">Sokhna, Egypt</a> <div class="_value">ATD: Oct 1, 16:25 UTC</div>';
+    const now = new Date("2026-10-20T12:00:00");
     expect(parseVesselFinderPortCalls(html, now)).toEqual([
       { port: "Sokhna, Egypt", kind: "ATD", dateIso: "2026-10-01" },
     ]);

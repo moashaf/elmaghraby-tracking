@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { daysBetweenIsoDates } from "@/lib/eta";
-import { resolveArrivalEtaFromVoyage } from "@/lib/vessel-tracking/announced-eta";
+import { resolveArrivalEtaFromVoyage, voyageShowsArrivalAtPort } from "@/lib/vessel-tracking/announced-eta";
 import { isVesselAtArrivalPort } from "@/lib/vessel-tracking/arrival-detection";
 import { trackVesselByName } from "@/lib/vessel-tracking/track";
 
@@ -65,6 +65,11 @@ export async function syncShipmentVesselTracking(
     const hasPosition = canCheckPortPosition(result.lat, result.lon, shipment.arrival_port);
     const atPort =
       hasPosition && isVesselAtArrivalPort(result.lat!, result.lon!, shipment.arrival_port!);
+    const portArrival = voyageShowsArrivalAtPort({
+      arrivalPort: shipment.arrival_port,
+      portCalls: result.portCalls,
+    });
+    const cargoArrived = atPort || portArrival.arrived;
 
     const updatePayload: Record<string, unknown> = {
       vessel_imo: result.hit.imo ?? null,
@@ -76,12 +81,14 @@ export async function syncShipmentVesselTracking(
       updated_at: trackedAt,
     };
 
-    const etaIso = resolveArrivalEtaFromVoyage({
-      arrivalPort: shipment.arrival_port,
-      destination: result.destination,
-      currentEtaIso: result.etaIso,
-      portCalls: result.portCalls,
-    });
+    const etaIso = portArrival.arrived
+      ? portArrival.arrivalDateIso
+      : resolveArrivalEtaFromVoyage({
+          arrivalPort: shipment.arrival_port,
+          destination: result.destination,
+          currentEtaIso: result.etaIso,
+          portCalls: result.portCalls,
+        });
 
     if (etaIso) {
       updatePayload.eta = etaIso;
@@ -92,7 +99,7 @@ export async function syncShipmentVesselTracking(
       }
     }
 
-    if (shipment.status === "in_sea" && atPort) {
+    if (shipment.status === "in_sea" && cargoArrived) {
       updatePayload.status = "customs";
       updatePayload.previous_status = "in_sea";
       updatePayload.auto_moved_to_customs_at = trackedAt;
@@ -101,7 +108,7 @@ export async function syncShipmentVesselTracking(
 
     await supabase.from("shipments").update(updatePayload).eq("id", shipment.id);
 
-    if (shipment.status === "in_sea" && atPort) return "moved_to_customs";
+    if (shipment.status === "in_sea" && cargoArrived) return "moved_to_customs";
     return "updated";
   } catch {
     await supabase

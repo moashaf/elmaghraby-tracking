@@ -18,7 +18,7 @@ import { displayInvoiceNumber } from "@/lib/shipment-invoice-number";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
 import { useSupabaseRealtimeReload } from "@/lib/supabase/use-realtime-reload";
-import { addDaysToIsoDate } from "@/lib/eta";
+import { addDaysToIsoDate, canTransitionToCustoms } from "@/lib/eta";
 import {
   CLOSE_COST_GROUPS,
   CLOSE_COST_ITEMS,
@@ -196,13 +196,27 @@ export default function ShipmentDetailsPage() {
     }
     if (action !== "to_customs") return;
 
-    const todayIso = new Date().toISOString().slice(0, 10);
-    if (shipment.eta && todayIso < shipment.eta) {
+    setSaving(true);
+    if (shipment.vessel_name?.trim()) {
+      await syncVesselTracking(shipment.id);
+    }
+    const refreshed = await createClient()
+      .from("shipments")
+      .select("id, eta, status")
+      .eq("id", shipment.id)
+      .maybeSingle();
+    if (refreshed.data?.status === "customs") {
+      setSaving(false);
+      await load();
+      return;
+    }
+    const eta = refreshed.data?.eta ?? shipment.eta;
+    if (!canTransitionToCustoms(eta)) {
+      setSaving(false);
       setError(ui("لا يمكن تحويل الشحنة إلى «في الجمرك» قبل تاريخ الوصول المتوقع (ETA)."));
       return;
     }
 
-    setSaving(true);
     const result = await createClient().rpc("transition_shipment_status", {
       shipment_id: shipment.id,
       target_status: "customs",

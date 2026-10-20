@@ -30,7 +30,11 @@ export function parseVesselFinderPortCalls(html: string, now = new Date()): Vess
   for (const match of html.matchAll(re)) {
     const port = decodeHtml(match[1].trim());
     const kind = match[2].toUpperCase() as VesselFinderPortCall["kind"];
-    const dateIso = parseAnnouncedEtaToIsoDate(decodeHtml(match[3]), now);
+    const dateIso = parseAnnouncedEtaToIsoDate(
+      decodeHtml(match[3]),
+      now,
+      kind === "ETA" ? "eta" : "actual"
+    );
     if (port && dateIso) calls.push({ port, kind, dateIso });
   }
   return calls;
