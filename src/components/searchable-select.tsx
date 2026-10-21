@@ -1,6 +1,15 @@
 "use client";
 
-import { forwardRef, useEffect, useId, useImperativeHandle, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import { ChevronDown, Search } from "lucide-react";
 
 export type SearchableOption = {
@@ -38,8 +47,10 @@ export const SearchableSelect = forwardRef<HTMLButtonElement, Props>(function Se
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [term, setTerm] = useState("");
+  const [highlighted, setHighlighted] = useState(0);
 
   useImperativeHandle(ref, () => buttonRef.current as HTMLButtonElement);
 
@@ -62,28 +73,103 @@ export const SearchableSelect = forwardRef<HTMLButtonElement, Props>(function Se
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
-  function advance() {
+  useEffect(() => {
+    if (!open) return;
+    if (term.trim()) {
+      setHighlighted(0);
+      return;
+    }
+    const selectedIndex = options.findIndex((option) => option.value === value);
+    setHighlighted(selectedIndex >= 0 ? selectedIndex : 0);
+    // Reset only when the list opens or the search text changes — not on parent re-renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, term]);
+
+  useEffect(() => {
+    if (!open) return;
+    const el = rootRef.current?.querySelector(`[data-option-index="${highlighted}"]`);
+    el?.scrollIntoView({ block: "nearest" });
+  }, [highlighted, open]);
+
+  function closeList() {
     setOpen(false);
     setTerm("");
+  }
+
+  function advance() {
+    closeList();
     onAdvance?.();
+  }
+
+  function choose(option: SearchableOption | undefined) {
+    if (!option) return;
+    onChange(option.value);
+    advance();
+  }
+
+  function moveHighlight(delta: number) {
+    if (!filtered.length) return;
+    setHighlighted((current) => {
+      const next = current + delta;
+      if (next < 0) return 0;
+      if (next >= filtered.length) return filtered.length - 1;
+      return next;
+    });
+  }
+
+  function openList() {
+    setOpen(true);
+    queueMicrotask(() => searchRef.current?.focus());
+  }
+
+  function onSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.nativeEvent.isComposing) return;
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      moveHighlight(1);
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      moveHighlight(-1);
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeList();
+      buttonRef.current?.focus();
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const option = filtered[highlighted] ?? filtered[0];
+      choose(option);
+    }
   }
 
   return (
     <div className={`relative ${className}`} ref={rootRef}>
       <button
+        aria-expanded={open}
+        aria-haspopup="listbox"
         className="input flex items-center justify-between gap-2 text-right"
         disabled={disabled}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => (open ? closeList() : openList())}
         onKeyDown={(event) => {
-          if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
-          if (open) return;
-          if (!value) {
+          if (event.nativeEvent.isComposing) return;
+          if (event.key === "ArrowDown" || event.key === "Enter") {
             event.preventDefault();
-            setOpen(true);
-            return;
+            if (!open) {
+              openList();
+              return;
+            }
+            if (event.key === "Enter") {
+              choose(filtered[highlighted] ?? filtered[0]);
+            } else {
+              moveHighlight(1);
+            }
           }
-          event.preventDefault();
-          advance();
         }}
         ref={buttonRef}
         type="button"
@@ -113,35 +199,28 @@ export const SearchableSelect = forwardRef<HTMLButtonElement, Props>(function Se
                 autoFocus
                 className="input pr-8 text-sm"
                 placeholder="بحث..."
+                ref={searchRef}
                 value={term}
                 onChange={(event) => setTerm(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
-                  event.preventDefault();
-                  if (filtered.length === 1) {
-                    onChange(filtered[0].value);
-                    advance();
-                    return;
-                  }
-                  if (value) advance();
-                }}
+                onKeyDown={onSearchKeyDown}
               />
             </div>
           </div>
-          <ul className="max-h-56 overflow-y-auto py-1 text-sm">
+          <ul className="max-h-56 overflow-y-auto py-1 text-sm" role="listbox">
             {filtered.length ? (
-              filtered.map((option) => (
+              filtered.map((option, index) => (
                 <li key={option.value}>
                   <button
                     className={`w-full px-3 py-2 text-right hover:bg-slate-100 ${
-                      option.value === value ? "bg-teal-50 font-semibold text-[var(--primary)]" : ""
+                      index === highlighted ? "bg-teal-50 font-semibold text-[var(--primary)]" : ""
                     }`}
+                    data-option-index={index}
+                    role="option"
+                    aria-selected={index === highlighted}
+                    tabIndex={-1}
                     type="button"
-                    onClick={() => {
-                      onChange(option.value);
-                      setOpen(false);
-                      setTerm("");
-                    }}
+                    onMouseEnter={() => setHighlighted(index)}
+                    onClick={() => choose(option)}
                   >
                     {option.label}
                   </button>
