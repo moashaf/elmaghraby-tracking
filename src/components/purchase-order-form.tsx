@@ -247,7 +247,7 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
         purchase_order_id: poId,
         product_id: row.product_id,
         order_quantity: toPositiveNumber(row.cartons_count) * toPositiveNumber(row.unit_quantity),
-        order_cartons: toPositiveNumber(row.cartons_count),
+        order_cartons: Math.round(toPositiveNumber(row.cartons_count)),
         is_disassembled: row.is_disassembled,
         is_new_incoming_product: row.is_new_incoming_product,
         notes: row.notes.trim() || null,

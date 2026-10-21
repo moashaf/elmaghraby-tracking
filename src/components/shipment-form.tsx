@@ -138,6 +138,13 @@ function toNullableNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function toNullableInt(value: string | number | null | undefined) {
+  if (value == null || value === "") return null;
+  const parsed = typeof value === "number" ? value : Number(String(value).trim());
+  if (!Number.isFinite(parsed)) return null;
+  return Math.round(parsed);
+}
+
 function toPositiveNumber(value: string) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
@@ -482,7 +489,7 @@ export function ShipmentForm({
     }
 
     const user = await supabase.auth.getUser();
-    const durationDays = form.shipping_duration_days ? Number(form.shipping_duration_days) : null;
+    const durationDays = toNullableInt(form.shipping_duration_days);
 
     const vesselName = form.vessel_name.trim() || null;
     const shipmentPayload = {
@@ -505,10 +512,10 @@ export function ShipmentForm({
             vessel_tracked_at: null,
             vessel_tracking_status: "pending",
           }),
-      shipping_duration_days: Number.isFinite(durationDays) ? durationDays : null,
+      shipping_duration_days: durationDays,
       shipment_type: form.shipment_type.trim() || "—",
       total_weight_kg: toNullableNumber(form.total_weight_kg),
-      total_cartons: toNullableNumber(form.total_cartons),
+      total_cartons: toNullableInt(form.total_cartons),
       value_usd: toNullableNumber(form.value_usd),
       route: form.route.trim() || null,
       notes: form.notes.trim() || null,
@@ -547,7 +554,7 @@ export function ShipmentForm({
           shipment_id: shipmentId,
           container_number: container.container_number.trim(),
           weight_kg: toNullableNumber(container.weight_kg),
-          cartons_count: toNullableNumber(container.cartons_count),
+          cartons_count: toNullableInt(container.cartons_count),
           notes: container.notes.trim() || null,
         }))
       )
@@ -587,7 +594,7 @@ export function ShipmentForm({
         shipment_id: shipmentId,
         product_id: row.product_id,
         quantity: toPositiveNumber(row.cartons_count) * toPositiveNumber(row.unit_quantity),
-        cartons_count: toNullableNumber(row.cartons_count),
+        cartons_count: toNullableInt(row.cartons_count),
         notes: row.notes.trim() || null,
         is_new_incoming_product: row.is_new_incoming_product,
         is_disassembled: row.is_disassembled,
