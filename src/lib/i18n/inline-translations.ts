@@ -1115,5 +1115,17 @@ export const INLINE_TRANSLATIONS: Record<string, InlineEntry> = {
   "مرفوع:": {
     "en": "Uploaded:",
     "zh": "已上传："
+  },
+  "مسودة محفوظة على الجهاز": {
+    en: "Draft saved on this device",
+    zh: "草稿已保存在本机"
+  },
+  "تم استرجاع مسودة من هذا الجهاز. اضغط حفظ الشحنة لتثبيتها.": {
+    en: "A local draft was restored. Save the shipment to store it on the server.",
+    zh: "已恢复本机草稿。请保存货运以写入服务器。"
+  },
+  "ملف INV لا يُحفظ في المسودة — ارفعه مرة أخرى قبل الحفظ.": {
+    en: "The INV file is not kept in the draft — attach it again before saving.",
+    zh: "INV 文件不会保存在草稿中 — 保存前请重新上传。"
   }
 };

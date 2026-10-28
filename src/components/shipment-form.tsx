@@ -10,6 +10,13 @@ import { toEntityOptions } from "@/lib/entity-options";
 import { PORT_SELECT_OPTIONS } from "@/lib/port-options";
 import { addDaysToIsoDate, daysBetweenIsoDates } from "@/lib/eta";
 import { syncProductQuantityFields, unitFromCartonsAndTotal, mergeOrAppendProductLine } from "@/lib/shipment-product-quantity";
+import {
+  clearShipmentDraft,
+  readShipmentDraft,
+  shipmentDraftFingerprint,
+  shipmentDraftStorageKey,
+  writeShipmentDraft,
+} from "@/lib/shipment-form-draft";
 import { useLanguage } from "@/context/language-context";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { fetchAllFromTable } from "@/lib/supabase/fetch-all";
@@ -198,11 +205,31 @@ export function ShipmentForm({
   const [showProductModal, setShowProductModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [draftReady, setDraftReady] = useState(readOnly);
+  const [draftRestored, setDraftRestored] = useState(false);
   const [vesselAnnouncement, setVesselAnnouncement] = useState<{ destination: string | null; eta: string | null } | null>(
     null
   );
   const [vesselEtaLoading, setVesselEtaLoading] = useState(false);
   const etaManualRef = useRef(false);
+  const restoredKeyRef = useRef<string | null>(null);
+  const draftKey = shipmentDraftStorageKey(shipment?.id);
+  const latestDraftRef = useRef({
+    form,
+    containers,
+    committedProducts,
+    productDraft,
+    editingProductIndex,
+    chinaWarehouseOnly,
+  });
+  latestDraftRef.current = {
+    form,
+    containers,
+    committedProducts,
+    productDraft,
+    editingProductIndex,
+    chinaWarehouseOnly,
+  };
 
   const productOptions = useMemo(() => {
     const source = chinaWarehouseOnly
@@ -355,6 +382,58 @@ export function ShipmentForm({
       setContainers((current) => resizeContainers(Math.min(Math.floor(count), 50), current));
     });
   }, [form.containers_count]);
+
+  useEffect(() => {
+    if (readOnly) {
+      setDraftReady(true);
+      return;
+    }
+    if (restoredKeyRef.current === draftKey) return;
+    restoredKeyRef.current = draftKey;
+    const draft = readShipmentDraft(draftKey);
+    if (draft) {
+      const initialFingerprint = shipmentDraftFingerprint({
+        form: formFromShipment(shipment),
+        containers: containerDrafts(initialContainers).length ? containerDrafts(initialContainers) : [{ ...emptyContainer }],
+        committedProducts: productDrafts(initialProducts),
+        productDraft: { ...emptyProduct },
+        editingProductIndex: null,
+      });
+      if (shipmentDraftFingerprint(draft) !== initialFingerprint) {
+        setForm(draft.form);
+        setContainers(draft.containers.length ? draft.containers : [{ ...emptyContainer }]);
+        setCommittedProducts(draft.committedProducts);
+        setProductDraft(draft.productDraft);
+        setEditingProductIndex(draft.editingProductIndex);
+        setChinaWarehouseOnly(draft.chinaWarehouseOnly);
+        setDraftRestored(true);
+      }
+    }
+    setDraftReady(true);
+  }, [draftKey, initialContainers, initialProducts, readOnly, shipment]);
+
+  useEffect(() => {
+    if (readOnly || !draftReady) return;
+    const timer = window.setTimeout(() => writeShipmentDraft(draftKey, latestDraftRef.current), 250);
+    return () => window.clearTimeout(timer);
+  }, [draftKey, draftReady, form, containers, committedProducts, productDraft, editingProductIndex, chinaWarehouseOnly, readOnly]);
+
+  useEffect(() => {
+    if (readOnly) return;
+    function persist() {
+      if (!draftReady) return;
+      writeShipmentDraft(draftKey, latestDraftRef.current);
+    }
+    function onVisibility() {
+      if (document.visibilityState === "hidden") persist();
+    }
+    window.addEventListener("pagehide", persist);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", persist);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [draftKey, draftReady, readOnly]);
 
   function setField<K extends keyof ShipmentFormValues>(key: K, value: ShipmentFormValues[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -616,6 +695,10 @@ export function ShipmentForm({
       setError(message);
       return;
     }
+
+    clearShipmentDraft(draftKey);
+    if (isNew) clearShipmentDraft(shipmentDraftStorageKey());
+    setDraftRestored(false);
 
     // Auto-pull from China warehouse into allocations (best-effort).
     try {
@@ -892,40 +975,53 @@ export function ShipmentForm({
         </section>
 
         <section className="space-y-3 border-t border-[var(--border)] pt-5">
-          <div className="sticky top-16 z-[15] flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-white/95 px-3 py-3 shadow-sm backdrop-blur-sm">
-            <div className="flex flex-wrap items-center gap-3">
-              <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--muted)]">{ui("منتجات الشحنة")}</h2>
-              <label className="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                <input checked={chinaWarehouseOnly} onChange={(e) => setChinaWarehouseOnly(e.target.checked)} type="checkbox" />
-                {ui("مخزن الصين")}
-              </label>
-              {cartonStats.target != null ? (
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                    cartonStats.entered === cartonStats.target
-                      ? "bg-emerald-100 text-emerald-800"
-                      : cartonStats.entered > cartonStats.target
-                        ? "bg-red-100 text-red-800"
-                        : "bg-amber-100 text-amber-800"
-                  }`}
-                >
-                  {ui("الكراتين:")} {cartonStats.entered} / {cartonStats.target}
-                </span>
-              ) : cartonStats.entered > 0 ? (
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                  {ui("الكراتين المدخلة:")} {cartonStats.entered}
-                </span>
-              ) : (
-                <span className="text-xs text-[var(--muted)]">{ui("حدّد إجمالي الكراتين في بيانات الشحنة")}</span>
-              )}
+          <div className="sticky top-16 z-[15] space-y-3 rounded-lg border border-[var(--border)] bg-white/95 p-3 shadow-sm backdrop-blur-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--muted)]">{ui("منتجات الشحنة")}</h2>
+                <label className="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                  <input checked={chinaWarehouseOnly} onChange={(e) => setChinaWarehouseOnly(e.target.checked)} type="checkbox" />
+                  {ui("مخزن الصين")}
+                </label>
+                {cartonStats.target != null ? (
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                      cartonStats.entered === cartonStats.target
+                        ? "bg-emerald-100 text-emerald-800"
+                        : cartonStats.entered > cartonStats.target
+                          ? "bg-red-100 text-red-800"
+                          : "bg-amber-100 text-amber-800"
+                    }`}
+                  >
+                    {ui("الكراتين:")} {cartonStats.entered} / {cartonStats.target}
+                  </span>
+                ) : cartonStats.entered > 0 ? (
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                    {ui("الكراتين المدخلة:")} {cartonStats.entered}
+                  </span>
+                ) : (
+                  <span className="text-xs text-[var(--muted)]">{ui("حدّد إجمالي الكراتين في بيانات الشحنة")}</span>
+                )}
+                {!readOnly ? (
+                  <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-800">
+                    {ui("مسودة محفوظة على الجهاز")}
+                  </span>
+                ) : null}
+              </div>
+              {!readOnly ? (
+                <button className="btn btn-secondary text-sm" onClick={() => setShowProductModal(true)} type="button">
+                  <Plus className="h-4 w-4" />
+                  {ui("منتج جديد")}
+                </button>
+              ) : null}
             </div>
-            {!readOnly ? (
-              <button className="btn btn-secondary text-sm" onClick={() => setShowProductModal(true)} type="button">
-                <Plus className="h-4 w-4" />
-                {ui("منتج جديد")}
-              </button>
+
+            {draftRestored && !readOnly ? (
+              <p className="text-xs text-sky-800">
+                {ui("تم استرجاع مسودة من هذا الجهاز. اضغط حفظ الشحنة لتثبيتها.")}
+                {isNew ? ` ${ui("ملف INV لا يُحفظ في المسودة — ارفعه مرة أخرى قبل الحفظ.")}` : ""}
+              </p>
             ) : null}
-          </div>
 
           {!readOnly ? (
             <div className="grid grid-cols-1 gap-3 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 sm:grid-cols-2 min-[1100px]:grid-cols-[minmax(0,1fr)_6.5rem_6.5rem_7rem_minmax(12rem,auto)_auto]">
@@ -1035,6 +1131,7 @@ export function ShipmentForm({
               </button>
             </div>
           ) : null}
+          </div>
 
           <div className="space-y-3">
             {committedProducts.length ? (
