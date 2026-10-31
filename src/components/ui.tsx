@@ -53,7 +53,7 @@ export function Stat({
 }) {
   const toneClass =
     tone === "primary"
-      ? "border-[rgb(15_118_110_/_24%)] bg-[rgb(15_118_110_/_8%)]"
+      ? "border-[rgb(196_30_58_/_24%)] bg-[rgb(196_30_58_/_8%)]"
       : tone === "amber"
         ? "border-[rgb(194_65_12_/_28%)] bg-[var(--amber-soft)]"
         : tone === "danger"
@@ -132,7 +132,7 @@ export function EmptyState({
 }) {
   return (
     <div className="card px-6 py-12 text-center">
-      <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[rgb(15_118_110_/_12%)] text-[var(--primary)]">
+      <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[rgb(196_30_58_/_12%)] text-[var(--primary)]">
         {icon ?? <Inbox className="h-7 w-7" />}
       </div>
       <h2 className="mt-4 text-lg font-bold text-[var(--navy)] dark:text-[var(--foreground)]">{title}</h2>

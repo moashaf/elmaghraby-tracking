@@ -12,8 +12,8 @@ import { buildCategorySelectOptions } from "@/lib/category-options";
 import { findLocalizedReport, getStatusLabel, languageToLocale, localizeReportCell } from "@/lib/i18n";
 import { signedProductImageUrls } from "@/lib/product-images";
 import { buildReport } from "@/lib/reports/build-reports";
-import type { ProductKindFilter } from "@/lib/reports/constants";
-import { supportsIncomingFilters, supportsProductImages, hasShipmentLinks, hasDocumentDownload, supportsReportPagination, INCOMING_PRODUCTS_PAGE_SIZE, SHIPMENT_SERIAL_COLUMN, SHIPMENT_TABLE_CLASS } from "@/lib/reports/constants";
+import type { ProductKindFilter, ShipmentStageFilter } from "@/lib/reports/constants";
+import { supportsIncomingFilters, supportsShipmentStageFilter, supportsProductImages, hasShipmentLinks, hasDocumentDownload, supportsReportPagination, INCOMING_PRODUCTS_PAGE_SIZE, SHIPMENT_SERIAL_COLUMN, SHIPMENT_TABLE_CLASS } from "@/lib/reports/constants";
 import { todayIso, type ReportRow } from "@/lib/reports/shipment-helpers";
 import { sumReportColumn, OPEN_SHIPMENT_STATUS_SORT_ORDER, type ShipmentStatusSummary } from "@/lib/shipment-container-count";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
@@ -52,12 +52,21 @@ export default function ReportDetailPage() {
     ],
     [ui]
   );
+  const stageTabs = useMemo<Array<{ id: ShipmentStageFilter; label: string }>>(
+    () => [
+      { id: "all", label: ui("الكل") },
+      { id: "in_sea", label: ui("البحر") },
+      { id: "customs", label: ui("الجمرك") },
+    ],
+    [ui]
+  );
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [statusSummary, setStatusSummary] = useState<ShipmentStatusSummary | null>(null);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [query, setQuery] = useState("");
   const [productKind, setProductKind] = useState<ProductKindFilter>("all");
+  const [shipmentStage, setShipmentStage] = useState<ShipmentStageFilter>("all");
   const [categoryId, setCategoryId] = useState("");
   const [withImages, setWithImages] = useState(false);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
@@ -75,6 +84,7 @@ export default function ReportDetailPage() {
 
   const showImages = withImages && supportsProductImages(params.slug);
   const showIncomingFilters = supportsIncomingFilters(params.slug);
+  const showShipmentStageFilter = supportsShipmentStageFilter(params.slug);
   const showShipmentLinks = hasShipmentLinks(params.slug);
   const showShipmentActions =
     showShipmentLinks || rows.some((row) => !row._sectionHeader && Boolean(row._shipmentId));
@@ -130,6 +140,7 @@ export default function ReportDetailPage() {
     const result = await buildReport(params.slug, from, to, {
       categoryId: categoryId || undefined,
       productKind: showIncomingFilters ? productKind : undefined,
+      shipmentStage: showShipmentStageFilter ? shipmentStage : undefined,
       page: paginatedReport && !exportAll ? targetPage : undefined,
       pageSize: paginatedReport && !exportAll ? INCOMING_PRODUCTS_PAGE_SIZE : undefined,
       exportAll: paginatedReport && exportAll,
@@ -185,7 +196,7 @@ export default function ReportDetailPage() {
     setPage(1);
     void load(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productKind, categoryId]);
+  }, [productKind, categoryId, shipmentStage]);
 
   useEffect(() => {
     if (!showImages) {
@@ -295,12 +306,17 @@ export default function ReportDetailPage() {
 
     const sourceRows =
       exportResult && !("error" in exportResult)
-        ? exportResult.rows.filter((row) => !row._sectionHeader)
-        : dataRows;
+        ? exportResult.rows
+        : tableRows;
 
-    const exportRows = sourceRows.map((row, index) => {
+    let shipmentSerial = 0;
+    const exportRows = sourceRows.map((row) => {
+      if (row._sectionHeader) {
+        return { SKU: ui(row._sectionHeader) };
+      }
+      shipmentSerial += 1;
       const copy: Record<string, string | number | null> = {};
-      if (showShipmentLinks) copy[SHIPMENT_SERIAL_COLUMN] = index + 1;
+      if (showShipmentLinks) copy[SHIPMENT_SERIAL_COLUMN] = shipmentSerial;
       for (const [key, value] of Object.entries(row)) {
         if (key.startsWith("_")) continue;
         copy[key] = value ?? "";
@@ -422,12 +438,27 @@ export default function ReportDetailPage() {
           </p>
         ) : null}
 
+        {showShipmentStageFilter ? (
+          <div className="flex flex-wrap gap-2">
+            {stageTabs.map((tab) => (
+              <button
+                className={`rounded-full px-3 py-1 text-sm font-semibold ${shipmentStage === tab.id ? "bg-[var(--primary)] text-white" : "bg-slate-100 text-slate-700"}`}
+                key={tab.id}
+                onClick={() => setShipmentStage(tab.id)}
+                type="button"
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         {showIncomingFilters ? (
           <div className="flex flex-wrap gap-2">
             {kindTabs.map((tab) => (
               <button
-                className={`rounded-full px-3 py-1 text-sm font-semibold ${productKind === tab.id ? "bg-[#0f766e] text-white" : "bg-slate-100 text-slate-700"}`}
-                key={tab.id}
+                className={`rounded-full px-3 py-1 text-sm font-semibold ${productKind === tab.id ? "bg-[var(--primary)] text-white" : "bg-slate-100 text-slate-700"}`}
+                key={`kind-${tab.id}`}
                 onClick={() => setProductKind(tab.id)}
                 type="button"
               >
@@ -519,7 +550,7 @@ export default function ReportDetailPage() {
                 row._sectionHeader ? (
                   <tr className="report-section-row bg-slate-100 font-bold print:bg-slate-100" key={`section-${index}`}>
                     <td className="p-3" colSpan={Math.max(columns.length, 1) + printableExtraColumns + (showShipmentActions ? 1 : 0)}>
-                      {row._sectionHeader}
+                      {ui(row._sectionHeader)}
                     </td>
                   </tr>
                 ) : (
@@ -567,7 +598,7 @@ export default function ReportDetailPage() {
                           serial
                         ) : column === "الرابط" && row._downloadPath ? (
                           <button
-                            className="text-[#0f766e] underline hover:opacity-80 print:text-inherit print:no-underline"
+                            className="text-[var(--primary)] underline hover:opacity-80 print:text-inherit print:no-underline"
                             onClick={() => downloadFile(String(row._downloadPath))}
                             type="button"
                           >
@@ -700,7 +731,7 @@ export default function ReportDetailPage() {
               <tr className="border-t border-[var(--border)]">
                 <td className="p-3 font-semibold">{ui("عدد الحاويات")}</td>
                 {OPEN_SHIPMENT_STATUS_SORT_ORDER.map((status) => (
-                  <td className="p-3 text-center text-xl font-bold text-[#0f766e]" key={status}>
+                  <td className="p-3 text-center text-xl font-bold text-[var(--primary)]" key={status}>
                     {statusSummary[status].containers}
                   </td>
                 ))}

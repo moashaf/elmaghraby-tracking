@@ -9,32 +9,46 @@ const settings: SystemSettings = {
 };
 
 describe("validateCloseShipmentRules", () => {
-  it("requires costs when setting enabled", () => {
+  it("closes with a customs PDF even when costs are zero", () => {
     const result = validateCloseShipmentRules({
       isAlreadyClosed: false,
       totalCost: 0,
       hasCustomsDocument: true,
+      closing: true,
       settings,
     });
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBe(true);
   });
 
-  it("requires customs document only when setting enabled", () => {
+  it("requires a customs release PDF when closing", () => {
     const blocked = validateCloseShipmentRules({
       isAlreadyClosed: false,
       totalCost: 100,
       hasCustomsDocument: false,
-      settings,
+      closing: true,
+      settings: { ...settings, require_customs_document: false },
     });
     expect(blocked.ok).toBe(false);
 
     const allowed = validateCloseShipmentRules({
       isAlreadyClosed: false,
-      totalCost: 100,
-      hasCustomsDocument: false,
+      totalCost: 0,
+      hasCustomsDocument: true,
+      closing: true,
       settings: { ...settings, require_customs_document: false },
     });
     expect(allowed.ok).toBe(true);
+  });
+
+  it("does not require a PDF when only saving costs", () => {
+    const result = validateCloseShipmentRules({
+      isAlreadyClosed: false,
+      totalCost: 0,
+      hasCustomsDocument: false,
+      closing: false,
+      settings,
+    });
+    expect(result.ok).toBe(true);
   });
 
   it("skips gates when already closed", () => {

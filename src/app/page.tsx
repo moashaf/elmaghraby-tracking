@@ -253,7 +253,7 @@ export default function DashboardPage() {
           helper: "معلمة كمنتج وارد جديد",
           href: "/reports/new-products",
           icon: Package,
-          tone: "bg-teal-50 text-teal-800 border-teal-200",
+          tone: "bg-rose-50 text-rose-800 border-rose-200",
         },
         {
           label: "alerts.disassembledProducts",
@@ -271,7 +271,7 @@ export default function DashboardPage() {
         ],
         incoming: [
           { label: t("alerts.incomingContainers"), value: openContainerCount, color: "#059669" },
-          { label: t("alerts.newProducts"), value: newIncomingProducts, color: "#0f766e" },
+          { label: t("alerts.newProducts"), value: newIncomingProducts, color: "#c41e3a" },
           { label: t("alerts.disassembledProducts"), value: disassembledCount, color: "#7c3aed" },
         ],
       },

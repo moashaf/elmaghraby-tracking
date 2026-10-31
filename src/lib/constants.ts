@@ -22,7 +22,6 @@ export function getNextStatusAction(
 ): "to_customs" | "to_close" | "edit_costs" | null {
   if (status === "in_sea") return "to_customs";
   if (status === "customs") return "to_close";
-  if (status === "closed") return "edit_costs";
   return null;
 }
 
@@ -31,6 +30,6 @@ export const NEXT_ACTION_LABELS: Record<
   string
 > = {
   to_customs: "التالي: الجمارك",
-  to_close: "التالي: المصاريف والإغلاق",
+  to_close: "التالي: الإفراج والإغلاق",
   edit_costs: "تعديل المصاريف",
 };

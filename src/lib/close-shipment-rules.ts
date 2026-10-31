@@ -4,6 +4,7 @@ export type CloseShipmentValidationInput = {
   isAlreadyClosed: boolean;
   totalCost: number;
   hasCustomsDocument: boolean;
+  closing?: boolean;
   settings: Pick<SystemSettings, "require_costs_before_close" | "require_customs_document">;
 };
 
@@ -15,15 +16,8 @@ export type CloseShipmentValidationResult =
 export function validateCloseShipmentRules(
   input: CloseShipmentValidationInput
 ): CloseShipmentValidationResult {
-  if (!input.isAlreadyClosed && input.settings.require_costs_before_close && input.totalCost <= 0) {
-    return { ok: false, message: "يجب إدخال المصاريف قبل إغلاق الشحنة." };
-  }
-
-  if (
-    !input.isAlreadyClosed &&
-    input.settings.require_customs_document &&
-    !input.hasCustomsDocument
-  ) {
+  const isClosing = input.closing !== false && !input.isAlreadyClosed;
+  if (isClosing && !input.hasCustomsDocument) {
     return { ok: false, message: "ارفع ملف PDF للإفراج الجمركي قبل الإغلاق." };
   }
 

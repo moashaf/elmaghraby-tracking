@@ -184,7 +184,7 @@ export function ShipmentFiles({
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="card space-y-4 p-4">
           <div className="flex items-center gap-2">
-            <FileUp className="h-5 w-5 text-[#0f766e]" />
+            <FileUp className="h-5 w-5 text-[var(--primary)]" />
             <h2 className="font-bold">{ui("ملفات الحاويات Excel/CSV")}</h2>
           </div>
           <SearchableSelect
@@ -202,7 +202,7 @@ export function ShipmentFiles({
 
         <section className="card space-y-4 p-4">
           <div className="flex items-center gap-2">
-            <FileUp className="h-5 w-5 text-[#0f766e]" />
+            <FileUp className="h-5 w-5 text-[var(--primary)]" />
             <h2 className="font-bold">{ui("مستندات الشحنة")}</h2>
           </div>
           <SearchableSelect

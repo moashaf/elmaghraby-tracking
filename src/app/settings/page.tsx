@@ -27,8 +27,8 @@ type SystemSettings = {
 };
 
 const defaultSettings: SystemSettings = {
-  require_costs_before_close: true,
-  require_customs_document: false,
+  require_costs_before_close: false,
+  require_customs_document: true,
   delayed_after_eta_days: 0,
 };
 
@@ -201,7 +201,7 @@ export default function SettingsPage() {
             <input className="input h-11" type="color" value={theme.primary} onChange={(event) => patchTheme({ primary: event.target.value })} />
           </label>
           <label className="label">
-            {ui("لون الشريط الجانبي")}
+            {ui("لون الشريط")}
             <input className="input h-11" type="color" value={theme.navy} onChange={(event) => patchTheme({ navy: event.target.value })} />
           </label>
           <label className="label">

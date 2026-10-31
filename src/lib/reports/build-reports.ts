@@ -11,10 +11,11 @@ import { CUSTOMS_RELEASE_DOC_TYPE } from "@/lib/storage-path";
 import { fetchSystemSettings, isShipmentDelayed } from "@/lib/system-settings";
 import { collectDescendantCategoryIds } from "@/lib/category-tree";
 import type { ProductCategory } from "@/lib/types";
-import type { ProductKindFilter } from "@/lib/reports/constants";
+import type { ProductKindFilter, ShipmentStageFilter } from "@/lib/reports/constants";
 import { GROUPED_PRODUCT_REPORT_SLUGS, INCOMING_PRODUCTS_PAGE_SIZE } from "@/lib/reports/constants";
 import {
   groupProductLines,
+  groupProductLinesByShipmentStage,
   formatEtaHeader,
   productLinesToDetailRows,
   statusLabel,
@@ -209,12 +210,14 @@ function toProductLine(row: ShipmentProductJoin, invoiceMap: Map<string, string>
     is_disassembled: row.is_disassembled,
     is_new: row.is_new_incoming_product,
     status: statusLabel(shipment.status),
+    statusKey: shipment.status,
   };
 }
 
 export type BuildReportOptions = {
   categoryId?: string;
   productKind?: ProductKindFilter;
+  shipmentStage?: ShipmentStageFilter;
   page?: number;
   pageSize?: number;
   /** When true, return all matching rows (e.g. Excel export) instead of one page. */
@@ -562,6 +565,15 @@ function filterLightRowsByKind(rows: ShipmentProductLightRow[], productKind?: Pr
   return rows;
 }
 
+function filterLightRowsByShipmentStage(
+  rows: ShipmentProductLightRow[],
+  shipmentById: Map<string, ShipmentReportRow>,
+  shipmentStage?: ShipmentStageFilter
+) {
+  if (!shipmentStage || shipmentStage === "all") return rows;
+  return rows.filter((row) => shipmentById.get(row.shipment_id)?.status === shipmentStage);
+}
+
 function lightRowsToProductLines(
   rows: ShipmentProductLightRow[],
   productById: Map<string, ProductMeta>,
@@ -591,6 +603,7 @@ function lightRowsToProductLines(
       is_disassembled: row.is_disassembled,
       is_new: row.is_new_incoming_product,
       status: statusLabel(shipment.status),
+      statusKey: shipment.status,
     });
   }
 
@@ -640,6 +653,7 @@ async function incomingProductsReport(
   if (lightResult.error) return { error: lightResult.error };
 
   let lightRows = filterLightRowsByKind(lightResult.data, options.productKind);
+  lightRows = filterLightRowsByShipmentStage(lightRows, shipmentById, options.shipmentStage);
   if (!lightRows.length) {
     return { rows: [], totalRows: 0, page, pageSize };
   }
@@ -676,10 +690,11 @@ async function incomingProductsReport(
   const invoiceMap = await fetchInvoiceFileNamesByShipmentId();
   const lines = lightRowsToProductLines(pageLightRows, productById, shipmentById, invoiceMap);
 
-  const groupedRows = groupProductLines(lines, {
+  const groupedRows = groupProductLinesByShipmentStage(lines, {
     productKind: options.productKind,
     categoryIds,
     dateColumns,
+    shipmentStage: options.shipmentStage,
   });
 
   // إجمالي كرتونات الوصول لكل يوم ETA — صف واحد في نهاية ملف Excel فقط.

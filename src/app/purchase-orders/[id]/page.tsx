@@ -202,7 +202,7 @@ export default function PurchaseOrderDetailsPage() {
         {tabs.map((tab) => (
           <button
             className={`rounded-md px-3 py-1.5 text-sm font-semibold ${
-              activeTab === tab.id ? "bg-[#0f766e] text-white" : "bg-slate-100 text-slate-700"
+              activeTab === tab.id ? "bg-[var(--primary)] text-white" : "bg-slate-100 text-slate-700"
             }`}
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}

@@ -9,8 +9,8 @@ export type SystemSettings = {
 };
 
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
-  require_costs_before_close: true,
-  require_customs_document: false,
+  require_costs_before_close: false,
+  require_customs_document: true,
   delayed_after_eta_days: 0,
 };
 

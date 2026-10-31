@@ -148,7 +148,7 @@ export function QuickProductModal({
             ) : null}
           </div>
           <div
-            className="rounded-md border border-dashed border-[var(--border)] bg-slate-50/80 p-3 text-center text-sm text-[var(--muted)] outline-none focus:border-[#0f766e] focus:ring-2 focus:ring-[#0f766e]/20"
+            className="rounded-md border border-dashed border-[var(--border)] bg-slate-50/80 p-3 text-center text-sm text-[var(--muted)] outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20"
             contentEditable={false}
             onPaste={handlePasteImage}
             tabIndex={0}

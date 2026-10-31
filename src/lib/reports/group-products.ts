@@ -1,6 +1,6 @@
 import { displayInvoiceNumber } from "@/lib/shipment-invoice-number";
-import { SHIPMENT_STATUS_LABELS } from "@/lib/constants";
-import type { ProductKindFilter } from "@/lib/reports/constants";
+import { SHIPMENT_STATUS_LABELS, type ShipmentStatus } from "@/lib/constants";
+import type { ProductKindFilter, ShipmentStageFilter } from "@/lib/reports/constants";
 import type { ReportRow } from "@/lib/reports/shipment-helpers";
 
 export type ProductLine = {
@@ -19,6 +19,7 @@ export type ProductLine = {
   is_disassembled: boolean;
   is_new: boolean;
   status: string;
+  statusKey?: ShipmentStatus | string;
 };
 
 type GroupedSku = {
@@ -132,6 +133,44 @@ export function groupProductLines(
   }
 
   return rowsToReportRows(Array.from(grouped.values()), options.dateColumns);
+}
+
+const STAGE_SECTIONS: Array<{ key: ShipmentStatus; title: string }> = [
+  { key: "in_sea", title: "في البحر" },
+  { key: "customs", title: "في الجمارك" },
+  { key: "closed", title: "مغلقة" },
+];
+
+export function lineMatchesShipmentStage(line: ProductLine, stage?: ShipmentStageFilter) {
+  if (!stage || stage === "all") return true;
+  return (line.statusKey || "") === stage;
+}
+
+export function groupProductLinesByShipmentStage(
+  lines: ProductLine[],
+  options: {
+    productKind?: ProductKindFilter;
+    categoryIds?: Set<string>;
+    dateColumns?: string[];
+    shipmentStage?: ShipmentStageFilter;
+  } = {}
+): ReportRow[] {
+  const filtered = lines.filter((line) => lineMatchesShipmentStage(line, options.shipmentStage));
+  if (options.shipmentStage && options.shipmentStage !== "all") {
+    return groupProductLines(filtered, options);
+  }
+
+  const rows: ReportRow[] = [];
+  for (const section of STAGE_SECTIONS) {
+    const part = groupProductLines(
+      filtered.filter((line) => (line.statusKey || "") === section.key),
+      options
+    );
+    if (!part.length) continue;
+    rows.push({ _sectionHeader: section.title });
+    rows.push(...part);
+  }
+  return rows;
 }
 
 export function productLinesToDetailRows(lines: ProductLine[], withImagePath = false): ReportRow[] {

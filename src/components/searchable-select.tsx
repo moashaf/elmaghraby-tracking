@@ -212,7 +212,7 @@ export const SearchableSelect = forwardRef<HTMLButtonElement, Props>(function Se
                 <li key={option.value}>
                   <button
                     className={`w-full px-3 py-2 text-right hover:bg-slate-100 ${
-                      index === highlighted ? "bg-teal-50 font-semibold text-[var(--primary)]" : ""
+                      index === highlighted ? "bg-red-50 font-semibold text-[var(--primary)]" : ""
                     }`}
                     data-option-index={index}
                     role="option"

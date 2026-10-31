@@ -8,11 +8,11 @@ export type ThemeSettings = {
 };
 
 export const DEFAULT_THEME: ThemeSettings = {
-  primary: "#0f766e",
-  navy: "#0a2740",
-  background: "#e9eef5",
-  foreground: "#0b1f33",
-  fontColor: "#0b1f33",
+  primary: "#c41e3a",
+  navy: "#1c1917",
+  background: "#f6f6f7",
+  foreground: "#1c1917",
+  fontColor: "#1c1917",
   darkMode: false,
 };
 
@@ -23,7 +23,18 @@ export function loadTheme(): ThemeSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_THEME;
-    return { ...DEFAULT_THEME, ...JSON.parse(raw) };
+    const parsed = { ...DEFAULT_THEME, ...JSON.parse(raw) } as ThemeSettings;
+    if (parsed.primary === "#0f766e" || parsed.navy === "#0a2740") {
+      return {
+        ...parsed,
+        primary: DEFAULT_THEME.primary,
+        navy: DEFAULT_THEME.navy,
+        background: parsed.background === "#e9eef5" ? DEFAULT_THEME.background : parsed.background,
+        foreground: parsed.foreground === "#0b1f33" ? DEFAULT_THEME.foreground : parsed.foreground,
+        fontColor: parsed.fontColor === "#0b1f33" ? DEFAULT_THEME.fontColor : parsed.fontColor,
+      };
+    }
+    return parsed;
   } catch {
     return DEFAULT_THEME;
   }
@@ -43,7 +54,7 @@ export function applyTheme(theme: ThemeSettings) {
   root.style.setProperty("--foreground", dark ? "#e2e8f0" : theme.fontColor || theme.foreground);
   root.style.setProperty("--surface", dark ? "#1e293b" : "#ffffff");
   root.style.setProperty("--muted", dark ? "#94a3b8" : "#64748b");
-  root.style.setProperty("--border", dark ? "#334155" : "rgb(10 39 64 / 12%)");
+  root.style.setProperty("--border", dark ? "#334155" : "rgb(28 25 23 / 10%)");
   root.style.setProperty("--amber", "#d97706");
   root.classList.toggle("dark", dark);
 }

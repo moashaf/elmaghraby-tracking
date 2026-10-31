@@ -9,6 +9,7 @@ import { DEFAULT_SYSTEM_SETTINGS, type SystemSettings } from "@/lib/system-setti
 import { jsonError, requireWriter } from "@/lib/supabase/server";
 
 type CloseCostsBody = {
+  close?: boolean;
   customs_cost?: number;
   clearance_cost?: number;
   local_transport_cost?: number;
@@ -44,6 +45,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const lineItems = normalizeCloseCostLineItems(body.line_items ?? {});
     const rollups = toCloseCostRollups(lineItems);
     const closingNotes = body.closing_notes?.trim() || null;
+    const wantsClose = body.close === true;
 
     const { data: shipment, error: shipmentError } = await auth.adminClient
       .from("shipments")
@@ -69,43 +71,49 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       isAlreadyClosed,
       totalCost: rollups.total_cost,
       hasCustomsDocument: Boolean(customsDoc),
+      closing: wantsClose,
       settings,
     });
     if (!validation.ok) return jsonError(validation.message, 400);
 
-    const costPayload = {
-      customs_cost: rollups.customs_cost,
-      shipping_cost: 0,
-      clearance_cost: rollups.clearance_cost,
-      local_transport_cost: rollups.local_transport_cost,
-      other_expenses: rollups.other_expenses,
-      closing_notes: closingNotes,
-      line_items: lineItems,
-      updated_at: new Date().toISOString(),
-    };
+    let costId: string | null = null;
 
-    const { data: existingCost } = await auth.adminClient
-      .from("shipment_costs")
-      .select("id")
-      .eq("shipment_id", shipmentId)
-      .maybeSingle();
+    if (!wantsClose) {
+      const costPayload = {
+        customs_cost: rollups.customs_cost,
+        shipping_cost: 0,
+        clearance_cost: rollups.clearance_cost,
+        local_transport_cost: rollups.local_transport_cost,
+        other_expenses: rollups.other_expenses,
+        closing_notes: closingNotes,
+        line_items: lineItems,
+        updated_at: new Date().toISOString(),
+      };
 
-    const costResult = existingCost
-      ? await auth.adminClient.from("shipment_costs").update(costPayload).eq("id", existingCost.id).select("id").single()
-      : await auth.adminClient
-          .from("shipment_costs")
-          .insert({
-            shipment_id: shipmentId,
-            ...costPayload,
-            closed_by: auth.user.id,
-            closed_at: new Date().toISOString(),
-          })
-          .select("id")
-          .single();
+      const { data: existingCost } = await auth.adminClient
+        .from("shipment_costs")
+        .select("id")
+        .eq("shipment_id", shipmentId)
+        .maybeSingle();
 
-    if (costResult.error) return jsonError(costResult.error.message, 500);
+      const costResult = existingCost
+        ? await auth.adminClient.from("shipment_costs").update(costPayload).eq("id", existingCost.id).select("id").single()
+        : await auth.adminClient
+            .from("shipment_costs")
+            .insert({
+              shipment_id: shipmentId,
+              ...costPayload,
+              closed_by: auth.user.id,
+              closed_at: new Date().toISOString(),
+            })
+            .select("id")
+            .single();
 
-    if (!isAlreadyClosed) {
+      if (costResult.error) return jsonError(costResult.error.message, 500);
+      costId = costResult.data.id;
+    }
+
+    if (wantsClose && !isAlreadyClosed) {
       const { error: closeError } = await auth.adminClient
         .from("shipments")
         .update({
@@ -122,13 +130,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         shipment_id: shipmentId,
         event_type: "closed_with_costs",
         title_ar: "إغلاق الشحنة",
-        description_ar: "تم حفظ المصاريف وإغلاق الشحنة",
-        metadata: { cost_id: costResult.data.id },
+        description_ar: "تم رفع الإفراج الجمركي وإغلاق الشحنة",
+        metadata: { cost_id: costId },
         created_by: auth.user.id,
       });
     }
 
-    return Response.json({ ok: true, cost_id: costResult.data.id });
+    return Response.json({ ok: true, cost_id: costId });
   } catch (error) {
     const message = error instanceof Error ? error.message : "تعذر إغلاق الشحنة.";
     return jsonError(message, 500);

@@ -351,7 +351,7 @@ export default function CategoriesPage() {
 
         {listScope.type === "under" ? (
           <nav aria-label="مسار التصفح" className="flex flex-wrap items-center gap-2 text-sm">
-            <button className="font-semibold text-[#0f766e] hover:underline" onClick={showAll} type="button">
+            <button className="font-semibold text-[var(--primary)] hover:underline" onClick={showAll} type="button">
               {tr("الكل", "All")}
             </button>
             {breadcrumb.map((item, index) => (
@@ -361,7 +361,7 @@ export default function CategoriesPage() {
                   <span className="font-bold">{item.name_ar}</span>
                 ) : (
                   <button
-                    className="font-semibold text-[#0f766e] hover:underline"
+                    className="font-semibold text-[var(--primary)] hover:underline"
                     onClick={() => openUnder(item.id)}
                     type="button"
                   >

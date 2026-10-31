@@ -1,21 +1,28 @@
 @import "tailwindcss";
 
 :root {
-  --background: #e9eef5;
-  --foreground: #0b1f33;
-  --primary: #0f766e;
+  --background: #f6f6f7;
+  --foreground: #1c1917;
+  --primary: #c41e3a;
   --primary-foreground: #ffffff;
   --surface: #ffffff;
-  --muted: #5b6b7c;
-  --border: rgb(10 39 64 / 12%);
-  --danger: #dc2626;
-  --navy: #0a2740;
+  --muted: #57534e;
+  --border: rgb(28 25 23 / 10%);
+  --danger: #b91c1c;
+  --navy: #1c1917;
   --amber: #c2410c;
   --amber-soft: #fff7ed;
-  --shadow-soft: 0 10px 30px rgb(10 39 64 / 7%);
+  --shadow-soft: 0 10px 28px rgb(28 25 23 / 6%);
   --radius-sm: 10px;
   --radius-md: 14px;
   --radius-lg: 18px;
+  --app-header-offset: 3.5rem;
+}
+
+@media (min-width: 900px) {
+  :root {
+    --app-header-offset: 7.75rem;
+  }
 }
 
 @theme inline {
@@ -89,8 +96,8 @@ body {
 
 .btn-secondary:hover:not(:disabled) {
   filter: none;
-  background: #f3f7fb;
-  border-color: rgb(15 118 110 / 30%);
+  background: #fafafa;
+  border-color: rgb(196 30 58 / 28%);
 }
 
 .btn-ghost {
@@ -126,7 +133,7 @@ body {
 
 .input:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgb(15 118 110 / 16%);
+  box-shadow: 0 0 0 3px rgb(196 30 58 / 16%);
 }
 
 .label {
@@ -143,7 +150,7 @@ body {
 }
 
 .row-hover:hover {
-  background: rgb(15 118 110 / 5%);
+  background: rgb(196 30 58 / 5%);
 }
 
 .row-delayed {
@@ -196,14 +203,14 @@ body {
 }
 
 .filter-chip:hover {
-  border-color: rgb(15 118 110 / 35%);
+  border-color: rgb(196 30 58 / 35%);
   color: var(--foreground);
 }
 
 .filter-chip-active {
   border-color: transparent;
-  background: rgb(15 118 110 / 14%);
-  color: #0f766e;
+  background: rgb(196 30 58 / 12%);
+  color: var(--primary);
 }
 
 .tabs-underline {
@@ -264,13 +271,13 @@ body {
 
 .progress-step-done,
 .progress-step-current {
-  border-color: rgb(15 118 110 / 30%);
-  background: rgb(15 118 110 / 9%);
-  color: #0f766e;
+  border-color: rgb(196 30 58 / 28%);
+  background: rgb(196 30 58 / 8%);
+  color: var(--primary);
 }
 
 .progress-step-current {
-  box-shadow: 0 0 0 2px rgb(15 118 110 / 18%);
+  box-shadow: 0 0 0 2px rgb(196 30 58 / 16%);
 }
 
 .meta-grid {
@@ -559,14 +566,14 @@ html.dark .table-head {
 /* ——— Login hero ——— */
 .login-page {
   min-height: 100vh;
-  background: #e9eef5;
+  background: #f6f6f7;
 }
 
 .login-hero-panel {
   position: relative;
   overflow: hidden;
   min-height: 240px;
-  background: #e9eef5;
+  background: #f6f6f7;
 }
 
 @media (min-width: 1024px) {
@@ -593,7 +600,7 @@ html.dark .table-head {
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
-  background: #e9eef5;
+  background: #f6f6f7;
 }
 
 @media (min-width: 1024px) {
@@ -605,8 +612,8 @@ html.dark .table-head {
 .login-form-card {
   width: 100%;
   max-width: 28rem;
-  border: 1px solid rgb(15 118 110 / 10%);
-  box-shadow: 0 8px 32px rgb(15 23 42 / 7%);
+  border: 1px solid rgb(196 30 58 / 12%);
+  box-shadow: 0 8px 32px rgb(28 25 23 / 8%);
 }
 
 /* ——— App pages decor (login-style, not crowded) ——— */
@@ -629,7 +636,7 @@ html.dark .table-head {
   inset-inline-start: -6rem;
   width: 24rem;
   height: 24rem;
-  background: radial-gradient(circle, rgb(15 118 110 / 10%) 0%, transparent 72%);
+  background: radial-gradient(circle, rgb(196 30 58 / 8%) 0%, transparent 72%);
 }
 
 .app-wave-bg__glow--end {
@@ -637,7 +644,7 @@ html.dark .table-head {
   inset-inline-end: -4rem;
   width: 18rem;
   height: 18rem;
-  background: radial-gradient(circle, rgb(18 60 90 / 7%) 0%, transparent 70%);
+  background: radial-gradient(circle, rgb(28 25 23 / 5%) 0%, transparent 70%);
 }
 
 .app-wave-bg__svg {
@@ -646,12 +653,12 @@ html.dark .table-head {
   inset-inline-start: 0;
   width: 100%;
   height: auto;
-  color: rgb(15 118 110 / 14%);
+  color: rgb(196 30 58 / 8%);
 }
 
 .app-wave-bg__svg--back {
   bottom: 1.25rem;
-  color: rgb(15 118 110 / 7%);
+  color: rgb(196 30 58 / 4%);
 }
 
 .app-wave-bg__corner {
@@ -660,7 +667,7 @@ html.dark .table-head {
   inset-inline-start: -2rem;
   width: 11rem;
   height: 11rem;
-  color: rgb(15 118 110 / 12%);
+  color: rgb(196 30 58 / 8%);
 }
 
 .app-main-content {
@@ -669,13 +676,13 @@ html.dark .table-head {
 
 .app-shell-header {
   border-color: var(--border);
-  background: rgb(233 238 245 / 90%);
-  backdrop-filter: blur(12px);
+  background: rgb(255 255 255 / 92%);
+  backdrop-filter: blur(14px);
 }
 
 .app-shell-footer {
   border-color: var(--border);
-  background: rgb(233 238 245 / 78%);
+  background: rgb(246 246 247 / 88%);
 }
 
 .page-title-accent {
@@ -683,7 +690,7 @@ html.dark .table-head {
   height: 3px;
   width: 4.5rem;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--primary), rgb(13 148 136 / 18%));
+  background: linear-gradient(90deg, var(--primary), rgb(196 30 58 / 18%));
 }
 
 .nav-section-label {
@@ -692,7 +699,29 @@ html.dark .table-head {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgb(255 255 255 / 42%);
+  color: rgb(28 25 23 / 45%);
+}
+
+.top-nav-item {
+  display: flex;
+  min-width: 4.6rem;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 0.75rem;
+  padding: 0.4rem 0.55rem;
+  color: #57534e;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.top-nav-item:hover {
+  background: rgb(196 30 58 / 6%);
+  color: var(--foreground);
+}
+
+.top-nav-item-active {
+  background: rgb(196 30 58 / 10%);
+  color: var(--primary);
 }
 
 /* ——— Report tables (screen + print base) ——— */

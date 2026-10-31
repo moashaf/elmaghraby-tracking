@@ -22,11 +22,11 @@ import { addDaysToIsoDate, canTransitionToCustoms, todayIsoDate } from "@/lib/et
 import {
   CLOSE_COST_GROUPS,
   CLOSE_COST_ITEMS,
+  emptyCloseCostLineItems,
   formStringsToLineItems,
   lineItemsToFormStrings,
   nonZeroCloseCostItems,
   sumCloseCostLineItems,
-  toCloseCostRollups,
   type CloseCostItemKey,
 } from "@/lib/close-cost-items";
 import { CUSTOMS_RELEASE_DOC_TYPE, shipmentCustomsReleasePath } from "@/lib/storage-path";
@@ -52,6 +52,7 @@ export default function ShipmentDetailsPage() {
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>("summary");
   const [showCosts, setShowCosts] = useState(false);
+  const [showClose, setShowClose] = useState(false);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -190,8 +191,8 @@ export default function ShipmentDetailsPage() {
   async function nextAction() {
     if (!shipment) return;
     const action = getNextStatusAction(shipment.status);
-    if (action === "to_close" || action === "edit_costs") {
-      setShowCosts(true);
+    if (action === "to_close") {
+      setShowClose(true);
       return;
     }
     if (action !== "to_customs") return;
@@ -378,7 +379,7 @@ export default function ShipmentDetailsPage() {
           <MetaItem label="ACID" value={shipment.acid} />
           <MetaItem label={ui("رقم الشهادة الجمركية")} value={shipment.customs_certificate_number?.trim() || "-"} />
         </div>
-        <div className="mt-5 rounded-[var(--radius-sm)] border border-[rgb(15_118_110_/_20%)] bg-[rgb(15_118_110_/_6%)] p-4">
+        <div className="mt-5 rounded-[var(--radius-sm)] border border-[rgb(196_30_58_/_20%)] bg-[rgb(196_30_58_/_6%)] p-4">
           <div className="text-xs font-semibold text-[var(--muted)]">{ui("موقع المركب")}</div>
           <div className="mt-1 text-base font-bold text-[var(--navy)] dark:text-[var(--foreground)]">
             <VesselLocationLink
@@ -456,15 +457,24 @@ export default function ShipmentDetailsPage() {
       {activeTab === "timeline" ? <Timeline rows={timeline} /> : null}
       {activeTab === "costs" ? <CostsPanel cost={cost} onEdit={() => setShowCosts(true)} /> : null}
 
+      {showClose ? (
+        <CloseDialog
+          shipmentId={shipment.id}
+          onClose={() => setShowClose(false)}
+          onSaved={async () => {
+            setShowClose(false);
+            setEditing(false);
+            await load();
+          }}
+        />
+      ) : null}
       {showCosts ? (
         <CostsDialog
           cost={cost}
           shipmentId={shipment.id}
-          isClosed={shipment.status === "closed"}
           onClose={() => setShowCosts(false)}
           onSaved={async () => {
             setShowCosts(false);
-            setEditing(false);
             await load();
           }}
         />
@@ -622,7 +632,7 @@ function CostsPanel({ cost, onEdit }: { cost: ShipmentCost | null; onEdit: () =>
           ))}
         </div>
       )}
-      <div className="rounded-md border border-[rgb(15_118_110_/_25%)] bg-[rgb(15_118_110_/_6%)] px-3 py-2 text-sm font-bold">
+      <div className="rounded-md border border-[rgb(196_30_58_/_25%)] bg-[rgb(196_30_58_/_6%)] px-3 py-2 text-sm font-bold">
         {ui("الإجمالي")}: {Number(cost.total_cost).toLocaleString("ar-EG")}
       </div>
       {cost.closing_notes ? <p className="text-sm text-[var(--muted)]">{cost.closing_notes}</p> : null}
@@ -633,28 +643,69 @@ function CostsPanel({ cost, onEdit }: { cost: ShipmentCost | null; onEdit: () =>
   );
 }
 
-function CostsDialog({
+async function postCloseCosts(
+  shipmentId: string,
+  accessToken: string,
+  body: { close: boolean; line_items: Record<CloseCostItemKey, number>; closing_notes?: string | null }
+) {
+  const response = await fetch(`/api/shipments/${shipmentId}/close-with-costs`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  let payload: { error?: string } = {};
+  try {
+    payload = (await response.json()) as { error?: string };
+  } catch {
+    /* empty or non-JSON body */
+  }
+
+  if (!response.ok) {
+    throw new Error(payload.error || "تعذر حفظ الشحنة.");
+  }
+}
+
+async function uploadCustomsReleasePdf(shipmentId: string, file: File) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("سجل الدخول أولا.");
+
+  const path = shipmentCustomsReleasePath(shipmentId, file.name);
+  const uploadResult = await supabase.storage.from(bucket).upload(path, file, { upsert: false });
+  if (uploadResult.error) throw new Error(uploadResult.error.message);
+
+  const insertResult = await supabase.from("shipment_documents").insert({
+    shipment_id: shipmentId,
+    doc_type: CUSTOMS_RELEASE_DOC_TYPE,
+    file_name: file.name,
+    storage_path: uploadResult.data.path,
+    mime_type: file.type || "application/pdf",
+    size_bytes: file.size,
+    uploaded_by: user.id,
+  });
+  if (insertResult.error) throw new Error(insertResult.error.message);
+}
+
+function CloseDialog({
   shipmentId,
-  cost,
-  isClosed,
   onClose,
   onSaved,
 }: {
   shipmentId: string;
-  cost: ShipmentCost | null;
-  isClosed: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const { ui } = useLanguage();
-  const [lineForm, setLineForm] = useState(() => lineItemsToFormStrings(cost?.line_items ?? {}));
-  const [closingNotes, setClosingNotes] = useState(cost?.closing_notes ?? "");
   const [customsReleaseFile, setCustomsReleaseFile] = useState<File | null>(null);
   const [existingCustomsRelease, setExistingCustomsRelease] = useState<ShipmentDocument | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
-  const totalPreview = useMemo(() => sumCloseCostLineItems(formStringsToLineItems(lineForm)), [lineForm]);
 
   useEffect(() => {
     if (!isSupabaseConfigured()) return;
@@ -671,65 +722,11 @@ function CostsDialog({
       });
   }, [shipmentId]);
 
-  async function uploadCustomsRelease(file: File) {
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) throw new Error(ui("سجل الدخول أولا."));
-
-    const path = shipmentCustomsReleasePath(shipmentId, file.name);
-    const uploadResult = await supabase.storage.from(bucket).upload(path, file, { upsert: false });
-    if (uploadResult.error) throw new Error(uploadResult.error.message);
-
-    const insertResult = await supabase
-      .from("shipment_documents")
-      .insert({
-        shipment_id: shipmentId,
-        doc_type: CUSTOMS_RELEASE_DOC_TYPE,
-        file_name: file.name,
-        storage_path: uploadResult.data.path,
-        mime_type: file.type || "application/pdf",
-        size_bytes: file.size,
-        uploaded_by: user.id,
-      })
-      .select("*")
-      .single();
-    if (insertResult.error) throw new Error(insertResult.error.message);
-    setExistingCustomsRelease(insertResult.data as ShipmentDocument);
-    setCustomsReleaseFile(null);
-  }
-
-  async function closeViaApi(accessToken: string, lineItems: Record<CloseCostItemKey, number>, notes: string | null) {
-    const response = await fetch(`/api/shipments/${shipmentId}/close-with-costs`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        line_items: lineItems,
-        closing_notes: notes,
-      }),
-    });
-
-    let payload: { error?: string } = {};
-    try {
-      payload = (await response.json()) as { error?: string };
-    } catch {
-      /* empty or non-JSON body */
-    }
-
-    if (!response.ok) {
-      throw new Error(payload.error || ui("تعذر حفظ المصاريف."));
-    }
-  }
-
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
 
-    if (!isClosed && !existingCustomsRelease && !customsReleaseFile) {
+    if (!existingCustomsRelease && !customsReleaseFile) {
       setError(ui("ارفع ملف PDF للإفراج الجمركي قبل الإغلاق."));
       return;
     }
@@ -743,14 +740,10 @@ function CostsDialog({
       }
     }
 
-    const lineItems = formStringsToLineItems(lineForm);
-    const rollups = toCloseCostRollups(lineItems);
-    const notes = closingNotes.trim() || null;
-
     setLoading(true);
     try {
       if (customsReleaseFile) {
-        await uploadCustomsRelease(customsReleaseFile);
+        await uploadCustomsReleasePdf(shipmentId, customsReleaseFile);
       }
 
       const supabase = createClient();
@@ -762,31 +755,91 @@ function CostsDialog({
         return;
       }
 
-      const { error: closeError } = await supabase.rpc("close_shipment_with_costs", {
-        shipment_id: shipmentId,
-        customs_cost: rollups.customs_cost,
-        shipping_cost: 0,
-        clearance_cost: rollups.clearance_cost,
-        local_transport_cost: rollups.local_transport_cost,
-        other_expenses: rollups.other_expenses,
-        closing_notes: notes,
-        line_items: lineItems,
+      await postCloseCosts(shipmentId, session.access_token, {
+        close: true,
+        line_items: emptyCloseCostLineItems(),
       });
-
-      if (closeError) {
-        const missingFn =
-          /could not find|does not exist|PGRST202|42883/i.test(closeError.message) ||
-          closeError.code === "PGRST202";
-        if (!missingFn) {
-          setError(closeError.message || ui("تعذر حفظ المصاريف."));
-          return;
-        }
-        await closeViaApi(session.access_token, lineItems, notes);
-      }
-
       onSaved();
     } catch (closeError) {
-      setError(getSupabaseErrorMessage(closeError) || ui("تعذر حفظ المصاريف وإغلاق الشحنة."));
+      setError(getSupabaseErrorMessage(closeError) || ui("تعذر إغلاق الشحنة."));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <AppModal>
+      <form className="card my-auto w-full max-w-lg space-y-4 p-5" onSubmit={submit}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold">{ui("إغلاق الشحنة")}</h2>
+          <button className="btn btn-secondary p-2" onClick={onClose} type="button">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <ErrorMessage message={error} />
+        <label className="label">
+          {ui("الافراج الجمركي")} (PDF)
+          {existingCustomsRelease ? (
+            <p className="mb-2 text-sm text-[var(--muted)]">
+              {ui("مرفوع:")} {existingCustomsRelease.file_name}
+            </p>
+          ) : null}
+          <input
+            accept="application/pdf,.pdf"
+            className="input"
+            onChange={(event) => setCustomsReleaseFile(event.target.files?.[0] ?? null)}
+            type="file"
+          />
+        </label>
+        <button className="btn w-full" disabled={loading} type="submit">
+          {loading ? ui("جاري الحفظ...") : ui("إغلاق الشحنة")}
+        </button>
+      </form>
+    </AppModal>
+  );
+}
+
+function CostsDialog({
+  shipmentId,
+  cost,
+  onClose,
+  onSaved,
+}: {
+  shipmentId: string;
+  cost: ShipmentCost | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { ui } = useLanguage();
+  const [lineForm, setLineForm] = useState(() => lineItemsToFormStrings(cost?.line_items ?? {}));
+  const [closingNotes, setClosingNotes] = useState(cost?.closing_notes ?? "");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const totalPreview = useMemo(() => sumCloseCostLineItems(formStringsToLineItems(lineForm)), [lineForm]);
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      const supabase = createClient();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setError(ui("سجل الدخول أولا."));
+        return;
+      }
+
+      await postCloseCosts(shipmentId, session.access_token, {
+        close: false,
+        line_items: formStringsToLineItems(lineForm),
+        closing_notes: closingNotes.trim() || null,
+      });
+      onSaved();
+    } catch (saveError) {
+      setError(getSupabaseErrorMessage(saveError) || ui("تعذر حفظ المصاريف."));
     } finally {
       setLoading(false);
     }
@@ -824,7 +877,7 @@ function CostsDialog({
           </section>
         ))}
 
-        <div className="rounded-md border border-[rgb(15_118_110_/_25%)] bg-[rgb(15_118_110_/_6%)] px-3 py-2 text-sm font-bold">
+        <div className="rounded-md border border-[rgb(196_30_58_/_25%)] bg-[rgb(196_30_58_/_6%)] px-3 py-2 text-sm font-bold">
           {ui("الإجمالي")}: {totalPreview.toLocaleString("ar-EG")}
         </div>
 
@@ -832,22 +885,8 @@ function CostsDialog({
           {ui("ملاحظات الإغلاق")}
           <textarea className="input min-h-24" value={closingNotes} onChange={(event) => setClosingNotes(event.target.value)} />
         </label>
-        <label className="label">
-          {ui("الافراج الجمركي")} (PDF)
-          {existingCustomsRelease ? (
-            <p className="mb-2 text-sm text-[var(--muted)]">
-              {ui("مرفوع:")} {existingCustomsRelease.file_name}
-            </p>
-          ) : null}
-          <input
-            accept="application/pdf,.pdf"
-            className="input"
-            onChange={(event) => setCustomsReleaseFile(event.target.files?.[0] ?? null)}
-            type="file"
-          />
-        </label>
         <button className="btn" disabled={loading} type="submit">
-          {loading ? ui("جاري الحفظ...") : isClosed ? ui("حفظ المصاريف") : ui("حفظ وإغلاق")}
+          {loading ? ui("جاري الحفظ...") : ui("حفظ المصاريف")}
         </button>
       </form>
     </AppModal>

@@ -23,7 +23,7 @@ export function ShipIllustration({ className = "" }: { className?: string }) {
         </linearGradient>
         <linearGradient id="containerTeal" x1="0" x2="0" y1="0" y2="1">
           <stop offset="0%" stopColor="#5eead4" />
-          <stop offset="100%" stopColor="#0f766e" />
+          <stop offset="100%" stopColor="#c41e3a" />
         </linearGradient>
         <linearGradient id="containerBlue" x1="0" x2="0" y1="0" y2="1">
           <stop offset="0%" stopColor="#7dd3fc" />

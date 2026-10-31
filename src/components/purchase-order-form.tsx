@@ -307,7 +307,7 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
         </label>
 
         <section className="space-y-3 border-t border-[var(--border)] pt-5">
-          <div className="sticky top-16 z-[15] flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-white/95 px-3 py-3 shadow-sm backdrop-blur-sm">
+          <div className="sticky top-[var(--app-header-offset)] z-[15] flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-white/95 px-3 py-3 shadow-sm backdrop-blur-sm">
             <div className="flex flex-wrap items-center gap-3">
               <h3 className="font-bold">{ui("بنود أمر الشراء")}</h3>
               {cartonStats.entered > 0 ? (
@@ -429,7 +429,7 @@ export function PurchaseOrderForm({ onSaved, onCancel }: Props) {
                 return (
                   <div
                     className={`grid cursor-pointer grid-cols-1 gap-3 rounded-md border p-3 sm:grid-cols-2 min-[1100px]:grid-cols-[minmax(0,1fr)_6.5rem_6.5rem_7rem_minmax(12rem,auto)_auto] ${
-                      isEditing ? "border-[var(--navy)] bg-[rgb(15_118_110_/_8%)]" : "border-[var(--border)]"
+                      isEditing ? "border-[var(--primary)] bg-[rgb(196_30_58_/_8%)]" : "border-[var(--border)]"
                     }`}
                     key={`${row.product_id}-${index}`}
                     onClick={() => startEditCommittedItem(index)}

@@ -1,6 +1,7 @@
 import type { ReportSlug } from "@/lib/report-definitions";
 
 export type ProductKindFilter = "all" | "disassembled" | "complete";
+export type ShipmentStageFilter = "all" | "in_sea" | "customs";
 
 /** Reports that support optional product images in export/print. */
 export const PRODUCT_IMAGE_REPORT_SLUGS: ReportSlug[] = [
@@ -58,6 +59,10 @@ export function hasShipmentLinks(slug: string) {
 
 export function supportsIncomingFilters(slug: string) {
   return slug === INCOMING_FILTER_SLUG || slug === "china-warehouse" || slug === "china-arrivals";
+}
+
+export function supportsShipmentStageFilter(slug: string) {
+  return slug === INCOMING_FILTER_SLUG;
 }
 
 export const DOCUMENT_DOWNLOAD_REPORT_SLUGS = [

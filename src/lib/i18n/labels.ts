@@ -13,7 +13,7 @@ const NEXT_ACTION: Record<
   { ar: string; en: string; zh: string }
 > = {
   to_customs: { ar: "التالي: الجمارك", en: "Next: Customs", zh: "下一步：清关" },
-  to_close: { ar: "التالي: المصاريف والإغلاق", en: "Next: Costs & close", zh: "下一步：费用与结案" },
+  to_close: { ar: "التالي: الإفراج والإغلاق", en: "Next: Release & close", zh: "下一步：放行并结案" },
   edit_costs: { ar: "تعديل المصاريف", en: "Edit costs", zh: "编辑费用" },
 };
 

@@ -93,6 +93,9 @@ const TITLE_BY_PREFIX: Array<{ match: (path: string) => boolean; labelKey: strin
 function isNavActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   if (href === "/supplier") return pathname === "/supplier";
+  if (href === "/shipments" && pathname.startsWith("/shipments/new")) return false;
+  if (href === "/purchase-orders" && pathname.startsWith("/purchase-orders/new")) return false;
+  if (href === "/products" && pathname.startsWith("/products/search")) return false;
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -159,84 +162,81 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (isLogin) return <>{children}</>;
 
-  const navList = (
-    <>
-      {groupedNav.map((group) => (
-        <div key={group.section}>
-          <div className="nav-section-label">
-            {tr(
-              SECTION_LABELS[group.section].ar,
-              SECTION_LABELS[group.section].en,
-              SECTION_LABELS[group.section].zh
-            )}
-          </div>
-          {group.items.map((item) => {
-            const Icon = item.icon;
-            const active = isNavActive(pathname, item.href);
-            return (
-              <Link
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                  active ? "bg-[var(--primary)] text-white shadow-sm" : "text-white/78 hover:bg-white/10"
-                }`}
-                href={item.href}
-                key={`${item.href}-${item.labelKey}`}
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                <Icon className="h-4 w-4" />
-                {t(item.labelKey)}
-              </Link>
-            );
-          })}
+  function navLink(item: NavItem, compact = false) {
+    const Icon = item.icon;
+    const active = isNavActive(pathname, item.href);
+    if (compact) {
+      return (
+        <Link
+          className={`top-nav-item ${active ? "top-nav-item-active" : ""}`}
+          href={item.href}
+          key={`${item.href}-${item.labelKey}`}
+          onClick={() => setMobileMenuOpen(false)}
+        >
+          <Icon className="h-5 w-5" />
+          <span className="max-w-[4.8rem] truncate text-[11px] font-semibold leading-tight">{t(item.labelKey)}</span>
+        </Link>
+      );
+    }
+
+    return (
+      <Link
+        className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+          active ? "bg-[var(--primary)] text-white shadow-sm" : "text-stone-700 hover:bg-stone-100"
+        }`}
+        href={item.href}
+        key={`${item.href}-${item.labelKey}`}
+        onClick={() => setMobileMenuOpen(false)}
+      >
+        <Icon className="h-4 w-4" />
+        {t(item.labelKey)}
+      </Link>
+    );
+  }
+
+  const toolbar = (
+    <div className="hidden items-center gap-2 min-[900px]:flex">
+      {groupedNav.map((group, index) => (
+        <div className="flex items-center" key={group.section}>
+          {index > 0 ? <div className="mx-1 h-9 w-px bg-stone-200" /> : null}
+          {group.items.map((item) => navLink(item, true))}
         </div>
       ))}
-    </>
+    </div>
   );
 
   return (
     <div className="relative min-h-screen bg-[var(--background)]">
       <AppWaveBackground />
-      <aside className="fixed right-0 top-0 z-10 hidden h-screen w-72 border-l border-white/10 bg-gradient-to-b from-[var(--navy)] to-[#071f31] text-white shadow-[inset_1px_0_0_rgb(255_255_255_/_6%)] min-[900px]:block print:hidden">
-        <div className="flex h-16 items-center gap-3 border-b border-white/10 px-5">
-          <div className="grid h-10 w-10 place-items-center rounded-lg bg-[var(--primary)]">
-            <ShipWheel className="h-5 w-5" />
-          </div>
-          <div>
-            <div className="font-bold">{t("app.name")}</div>
-            <div className="text-xs text-white/70">{t("app.tagline")}</div>
-          </div>
-        </div>
-        <nav className="space-y-1 overflow-y-auto p-3 pb-28">{navList}</nav>
-        <div className="absolute bottom-4 right-4 left-4 space-y-2">
-          <p className="text-center text-[10px] text-white/50">Powered by {APP_CREDIT_NAME}</p>
-          {!loading && role ? (
-            <div className="rounded-lg bg-white/10 px-3 py-2 text-xs text-white/85">
-              {ui("الدور:")} {getRoleLabel(role as UserRole, lang)}
-            </div>
-          ) : null}
-        </div>
-      </aside>
-
-      <div className="min-[900px]:mr-72 print:mr-0">
-        <header className="app-shell-header sticky top-0 z-20 flex h-16 items-center justify-between border-b px-4 min-[900px]:px-8 print:hidden dark:bg-slate-900/95">
-          <div className="flex min-w-0 items-center gap-2">
+      <header className="sticky top-0 z-30 print:hidden">
+        <div className="flex h-14 items-center justify-between gap-3 bg-[var(--primary)] px-3 text-white min-[900px]:px-6">
+          <div className="flex min-w-0 items-center gap-3">
             <button
-              className="btn btn-secondary shrink-0 px-2 min-[900px]:hidden"
+              className="grid h-9 w-9 place-items-center rounded-lg bg-white/15 min-[900px]:hidden"
               onClick={() => setMobileMenuOpen(true)}
               type="button"
               aria-label={ui("فتح القائمة")}
             >
               <Menu className="h-5 w-5" />
             </button>
-            <div className="min-w-0">
-              <div className="truncate text-sm font-bold text-[var(--navy)] dark:text-[var(--foreground)]">
-                {pageTitle}
-              </div>
-              <div className="hidden text-xs text-[var(--muted)] sm:block">{t("app.tagline")}</div>
-            </div>
+            <Link className="flex min-w-0 items-center gap-2.5" href="/">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white text-[var(--primary)] shadow-sm">
+                <ShipWheel className="h-5 w-5" />
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-bold leading-tight">{t("app.name")}</span>
+                <span className="hidden truncate text-[11px] text-white/80 sm:block">{pageTitle}</span>
+              </span>
+            </Link>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {!loading && role ? (
+              <span className="hidden rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold text-white sm:inline">
+                {getRoleLabel(role as UserRole, lang)}
+              </span>
+            ) : null}
             {role && !canWrite ? (
-              <span className="hidden rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 sm:inline dark:bg-slate-800 dark:text-slate-300">
+              <span className="hidden rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold sm:inline">
                 {t("role.viewer")}
               </span>
             ) : null}
@@ -244,36 +244,57 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {ui("تغيير اللغة")}
             </label>
             <select
-              className="btn btn-secondary max-w-[7.5rem] cursor-pointer appearance-none truncate pe-7 text-sm"
+              className="h-9 max-w-[7.5rem] cursor-pointer appearance-none rounded-lg border border-white/20 bg-white/10 px-2 pe-7 text-sm font-semibold text-white"
               id="app-language"
               onChange={(event) => setLanguage(event.target.value as typeof lang)}
               title={ui("تغيير اللغة")}
               value={lang}
             >
-              <option value="ar">{t("lang.ar")}</option>
-              <option value="en">{t("lang.en")}</option>
-              <option value="zh">{t("lang.zh")}</option>
+              <option className="text-stone-900" value="ar">
+                {t("lang.ar")}
+              </option>
+              <option className="text-stone-900" value="en">
+                {t("lang.en")}
+              </option>
+              <option className="text-stone-900" value="zh">
+                {t("lang.zh")}
+              </option>
             </select>
-            <button className="btn btn-secondary flex items-center gap-2 text-sm" onClick={signOut} type="button">
+            <button
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-3 text-sm font-semibold"
+              onClick={signOut}
+              type="button"
+            >
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline">{t("auth.signOut")}</span>
             </button>
           </div>
-        </header>
-        <main className="app-main-content mx-auto max-w-7xl p-4 pb-24 min-[900px]:p-8 min-[900px]:pb-8">{children}</main>
-        <footer className="app-shell-footer mx-auto max-w-7xl border-t px-4 py-3 text-center text-xs text-[var(--muted)] print:hidden">
-          Powered by <span className="font-semibold text-[var(--foreground)]">{APP_CREDIT_NAME}</span>
-        </footer>
-      </div>
+        </div>
+        <div className="app-shell-header hidden border-b min-[900px]:block">
+          <div className="mx-auto flex max-w-[92rem] items-center overflow-x-auto px-3 py-1.5 min-[900px]:px-6">
+            {toolbar}
+          </div>
+        </div>
+      </header>
+
+      <main className="app-main-content mx-auto max-w-7xl p-4 pb-24 min-[900px]:p-8 min-[900px]:pb-8">{children}</main>
+      <footer className="app-shell-footer mx-auto max-w-7xl border-t px-4 py-3 text-center text-xs text-[var(--muted)] print:hidden">
+        Powered by <span className="font-semibold text-[var(--foreground)]">{APP_CREDIT_NAME}</span>
+      </footer>
 
       {mobileMenuOpen ? (
-        <div className="fixed inset-0 z-40 bg-slate-950/40 min-[900px]:hidden" onClick={() => setMobileMenuOpen(false)}>
+        <div className="fixed inset-0 z-40 bg-stone-950/40 min-[900px]:hidden" onClick={() => setMobileMenuOpen(false)}>
           <aside
-            className="ms-auto flex h-full w-80 max-w-[86vw] flex-col bg-[var(--navy)] p-4 text-white shadow-2xl"
+            className="ms-auto flex h-full w-80 max-w-[86vw] flex-col bg-white p-4 text-[var(--foreground)] shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
-              <div className="font-bold">{t("app.name")}</div>
+              <div className="flex items-center gap-2 font-bold">
+                <span className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--primary)] text-white">
+                  <ShipWheel className="h-4 w-4" />
+                </span>
+                {t("app.name")}
+              </div>
               <button
                 className="btn btn-secondary px-2"
                 onClick={() => setMobileMenuOpen(false)}
@@ -283,12 +304,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <nav className="flex-1 space-y-1 overflow-y-auto">{navList}</nav>
+            <nav className="flex-1 space-y-1 overflow-y-auto">
+              {groupedNav.map((group) => (
+                <div key={group.section}>
+                  <div className="nav-section-label">
+                    {tr(
+                      SECTION_LABELS[group.section].ar,
+                      SECTION_LABELS[group.section].en,
+                      SECTION_LABELS[group.section].zh
+                    )}
+                  </div>
+                  {group.items.map((item) => navLink(item))}
+                </div>
+              ))}
+            </nav>
           </aside>
         </div>
       ) : null}
 
-      <nav className="app-shell-header fixed inset-x-0 bottom-0 z-30 border-t px-1 py-2 shadow-[0_-8px_24px_rgb(15_23_42_/_8%)] min-[900px]:hidden safe-area-pb print:hidden">
+      <nav className="app-shell-header fixed inset-x-0 bottom-0 z-30 border-t px-1 py-2 shadow-[0_-8px_24px_rgb(28_25_23_/_8%)] min-[900px]:hidden safe-area-pb print:hidden">
         <div className="grid grid-cols-5 gap-1">
           {mobileNavItems.map((item) => {
             const Icon = item.icon;
@@ -296,7 +330,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             return (
               <Link
                 className={`flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[10px] font-semibold leading-tight ${
-                  active ? "bg-[var(--primary)] text-white shadow-sm" : "text-slate-600"
+                  active ? "bg-[var(--primary)] text-white shadow-sm" : "text-stone-600"
                 }`}
                 href={item.href}
                 key={item.href}

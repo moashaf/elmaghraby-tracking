@@ -500,6 +500,18 @@ export const INLINE_TRANSLATIONS: Record<string, InlineEntry> = {
     "en": "Save and close",
     "zh": "保存并结案"
   },
+  "إغلاق الشحنة": {
+    en: "Close shipment",
+    zh: "结案"
+  },
+  "تعذر إغلاق الشحنة.": {
+    en: "Could not close the shipment.",
+    zh: "无法结案。"
+  },
+  "التالي: الإفراج والإغلاق": {
+    en: "Next: Release & close",
+    zh: "下一步：放行并结案"
+  },
   "الكل": {
     "en": "All",
     "zh": "全部"
@@ -507,6 +519,26 @@ export const INLINE_TRANSLATIONS: Record<string, InlineEntry> = {
   "كامل": {
     "en": "Complete",
     "zh": "完整件"
+  },
+  "البحر": {
+    en: "At sea",
+    zh: "在途"
+  },
+  "الجمرك": {
+    en: "Customs",
+    zh: "清关"
+  },
+  "في البحر": {
+    en: "At sea",
+    zh: "在途"
+  },
+  "في الجمارك": {
+    en: "In customs",
+    zh: "清关中"
+  },
+  "مغلقة": {
+    en: "Closed",
+    zh: "已结案"
   },
   "التقرير غير موجود.": {
     "en": "Report not found.",
@@ -752,9 +784,9 @@ export const INLINE_TRANSLATIONS: Record<string, InlineEntry> = {
     "en": "Primary color",
     "zh": "主色"
   },
-  "لون الشريط الجانبي": {
-    "en": "Sidebar color",
-    "zh": "侧边栏颜色"
+  "لون الشريط": {
+    "en": "Bar color",
+    "zh": "顶栏颜色"
   },
   "لون الخلفية": {
     "en": "Background color",
