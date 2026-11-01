@@ -4,8 +4,9 @@ import { mapPool } from "@/lib/map-pool";
 import { PRODUCT_IMAGES_BUCKET } from "@/lib/storage-path";
 
 const THUMB_CONCURRENCY = 8;
-const MAX_THUMB_BYTES = 12000;
-const TOTAL_THUMBS_BUDGET = 7 * 1024 * 1024;
+const THUMB_PIXELS = 160;
+const MAX_THUMB_BYTES = 20000;
+const TOTAL_THUMBS_BUDGET = 8 * 1024 * 1024;
 const FETCH_MS = 8000;
 
 function xlsxFilename(name: string) {
@@ -42,15 +43,20 @@ async function fetchWithTimeout(url: string) {
   }
 }
 
+async function encodeCanvasJpeg(canvas: HTMLCanvasElement, quality: number) {
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+  if (!blob) return null;
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
 async function jpegThumb(bytes: Uint8Array): Promise<Uint8Array | null> {
-  if (bytes.length <= MAX_THUMB_BYTES && bytes[0] === 0xff && bytes[1] === 0xd8) return bytes;
   if (typeof createImageBitmap !== "function") return null;
 
   try {
     const bitmap = await createImageBitmap(
       new Blob([bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer])
     );
-    const scale = Math.min(72 / bitmap.width, 72 / bitmap.height, 1);
+    const scale = Math.min(THUMB_PIXELS / bitmap.width, THUMB_PIXELS / bitmap.height, 1);
     const width = Math.max(1, Math.round(bitmap.width * scale));
     const height = Math.max(1, Math.round(bitmap.height * scale));
     const canvas = document.createElement("canvas");
@@ -63,11 +69,18 @@ async function jpegThumb(bytes: Uint8Array): Promise<Uint8Array | null> {
     }
     context.fillStyle = "#ffffff";
     context.fillRect(0, 0, width, height);
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
     context.drawImage(bitmap, 0, 0, width, height);
     bitmap.close();
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.38));
-    if (!blob || blob.size > MAX_THUMB_BYTES * 2) return null;
-    return new Uint8Array(await blob.arrayBuffer());
+
+    for (const quality of [0.78, 0.64, 0.5]) {
+      const encoded = await encodeCanvasJpeg(canvas, quality);
+      if (!encoded) continue;
+      if (encoded.length <= MAX_THUMB_BYTES) return encoded;
+      if (quality === 0.5 && encoded.length <= MAX_THUMB_BYTES * 1.4) return encoded;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -77,7 +90,7 @@ async function thumbFromPath(path: string) {
   const signed = await createClient()
     .storage.from(PRODUCT_IMAGES_BUCKET)
     .createSignedUrl(path, 120, {
-      transform: { width: 72, height: 72, resize: "contain", quality: 40 },
+      transform: { width: THUMB_PIXELS, height: THUMB_PIXELS, resize: "contain", quality: 75 },
     });
   const url = signed.error ? null : signed.data?.signedUrl;
   if (!url) return null;

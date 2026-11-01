@@ -4,7 +4,8 @@ import { mapPool } from "@/lib/map-pool";
 import { PRODUCT_IMAGES_BUCKET } from "@/lib/storage-path";
 
 const IMAGE_CONCURRENCY = 6;
-const MAX_IMAGE_BYTES = 8000;
+const THUMB_PIXELS = 160;
+const MAX_IMAGE_BYTES = 20000;
 const TOTAL_IMAGES_BUDGET = 8 * 1024 * 1024;
 
 export type ExcelExportPayload = {
@@ -24,9 +25,9 @@ async function compressIfNeeded(input: Buffer) {
   try {
     const { default: sharp } = await import("sharp");
     const attempts: Array<{ width: number; quality: number }> = [
-      { width: 72, quality: 40 },
-      { width: 64, quality: 32 },
-      { width: 48, quality: 26 },
+      { width: THUMB_PIXELS, quality: 76 },
+      { width: 140, quality: 64 },
+      { width: 120, quality: 52 },
     ];
     let best: Buffer | null = null;
     for (const attempt of attempts) {
@@ -52,7 +53,7 @@ async function loadThumb(
   try {
     if (source.path) {
       const transformed = await supabase.storage.from(PRODUCT_IMAGES_BUCKET).createSignedUrl(source.path, 120, {
-        transform: { width: 72, height: 72, resize: "contain", quality: 40 },
+        transform: { width: THUMB_PIXELS, height: THUMB_PIXELS, resize: "contain", quality: 75 },
       });
       if (!transformed.error && transformed.data?.signedUrl) {
         const response = await fetch(transformed.data.signedUrl);

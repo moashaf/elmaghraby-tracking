@@ -14,14 +14,34 @@ export async function uploadProductImage(productId: string, file: File) {
   return { error: null, path };
 }
 
-export async function signedProductImageUrl(path: string, expiresIn = 3600) {
-  const result = await createClient().storage.from(PRODUCT_IMAGES_BUCKET).createSignedUrl(path, expiresIn);
+export async function signedProductImageUrl(
+  path: string,
+  expiresIn = 3600,
+  transform?: { width: number; quality?: number }
+) {
+  const result = await createClient().storage.from(PRODUCT_IMAGES_BUCKET).createSignedUrl(
+    path,
+    expiresIn,
+    transform
+      ? {
+          transform: {
+            width: transform.width,
+            height: transform.width,
+            resize: "contain",
+            quality: transform.quality ?? 78,
+          },
+        }
+      : undefined
+  );
   if (result.error) return null;
   return result.data.signedUrl;
 }
 
-export async function signedProductImageUrls(paths: string[]) {
+export async function signedProductImageUrls(
+  paths: string[],
+  transform?: { width: number; quality?: number }
+) {
   const unique = [...new Set(paths.filter(Boolean))];
-  const entries = await mapPool(unique, 10, async (path) => [path, await signedProductImageUrl(path)] as const);
+  const entries = await mapPool(unique, 10, async (path) => [path, await signedProductImageUrl(path, 3600, transform)] as const);
   return new Map(entries.filter(([, url]) => url).map(([path, url]) => [path, url!]));
 }

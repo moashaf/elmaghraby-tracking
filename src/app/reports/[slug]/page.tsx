@@ -165,7 +165,7 @@ export default function ReportDetailPage() {
 
       if (withImages && supportsProductImages(params.slug)) {
         const paths = result.rows.map((row) => row._imagePath).filter((path): path is string => Boolean(path));
-        const urls = await signedProductImageUrls(paths);
+        const urls = await signedProductImageUrls(paths, { width: 360, quality: 80 });
         setImageUrls(urls);
       } else {
         setImageUrls(new Map());
@@ -205,7 +205,7 @@ export default function ReportDetailPage() {
     }
     void (async () => {
       const paths = rows.map((row) => row._imagePath).filter((path): path is string => Boolean(path));
-      setImageUrls(await signedProductImageUrls(paths));
+      setImageUrls(await signedProductImageUrls(paths, { width: 360, quality: 80 }));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [withImages, rows, params.slug]);
@@ -273,7 +273,7 @@ export default function ReportDetailPage() {
     if (supportsProductImages(params.slug)) {
       const paths = rowsForPrint.map((row) => row._imagePath).filter((path): path is string => Boolean(path));
       if (paths.length) {
-        const urls = await signedProductImageUrls(paths);
+        const urls = await signedProductImageUrls(paths, { width: 360, quality: 80 });
         if (paginatedReport) {
           setPrintImageUrls(urls);
         } else {
@@ -309,13 +309,24 @@ export default function ReportDetailPage() {
         ? exportResult.rows
         : tableRows;
 
+    const exportColumnKeys = (() => {
+      const sample = sourceRows.find((row) => !row._sectionHeader);
+      const keys = sample ? Object.keys(sample).filter((key) => !key.startsWith("_")) : [];
+      return showShipmentLinks && !keys.includes(SHIPMENT_SERIAL_COLUMN)
+        ? [SHIPMENT_SERIAL_COLUMN, ...keys]
+        : keys;
+    })();
+
     let shipmentSerial = 0;
     const exportRows = sourceRows.map((row) => {
+      const copy: Record<string, string | number | null> = {};
+      for (const key of exportColumnKeys) copy[key] = "";
       if (row._sectionHeader) {
-        return { SKU: ui(row._sectionHeader) };
+        const titleKey = exportColumnKeys.find((key) => key === "SKU" || key === "المنتج") ?? exportColumnKeys[0];
+        if (titleKey) copy[titleKey] = ui(row._sectionHeader);
+        return copy;
       }
       shipmentSerial += 1;
-      const copy: Record<string, string | number | null> = {};
       if (showShipmentLinks) copy[SHIPMENT_SERIAL_COLUMN] = shipmentSerial;
       for (const [key, value] of Object.entries(row)) {
         if (key.startsWith("_")) continue;
@@ -364,7 +375,10 @@ export default function ReportDetailPage() {
 
     let imageStoragePaths: Array<string | null | undefined> | undefined;
     if (showImages) {
-      imageStoragePaths = exportRows.map((_, index) => sourceRows[index]?._imagePath ?? null);
+      imageStoragePaths = sourceRows.map((row) => (row._sectionHeader ? null : row._imagePath ?? null));
+      if (exportRows.length > sourceRows.length) {
+        imageStoragePaths = [...imageStoragePaths, ...Array(exportRows.length - sourceRows.length).fill(null)];
+      }
     }
 
     await downloadExcelWithOptionalImages({

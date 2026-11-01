@@ -77,7 +77,7 @@ export function ShipmentPrintReport({ shipmentId }: { shipmentId: string }) {
     const paths = products
       .map((row) => row.products?.image_url)
       .filter((path): path is string => Boolean(path));
-    void signedProductImageUrls(paths).then(setImageUrls);
+    void signedProductImageUrls(paths, { width: 360, quality: 80 }).then(setImageUrls);
   }, [withImages, products]);
 
   async function download(path: string) {

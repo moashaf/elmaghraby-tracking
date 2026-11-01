@@ -55,12 +55,15 @@ export async function packXlsxWithEmbeddedImages(options: {
   const hasImages = Boolean(imagesByRow?.some((image) => image && image.length));
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet(safeSheetName(sheetName));
-  const columns = rows.length ? Object.keys(rows[0] ?? {}) : [];
+  const columns = rows.reduce<string[]>((keys, row) => {
+    if (Object.keys(row).length > keys.length) return Object.keys(row);
+    return keys;
+  }, Object.keys(rows[0] ?? {}));
   const headers = hasImages ? [...columns, imageColumnLabel] : columns;
 
   worksheet.addRow(headers);
   worksheet.getRow(1).font = { bold: true };
-  if (hasImages) worksheet.getColumn(columns.length + 1).width = 12;
+  if (hasImages) worksheet.getColumn(columns.length + 1).width = 14;
 
   const imageIdByFingerprint = new Map<string, number>();
 
@@ -92,10 +95,10 @@ export async function packXlsxWithEmbeddedImages(options: {
       imageIdByFingerprint.set(fingerprint, imageId);
     }
 
-    worksheet.getRow(rowNumber).height = 48;
+    worksheet.getRow(rowNumber).height = 58;
     worksheet.addImage(imageId, {
       tl: { col: columns.length, row: rowNumber - 1 },
-      ext: { width: 64, height: 46 },
+      ext: { width: 78, height: 78 },
       editAs: "oneCell",
     });
   }
