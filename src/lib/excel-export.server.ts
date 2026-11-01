@@ -12,6 +12,7 @@ export type ExcelExportPayload = {
   filename: string;
   sheetName: string;
   rows: ExcelSheetRow[];
+  columns?: string[];
   imageStoragePaths?: Array<string | null | undefined>;
   imageUrls?: Array<string | null | undefined>;
   imageColumnLabel?: string;
@@ -85,6 +86,7 @@ export async function buildExcelWithImagesBuffer(
   const {
     sheetName,
     rows,
+    columns,
     imageStoragePaths,
     imageUrls,
     imageColumnLabel = "صورة",
@@ -132,6 +134,7 @@ export async function buildExcelWithImagesBuffer(
   return packXlsxWithEmbeddedImages({
     sheetName,
     rows,
+    columns,
     imageColumnLabel,
     imagesByRow,
     linkColumn,

@@ -109,6 +109,7 @@ export async function downloadExcelWithOptionalImages(options: {
   filename: string;
   sheetName: string;
   rows: Record<string, string | number | null>[];
+  columns?: string[];
   imageUrls?: Array<string | null | undefined>;
   imageStoragePaths?: Array<string | null | undefined>;
   imageColumnLabel?: string;
@@ -123,7 +124,9 @@ export async function downloadExcelWithOptionalImages(options: {
   const filename = xlsxFilename(options.filename);
 
   if (!hasImages && !hasLinks) {
-    const worksheet = XLSX.utils.json_to_sheet(options.rows);
+    const worksheet = options.columns?.length
+      ? XLSX.utils.json_to_sheet(options.rows, { header: options.columns })
+      : XLSX.utils.json_to_sheet(options.rows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, options.sheetName);
     XLSX.writeFile(workbook, filename);
@@ -166,6 +169,7 @@ export async function downloadExcelWithOptionalImages(options: {
   const bytes = await packXlsxWithEmbeddedImages({
     sheetName: options.sheetName,
     rows: options.rows,
+    columns: options.columns,
     imageColumnLabel: options.imageColumnLabel,
     imagesByRow,
     linkColumn: options.linkColumn,

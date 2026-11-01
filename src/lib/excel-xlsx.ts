@@ -33,9 +33,43 @@ function containsMedia(bytes: Uint8Array) {
   return text.includes(marker);
 }
 
+export function collectExcelColumns(rows: ExcelSheetRow[], preferred?: string[]) {
+  const keys: string[] = [];
+  const seen = new Set<string>();
+
+  const add = (key: string) => {
+    if (!key || key.startsWith("_") || seen.has(key)) return;
+    seen.add(key);
+    keys.push(key);
+  };
+
+  for (const key of preferred ?? []) add(key);
+  for (const row of rows) {
+    for (const key of Object.keys(row ?? {})) add(key);
+  }
+  return keys;
+}
+
+function columnWidth(name: string, isImage: boolean) {
+  if (isImage) return 14;
+  if (name === "SKU") return 14;
+  if (name === "المنتج") return 32;
+  if (name === "التصنيف") return 16;
+  if (name.startsWith("إجمالي")) return 14;
+  if (/^\d{2}-\d{2}-\d{4}$/.test(name)) return 22;
+  return 16;
+}
+
+function isSectionTitleRow(row: ExcelSheetRow | undefined, columns: string[]) {
+  if (!row) return false;
+  const filled = columns.filter((column) => String(row[column] ?? "").trim());
+  return filled.length === 1 && (filled[0] === "SKU" || filled[0] === "المنتج");
+}
+
 export async function packXlsxWithEmbeddedImages(options: {
   sheetName: string;
   rows: ExcelSheetRow[];
+  columns?: string[];
   imageColumnLabel?: string;
   imagesByRow?: Array<Uint8Array | null | undefined>;
   linkColumn?: string;
@@ -55,24 +89,42 @@ export async function packXlsxWithEmbeddedImages(options: {
   const hasImages = Boolean(imagesByRow?.some((image) => image && image.length));
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet(safeSheetName(sheetName));
-  const columns = rows.reduce<string[]>((keys, row) => {
-    if (Object.keys(row).length > keys.length) return Object.keys(row);
-    return keys;
-  }, Object.keys(rows[0] ?? {}));
+  const columns = collectExcelColumns(rows, options.columns);
   const headers = hasImages ? [...columns, imageColumnLabel] : columns;
+  const imageColIndex = hasImages ? columns.length : -1;
 
-  worksheet.addRow(headers);
+  worksheet.columns = headers.map((header, index) => ({
+    header,
+    key: `c${index}`,
+    width: columnWidth(header, header === imageColumnLabel),
+  }));
   worksheet.getRow(1).font = { bold: true };
-  if (hasImages) worksheet.getColumn(columns.length + 1).width = 14;
+  worksheet.getRow(1).alignment = { vertical: "middle", wrapText: true };
 
   const imageIdByFingerprint = new Map<string, number>();
 
   for (let index = 0; index < rows.length; index += 1) {
-    const values = columns.map((column) => rows[index]?.[column] ?? "");
-    if (hasImages) values.push("");
-    const rowNumber = worksheet.addRow(values).number;
+    const source = rows[index] ?? {};
+    const rowObject: ExcelSheetRow = {};
+    headers.forEach((header, columnIndex) => {
+      rowObject[`c${columnIndex}`] = header === imageColumnLabel ? "" : source[header] ?? "";
+    });
 
-    if (linkColumn) {
+    const excelRow = worksheet.addRow(rowObject);
+    const rowNumber = excelRow.number;
+    const sectionRow = isSectionTitleRow(source, columns);
+
+    if (sectionRow && headers.length > 1) {
+      worksheet.mergeCells(rowNumber, 1, rowNumber, headers.length);
+      excelRow.font = { bold: true };
+      excelRow.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFF3F4F6" },
+      };
+    }
+
+    if (linkColumn && !sectionRow) {
       const linkIndex = columns.indexOf(linkColumn);
       const url = linkUrls?.[index];
       if (linkIndex >= 0 && url) {
@@ -82,8 +134,8 @@ export async function packXlsxWithEmbeddedImages(options: {
       }
     }
 
-    const image = imagesByRow?.[index];
-    if (!image?.length) continue;
+    const image = sectionRow ? undefined : imagesByRow?.[index];
+    if (!image?.length || imageColIndex < 0) continue;
 
     const fingerprint = `${image.length}:${image[0]}:${image[1]}:${image[2]}:${image[10] ?? 0}:${image[20] ?? 0}`;
     let imageId = imageIdByFingerprint.get(fingerprint);
@@ -95,10 +147,10 @@ export async function packXlsxWithEmbeddedImages(options: {
       imageIdByFingerprint.set(fingerprint, imageId);
     }
 
-    worksheet.getRow(rowNumber).height = 58;
+    excelRow.height = 58;
     worksheet.addImage(imageId, {
-      tl: { col: columns.length, row: rowNumber - 1 },
-      ext: { width: 78, height: 78 },
+      tl: { col: imageColIndex, row: rowNumber - 1 },
+      br: { col: imageColIndex + 1, row: rowNumber },
       editAs: "oneCell",
     });
   }

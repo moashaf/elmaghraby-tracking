@@ -228,9 +228,17 @@ export default function ReportDetailPage() {
   const dataRows = useMemo(() => tableRows.filter((row) => !row._sectionHeader), [tableRows]);
 
   const columns = useMemo(() => {
-    const sample = dataRows[0] ?? tableRows.find((row) => !row._sectionHeader);
-    const keys = sample ? Object.keys(sample).filter((key) => !key.startsWith("_")) : [];
-    return showShipmentLinks ? [SHIPMENT_SERIAL_COLUMN, ...keys] : keys;
+    const keys: string[] = showShipmentLinks ? [SHIPMENT_SERIAL_COLUMN] : [];
+    const seen = new Set(keys);
+    for (const row of dataRows.length ? dataRows : tableRows) {
+      if (row._sectionHeader) continue;
+      for (const key of Object.keys(row)) {
+        if (key.startsWith("_") || seen.has(key)) continue;
+        seen.add(key);
+        keys.push(key);
+      }
+    }
+    return keys;
   }, [dataRows, tableRows, showShipmentLinks]);
 
   const printableExtraColumns =
@@ -310,11 +318,19 @@ export default function ReportDetailPage() {
         : tableRows;
 
     const exportColumnKeys = (() => {
-      const sample = sourceRows.find((row) => !row._sectionHeader);
-      const keys = sample ? Object.keys(sample).filter((key) => !key.startsWith("_")) : [];
-      return showShipmentLinks && !keys.includes(SHIPMENT_SERIAL_COLUMN)
-        ? [SHIPMENT_SERIAL_COLUMN, ...keys]
-        : keys;
+      const keys: string[] = showShipmentLinks ? [SHIPMENT_SERIAL_COLUMN] : [];
+      const seen = new Set(keys);
+      const add = (key: string) => {
+        if (!key || key.startsWith("_") || seen.has(key)) return;
+        seen.add(key);
+        keys.push(key);
+      };
+      for (const key of columns) add(key);
+      for (const row of sourceRows) {
+        if (row._sectionHeader) continue;
+        for (const key of Object.keys(row)) add(key);
+      }
+      return keys;
     })();
 
     let shipmentSerial = 0;
@@ -385,6 +401,7 @@ export default function ReportDetailPage() {
       filename: `${params.slug}-${todayIso()}.xlsx`,
       sheetName: report?.title ?? "Report",
       rows: exportRows,
+      columns: exportColumnKeys,
       imageStoragePaths,
       linkColumn: showDocumentLinks ? "الرابط" : undefined,
       linkUrls,

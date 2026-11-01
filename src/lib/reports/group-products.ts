@@ -160,11 +160,16 @@ export function groupProductLinesByShipmentStage(
     return groupProductLines(filtered, options);
   }
 
+  const sharedDateColumns =
+    options.dateColumns?.length
+      ? options.dateColumns
+      : [...new Set(filtered.map((line) => line.eta?.trim()).filter((eta): eta is string => Boolean(eta && eta !== "-")))].sort();
+
   const rows: ReportRow[] = [];
   for (const section of STAGE_SECTIONS) {
     const part = groupProductLines(
       filtered.filter((line) => (line.statusKey || "") === section.key),
-      options
+      { ...options, dateColumns: sharedDateColumns }
     );
     if (!part.length) continue;
     rows.push({ _sectionHeader: section.title });
