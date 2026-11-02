@@ -96,7 +96,7 @@ export default function ShipmentsPage() {
   async function refreshInSeaVesselEtas() {
     const key = "vessel-sync-all-at";
     const last = Number(window.localStorage.getItem(key) ?? 0);
-    if (Date.now() - last < 2 * 60 * 60 * 1000) return;
+    if (Date.now() - last < 10 * 60 * 1000) return;
 
     const session = await createClient().auth.getSession();
     const token = session.data.session?.access_token;

@@ -361,6 +361,17 @@ export function ShipmentForm({
 
         if (announcedEta && !etaManualRef.current) {
           setForm((current) => (current.eta === announcedEta ? current : { ...current, eta: announcedEta }));
+          if (shipment?.id) {
+            const shippedAt = form.shipped_at;
+            const duration = shippedAt ? daysBetweenIsoDates(shippedAt, announcedEta) : null;
+            await createClient()
+              .from("shipments")
+              .update({
+                eta: announcedEta,
+                ...(duration != null ? { shipping_duration_days: Math.max(0, duration) } : {}),
+              })
+              .eq("id", shipment.id);
+          }
         }
       } catch {
         /* best-effort AIS lookup */
@@ -373,7 +384,7 @@ export function ShipmentForm({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [form.vessel_name, form.arrival_port, readOnly]);
+  }, [form.vessel_name, form.arrival_port, form.shipped_at, readOnly, shipment?.id]);
 
   useEffect(() => {
     const count = Number(form.containers_count);
