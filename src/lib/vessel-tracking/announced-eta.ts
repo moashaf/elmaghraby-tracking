@@ -162,18 +162,9 @@ function cargoPortCalls(arrivalPort: string, calls: VoyagePortCall[]) {
   return [];
 }
 
-function pickCargoDate(list: VoyagePortCall[], todayIso: string) {
-  const pastArrivals = list
-    .filter((call) => (call.kind === "ATA" || call.kind === "ATD") && call.dateIso.slice(0, 10) <= todayIso)
-    .sort((a, b) => b.dateIso.localeCompare(a.dateIso));
-  if (pastArrivals[0]) return pastArrivals[0].dateIso;
-
-  const upcomingEta = list
-    .filter((call) => call.kind === "ETA")
-    .sort((a, b) => a.dateIso.localeCompare(b.dateIso));
-  if (upcomingEta[0]) return upcomingEta[0].dateIso;
-
-  return list.find((call) => call.kind === "ATA")?.dateIso ?? list.find((call) => call.kind === "ATD")?.dateIso ?? null;
+function callsOnThisVoyage(calls: VoyagePortCall[], shippedAt?: string) {
+  if (!shippedAt) return calls;
+  return calls.filter((call) => call.dateIso.slice(0, 10) >= shippedAt);
 }
 
 export function voyageShowsArrivalAtPort(input: {
@@ -181,15 +172,17 @@ export function voyageShowsArrivalAtPort(input: {
   destination?: string | null;
   currentEtaIso?: string | null;
   portCalls?: VoyagePortCall[];
+  shippedAt?: string | null;
   todayIso?: string;
 }) {
   const arrivalPort = (input.arrivalPort ?? "").trim();
   const todayIso = input.todayIso ?? new Date().toISOString().slice(0, 10);
   const destination = (input.destination ?? "").trim();
+  const shippedAt = (input.shippedAt ?? "").trim().slice(0, 10);
   if (destination && destinationServesArrivalPort(destination, arrivalPort)) {
     return { arrived: false, arrivalDateIso: null };
   }
-  const list = cargoPortCalls(arrivalPort, input.portCalls ?? []);
+  const list = callsOnThisVoyage(cargoPortCalls(arrivalPort, input.portCalls ?? []), shippedAt);
   const pastArrivals = list
     .filter((call) => (call.kind === "ATA" || call.kind === "ATD") && call.dateIso.slice(0, 10) <= todayIso)
     .sort((a, b) => b.dateIso.localeCompare(a.dateIso));
@@ -202,18 +195,25 @@ export function resolveArrivalEtaFromVoyage(input: {
   destination?: string | null;
   currentEtaIso?: string | null;
   portCalls?: VoyagePortCall[];
+  shippedAt?: string | null;
   todayIso?: string;
 }): string | null {
   const arrivalPort = (input.arrivalPort ?? "").trim();
-  const todayIso = input.todayIso ?? new Date().toISOString().slice(0, 10);
   const destination = (input.destination ?? "").trim();
   const announcedEta = input.currentEtaIso?.trim() || null;
-  if (announcedEta && (!arrivalPort || (destination && destinationServesArrivalPort(destination, arrivalPort)))) {
+  const shippedAt = (input.shippedAt ?? "").trim().slice(0, 10);
+
+  if (announcedEta && destination && destinationServesArrivalPort(destination, arrivalPort)) {
     return announcedEta;
   }
+  if (announcedEta && !arrivalPort) return announcedEta;
 
-  const cargoDate = pickCargoDate(cargoPortCalls(arrivalPort, input.portCalls ?? []), todayIso);
-  if (cargoDate) return cargoDate;
+  const cargoEtas = callsOnThisVoyage(cargoPortCalls(arrivalPort, input.portCalls ?? []), shippedAt)
+    .filter((call) => call.kind === "ETA")
+    .sort((a, b) => a.dateIso.localeCompare(b.dateIso));
+  if (cargoEtas[0] && (!destination || destinationServesArrivalPort(destination, arrivalPort))) {
+    return cargoEtas[0].dateIso;
+  }
 
-  return destination && destinationServesArrivalPort(destination, arrivalPort) ? announcedEta : null;
+  return null;
 }

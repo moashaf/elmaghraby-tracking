@@ -8,7 +8,7 @@ import { SearchableSelect } from "@/components/searchable-select";
 import { ErrorMessage } from "@/components/ui";
 import { toEntityOptions } from "@/lib/entity-options";
 import { PORT_SELECT_OPTIONS } from "@/lib/port-options";
-import { addDaysToIsoDate, daysBetweenIsoDates } from "@/lib/eta";
+import { addDaysToIsoDate, daysBetweenIsoDates, etaWithRouteFallback, findRouteDuration, type CargoEtaSource } from "@/lib/eta";
 import { syncProductQuantityFields, unitFromCartonsAndTotal, mergeOrAppendProductLine } from "@/lib/shipment-product-quantity";
 import {
   clearShipmentDraft,
@@ -31,6 +31,7 @@ import type {
   ShipmentFormValues,
   ShipmentProduct,
   ShipmentProductDraft,
+  ShippingRoute,
   Supplier,
 } from "@/lib/types";
 
@@ -207,9 +208,12 @@ export function ShipmentForm({
   const [error, setError] = useState("");
   const [draftReady, setDraftReady] = useState(readOnly);
   const [draftRestored, setDraftRestored] = useState(false);
-  const [vesselAnnouncement, setVesselAnnouncement] = useState<{ destination: string | null; eta: string | null } | null>(
-    null
-  );
+  const [routes, setRoutes] = useState<ShippingRoute[]>([]);
+  const [vesselAnnouncement, setVesselAnnouncement] = useState<{
+    destination: string | null;
+    eta: string | null;
+    source: CargoEtaSource | null;
+  } | null>(null);
   const [vesselEtaLoading, setVesselEtaLoading] = useState(false);
   const etaManualRef = useRef(false);
   const restoredKeyRef = useRef<string | null>(null);
@@ -271,19 +275,21 @@ export function ShipmentForm({
       }
 
       const supabase = createClient();
-      const [companiesResult, suppliersResult, productsResult, categoriesResult] = await Promise.all([
+      const [companiesResult, suppliersResult, productsResult, categoriesResult, routesResult] = await Promise.all([
         supabase.from("companies").select("id,name_ar,name_en,code,is_active").eq("is_active", true).order("name_ar"),
         supabase.from("suppliers").select("id,name_ar,code,country,contact_phone,is_active").eq("is_active", true).order("name_ar"),
         fetchAllFromTable(supabase, "products", "id,sku,name_ar,name_en,category,category_id,unit,is_active", { column: "name_ar" }),
         fetchAllFromTable(supabase, "product_categories", "id,name_ar,code,parent_id,is_active", { column: "name_ar" }),
+        supabase.from("shipping_routes").select("id,shipping_port,arrival_port,duration_days,is_active").eq("is_active", true),
       ]);
 
-      if (companiesResult.error || suppliersResult.error || productsResult.error || categoriesResult.error) {
+      if (companiesResult.error || suppliersResult.error || productsResult.error || categoriesResult.error || routesResult.error) {
         setError(
           companiesResult.error?.message ||
             suppliersResult.error?.message ||
             productsResult.error ||
             categoriesResult.error ||
+            routesResult.error?.message ||
             ui("تعذر تحميل البيانات الأساسية.")
         );
         return;
@@ -293,6 +299,7 @@ export function ShipmentForm({
       setSuppliers((suppliersResult.data ?? []) as Supplier[]);
       setProducts((productsResult.data ?? []) as Product[]);
       setCategories((categoriesResult.data ?? []) as ProductCategory[]);
+      setRoutes((routesResult.data ?? []) as ShippingRoute[]);
 
       const stock = await supabase
         .from("china_warehouse_stock")
@@ -320,12 +327,36 @@ export function ShipmentForm({
     });
   }, [form.shipped_at, form.eta]);
 
+  function applyPlannedEta(eta: string, source: CargoEtaSource, destination: string | null = null) {
+    if (etaManualRef.current) return;
+    setVesselAnnouncement({ destination, eta, source });
+    setForm((current) => (current.eta === eta ? current : { ...current, eta }));
+    if (!shipment?.id) return;
+    const duration = form.shipped_at ? daysBetweenIsoDates(form.shipped_at, eta) : null;
+    void createClient()
+      .from("shipments")
+      .update({
+        eta,
+        ...(duration != null ? { shipping_duration_days: Math.max(0, duration) } : {}),
+      })
+      .eq("id", shipment.id);
+  }
+
+  useEffect(() => {
+    if (readOnly || etaManualRef.current) return;
+    if (form.vessel_name.trim().length >= 3) return;
+    const days = findRouteDuration(routes, form.shipping_port, form.arrival_port);
+    const planned = etaWithRouteFallback(null, form.shipped_at, days);
+    if (!planned.eta || planned.source !== "route") return;
+    applyPlannedEta(planned.eta, "route");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readOnly, routes, form.shipping_port, form.arrival_port, form.shipped_at, form.vessel_name]);
+
   useEffect(() => {
     if (readOnly) return;
     const vesselName = form.vessel_name.trim();
     etaManualRef.current = false;
     if (vesselName.length < 3) {
-      setVesselAnnouncement(null);
       setVesselEtaLoading(false);
       return;
     }
@@ -345,33 +376,29 @@ export function ShipmentForm({
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ vesselName, arrivalPort: form.arrival_port }),
+          body: JSON.stringify({
+            vesselName,
+            arrivalPort: form.arrival_port,
+            shippingPort: form.shipping_port,
+            shippedAt: form.shipped_at,
+          }),
         });
         if (!response.ok || cancelled) return;
 
         const payload = (await response.json()) as {
           destination?: string | null;
           eta?: string | null;
+          etaSource?: CargoEtaSource | null;
         };
         if (cancelled) return;
 
-        const announcedEta = payload.eta?.trim() || null;
+        const plannedEta = payload.eta?.trim() || null;
         const destination = payload.destination?.trim() || null;
-        setVesselAnnouncement({ destination, eta: announcedEta });
-
-        if (announcedEta && !etaManualRef.current) {
-          setForm((current) => (current.eta === announcedEta ? current : { ...current, eta: announcedEta }));
-          if (shipment?.id) {
-            const shippedAt = form.shipped_at;
-            const duration = shippedAt ? daysBetweenIsoDates(shippedAt, announcedEta) : null;
-            await createClient()
-              .from("shipments")
-              .update({
-                eta: announcedEta,
-                ...(duration != null ? { shipping_duration_days: Math.max(0, duration) } : {}),
-              })
-              .eq("id", shipment.id);
-          }
+        const source = payload.etaSource ?? (plannedEta ? "announced" : null);
+        if (plannedEta && source && !etaManualRef.current) {
+          applyPlannedEta(plannedEta, source, destination);
+        } else {
+          setVesselAnnouncement({ destination, eta: plannedEta, source });
         }
       } catch {
         /* best-effort AIS lookup */
@@ -384,7 +411,7 @@ export function ShipmentForm({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [form.vessel_name, form.arrival_port, form.shipped_at, readOnly, shipment?.id]);
+  }, [form.vessel_name, form.arrival_port, form.shipping_port, form.shipped_at, readOnly, shipment?.id]);
 
   useEffect(() => {
     const count = Number(form.containers_count);
@@ -880,11 +907,13 @@ export function ShipmentForm({
               <span className="mt-1 text-xs text-[var(--muted)]">
                 {vesselEtaLoading
                   ? ui("جاري قراءة معاد الوصول المعلن للمركب…")
-                  : vesselAnnouncement?.eta
+                  : vesselAnnouncement?.source === "announced" && vesselAnnouncement.eta
                     ? `${ui("من إعلان المركب")}${
                         vesselAnnouncement.destination ? `: ${vesselAnnouncement.destination}` : ""
                       } — ${vesselAnnouncement.eta}`
-                    : ui("يُؤخذ من إعلان المركب (AIS) عند توفر اسم المركب، ويختلف من سفينة لأخرى.")}
+                    : vesselAnnouncement?.source === "route"
+                      ? ui("معاد السخنة لسه مش معلن على التتبع — محسوب من مدة الخط.")
+                      : ui("يُؤخذ من إعلان المركب إن ظهر، وإلا من مدة الخط بين الميناءين.")}
               </span>
             </label>
             <label className="label">

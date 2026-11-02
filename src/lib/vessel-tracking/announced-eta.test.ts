@@ -81,48 +81,40 @@ describe("parseMyShipTrackingHtml", () => {
 });
 
 describe("resolveArrivalEtaFromVoyage", () => {
-  it("uses the Sokhna port call instead of the next-voyage China ETA", () => {
-    const eta = resolveArrivalEtaFromVoyage({
-      arrivalPort: "السخنة، مصر",
-      destination: "Qingdao, China",
-      currentEtaIso: "2026-10-22",
-      portCalls: [{ port: "Sokhna, Egypt", kind: "ATD", dateIso: "2026-10-01" }],
-    });
-    expect(eta).toBe("2026-10-01");
+  it("ignores a China AIS ETA when cargo is for Sokhna", () => {
+    expect(
+      resolveArrivalEtaFromVoyage({
+        arrivalPort: "السخنة، مصر",
+        destination: "Shanghai, China",
+        currentEtaIso: "2026-10-31",
+        shippedAt: "2026-10-28",
+        portCalls: [],
+      })
+    ).toBeNull();
   });
 
-  it("treats a past Sokhna ATD as arrived even if the vessel already left", () => {
+  it("treats a Sokhna ATD after this cargo shipped as arrived once the vessel left", () => {
     expect(
       voyageShowsArrivalAtPort({
         arrivalPort: "السخنة، مصر",
+        destination: "Qingdao, China",
         todayIso: "2026-10-20",
+        shippedAt: "2026-08-16",
         portCalls: [{ port: "Sokhna, Egypt", kind: "ATD", dateIso: "2026-10-01" }],
       })
     ).toEqual({ arrived: true, arrivalDateIso: "2026-10-01" });
   });
 
-  it("keeps the actual Sokhna call instead of the next rotation ETA", () => {
-    const eta = resolveArrivalEtaFromVoyage({
-      arrivalPort: "السخنة، مصر",
-      destination: "Singapore",
-      currentEtaIso: "2027-10-01",
-      todayIso: "2026-10-20",
-      portCalls: [
-        { port: "Sokhna, Egypt", kind: "ATD", dateIso: "2026-10-01" },
-        { port: "Sokhna, Egypt", kind: "ETA", dateIso: "2027-10-01" },
-      ],
-    });
-    expect(eta).toBe("2026-10-01");
-  });
-
-  it("falls back to an Egypt port call when Sokhna is not listed", () => {
-    const eta = resolveArrivalEtaFromVoyage({
-      arrivalPort: "السخنة، مصر",
-      destination: "Shanghai, China",
-      currentEtaIso: "2026-10-13",
-      portCalls: [{ port: "As Suways (Suez) Anch., Egypt", kind: "ATD", dateIso: "2026-09-25" }],
-    });
-    expect(eta).toBe("2026-09-25");
+  it("does not treat a previous-voyage Sokhna call as this cargo arriving", () => {
+    expect(
+      voyageShowsArrivalAtPort({
+        arrivalPort: "السخنة، مصر",
+        destination: "Shanghai, China",
+        todayIso: "2026-11-02",
+        shippedAt: "2026-10-28",
+        portCalls: [{ port: "Sokhna, Egypt", kind: "ATD", dateIso: "2026-09-25" }],
+      })
+    ).toEqual({ arrived: false, arrivalDateIso: null });
   });
 
   it("uses the announced Suez Canal ETA for Sokhna cargo still inbound", () => {

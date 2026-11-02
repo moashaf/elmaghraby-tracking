@@ -30,7 +30,7 @@ export async function GET(request: Request) {
 
   const { data: shipments, error } = await supabase
     .from("shipments")
-    .select("id, vessel_name, arrival_port, shipped_at, eta, status")
+    .select("id, vessel_name, shipping_port, arrival_port, shipped_at, eta, status")
     .in("status", ["in_sea"])
     .not("vessel_name", "is", null)
     .limit(40);
@@ -84,7 +84,7 @@ export async function POST(request: Request) {
   if (body.all) {
     const { data: shipments, error } = await writer.adminClient
       .from("shipments")
-      .select("id, vessel_name, arrival_port, shipped_at, eta, status")
+      .select("id, vessel_name, shipping_port, arrival_port, shipped_at, eta, status")
       .in("status", ["in_sea"])
       .not("vessel_name", "is", null)
       .limit(40);
@@ -119,7 +119,7 @@ export async function POST(request: Request) {
 
   const { data: shipment, error } = await writer.adminClient
     .from("shipments")
-    .select("id, vessel_name, arrival_port, shipped_at, eta, status")
+    .select("id, vessel_name, shipping_port, arrival_port, shipped_at, eta, status")
     .eq("id", shipmentId)
     .maybeSingle();
 

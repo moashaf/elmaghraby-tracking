@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { cargoEtaAfterVoyageWindow, daysBetweenIsoDates, etaRolledIntoNextVoyage, todayIsoDate } from "@/lib/eta";
+import { cargoEtaAfterVoyageWindow, daysBetweenIsoDates, etaRolledIntoNextVoyage, etaWithRouteFallback, todayIsoDate } from "@/lib/eta";
+import { fetchRouteDurationDays } from "@/lib/shipping-routes";
 import { resolveArrivalEtaFromVoyage, voyageShowsArrivalAtPort } from "@/lib/vessel-tracking/announced-eta";
 import { isVesselAtArrivalPort } from "@/lib/vessel-tracking/arrival-detection";
 import { trackVesselByName } from "@/lib/vessel-tracking/track";
@@ -7,6 +8,7 @@ import { trackVesselByName } from "@/lib/vessel-tracking/track";
 export type VesselSyncShipment = {
   id: string;
   vessel_name: string | null;
+  shipping_port?: string | null;
   arrival_port?: string | null;
   shipped_at?: string | null;
   eta?: string | null;
@@ -93,11 +95,19 @@ export async function syncShipmentVesselTracking(
 
     if (result.trackingStatus === "not_found") {
       if (await moveFromRolledEta()) return "moved_to_customs";
+      const routeDays = await fetchRouteDurationDays(supabase, shipment.shipping_port, shipment.arrival_port);
+      const planned = etaWithRouteFallback(null, shipment.shipped_at, routeDays);
       await supabase
         .from("shipments")
         .update({
           vessel_tracking_status: "not_found",
           vessel_tracked_at: trackedAt,
+          ...(planned.eta
+            ? {
+                eta: planned.eta,
+                shipping_duration_days: daysBetweenIsoDates(shipment.shipped_at ?? "", planned.eta) ?? undefined,
+              }
+            : {}),
         })
         .eq("id", shipment.id);
       return "not_found";
@@ -123,6 +133,7 @@ export async function syncShipmentVesselTracking(
       destination: result.destination,
       currentEtaIso: result.etaIso,
       portCalls: result.portCalls,
+      shippedAt: shipment.shipped_at,
     });
     const cargoArrived = atPort || portArrival.arrived;
 
@@ -136,14 +147,19 @@ export async function syncShipmentVesselTracking(
       updated_at: trackedAt,
     };
 
-    const etaIso = portArrival.arrived
+    const announcedEta = portArrival.arrived
       ? portArrival.arrivalDateIso
       : resolveArrivalEtaFromVoyage({
           arrivalPort: shipment.arrival_port,
           destination: result.destination,
           currentEtaIso: result.etaIso,
           portCalls: result.portCalls,
+          shippedAt: shipment.shipped_at,
         });
+    const routeDurationDays = announcedEta
+      ? null
+      : await fetchRouteDurationDays(supabase, shipment.shipping_port, shipment.arrival_port);
+    const etaIso = etaWithRouteFallback(announcedEta, shipment.shipped_at, routeDurationDays).eta;
 
     const arrived = applyRolledEtaArrival(shipment, updatePayload, etaIso, cargoArrived);
 

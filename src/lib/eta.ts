@@ -82,5 +82,27 @@ export function findRouteDuration(
   const match = routes.find(
     (route) => route.shipping_port.trim() === from && route.arrival_port.trim() === to
   );
-  return match?.duration_days ?? null;
+  const days = match?.duration_days;
+  return days != null && days > 0 ? days : null;
+}
+
+export type CargoEtaSource = "announced" | "route";
+
+export function etaFromRouteDuration(shippedAt: string | null | undefined, durationDays: number | null | undefined) {
+  const shipped = isoDateOnly(shippedAt);
+  const days = Number(durationDays);
+  if (!shipped || !Number.isFinite(days) || days <= 0) return null;
+  return addDaysToIsoDate(shipped, days);
+}
+
+export function etaWithRouteFallback(
+  announcedEta: string | null | undefined,
+  shippedAt: string | null | undefined,
+  routeDurationDays: number | null | undefined
+): { eta: string | null; source: CargoEtaSource | null } {
+  const announced = isoDateOnly(announcedEta);
+  if (announced) return { eta: announced, source: "announced" };
+  const routeEta = etaFromRouteDuration(shippedAt, routeDurationDays);
+  if (routeEta) return { eta: routeEta, source: "route" };
+  return { eta: null, source: null };
 }
