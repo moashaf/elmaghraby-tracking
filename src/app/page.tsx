@@ -12,6 +12,7 @@ import {
   ShipWheel,
   TrendingUp,
 } from "lucide-react";
+import { FxTicker } from "@/components/fx-ticker";
 import { ErrorMessage, PageHeader, Skeleton, Stat } from "@/components/ui";
 import { VesselLocationLink } from "@/components/vessel-location-link";
 import { useLanguage } from "@/context/language-context";
@@ -305,6 +306,8 @@ export default function DashboardPage() {
       />
 
       <ErrorMessage message={error} />
+
+      <FxTicker />
 
       <section className="grid gap-3 sm:grid-cols-3">
         <Stat
