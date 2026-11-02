@@ -82,10 +82,40 @@ export default function ShipmentsPage() {
           (documentsResult.data as Array<{ shipment_id: string; doc_type: string; file_name: string }> | null) ?? []
         )
       );
+
+      const loaded = (result.data as Shipment[] | null) ?? [];
+      const hasSeaVessels = loaded.some((shipment) => shipment.status === "in_sea" && shipment.vessel_name?.trim());
+      if (hasSeaVessels) void refreshInSeaVesselEtas();
     } catch (loadError) {
       setError(getSupabaseErrorMessage(loadError));
     } finally {
       if (!options?.silent) setLoading(false);
+    }
+  }
+
+  async function refreshInSeaVesselEtas() {
+    const key = "vessel-sync-all-at";
+    const last = Number(window.localStorage.getItem(key) ?? 0);
+    if (Date.now() - last < 2 * 60 * 60 * 1000) return;
+
+    const session = await createClient().auth.getSession();
+    const token = session.data.session?.access_token;
+    if (!token) return;
+
+    try {
+      const response = await fetch("/api/vessel-tracking/sync", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ all: true }),
+      });
+      if (!response.ok) return;
+      window.localStorage.setItem(key, String(Date.now()));
+      await load({ silent: true });
+    } catch {
+      /* best-effort announced ETA refresh */
     }
   }
 

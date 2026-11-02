@@ -74,11 +74,42 @@ export async function POST(request: Request) {
   const writer = await requireWriter(request);
   if (!writer.ok) return jsonError(writer.error, writer.status);
 
-  let body: { shipmentId?: string } = {};
+  let body: { shipmentId?: string; all?: boolean } = {};
   try {
-    body = (await request.json()) as { shipmentId?: string };
+    body = (await request.json()) as { shipmentId?: string; all?: boolean };
   } catch {
     return jsonError("طلب غير صالح.", 400);
+  }
+
+  if (body.all) {
+    const { data: shipments, error } = await writer.adminClient
+      .from("shipments")
+      .select("id, vessel_name, arrival_port, shipped_at, eta, status")
+      .in("status", ["in_sea"])
+      .not("vessel_name", "is", null)
+      .limit(40);
+
+    if (error) return jsonError(error.message, 500);
+
+    let updated = 0;
+    let failed = 0;
+    let movedToCustoms = 0;
+    for (const shipment of shipments ?? []) {
+      const outcome = await syncShipmentVesselTracking(writer.adminClient, shipment);
+      if (outcome === "updated") updated += 1;
+      else if (outcome === "moved_to_customs") {
+        updated += 1;
+        movedToCustoms += 1;
+      } else if (outcome === "failed" || outcome === "not_found") failed += 1;
+    }
+
+    return NextResponse.json({
+      ok: true,
+      count: shipments?.length ?? 0,
+      updated,
+      failed,
+      movedToCustoms,
+    });
   }
 
   const shipmentId = body.shipmentId?.trim();

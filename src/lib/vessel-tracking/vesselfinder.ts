@@ -23,10 +23,12 @@ function decodeHtml(text: string) {
     .replace(/&#39;/g, "'");
 }
 
+const AIS_AGO = String.raw`[\d.]+\s+(?:hours?|hrs?|mins?|minutes?|days?)\s+ago`;
+
 export function parseVesselFinderPortCalls(html: string, now = new Date()): VesselFinderPortCall[] {
   const calls: VesselFinderPortCall[] = [];
   const re =
-    /<a class="_npNa" href="\/ports\/[^"]+">([^<]+)<\/a>\s*<div class="_value">(ATA|ATD|ETA):\s*([^<]+)/gi;
+    /<a class="_npNa" href="\/ports\/[^"]+">([^<]+)<\/a>[\s\S]{0,280}?(?:<span class="_mcol12ext">)?(ATA|ATD|ETA):\s*([^<]+)/gi;
   for (const match of html.matchAll(re)) {
     const port = decodeHtml(match[1].trim());
     const kind = match[2].toUpperCase() as VesselFinderPortCall["kind"];
@@ -42,22 +44,20 @@ export function parseVesselFinderPortCalls(html: string, now = new Date()): Vess
 
 export function parseVesselFinderLocationHtml(html: string, now = new Date()): VesselFinderLocation | null {
   const areaMatch =
-    html.match(
-      /located in(?: the)?\s+([A-Z][A-Za-z0-9 .\-/]{2,80}?)\s+reported\s+[\d.]+\s+(?:hours?|hrs?|mins?|minutes?)\s+ago/i
-    ) ??
-    html.match(
-      /at\s+([A-Z][A-Za-z0-9 .\-/]{2,80}?)\s+reported\s+[\d.]+\s+(?:hours?|hrs?|mins?|minutes?)\s+ago\s+by\s+AIS/
-    ) ??
-    html.match(
-      /([A-Z][A-Za-z0-9 .\-/]{2,80})\s+reported\s+[\d.]+\s+(?:hours?|hrs?|mins?|minutes?)\s+ago\s+by\s+AIS/
-    );
+    html.match(new RegExp(String.raw`located in(?: the)?\s+([A-Z][A-Za-z0-9 .\-/]{2,80}?)\s+reported\s+${AIS_AGO}`, "i")) ??
+    html.match(new RegExp(String.raw`at\s+([A-Z][A-Za-z0-9 .\-/]{2,80}?)\s+reported\s+${AIS_AGO}\s+by\s+AIS`, "i")) ??
+    html.match(new RegExp(String.raw`([A-Z][A-Za-z0-9 .\-/]{2,80})\s+reported\s+${AIS_AGO}\s+by\s+AIS`, "i"));
 
   const destMatch =
     html.match(/en route to(?: the port of)?\s+<strong>([^<]+)<\/strong>/i) ??
+    html.match(/en route to(?: the port of)?\s+([^,<]{3,80}?)(?:,\s*sailing|\s+sailing)/i) ??
     html.match(/<div class="vilabel">Destination<\/div>\s*<a[^>]*>([^<]+)<\/a>/i);
   const destination = destMatch ? decodeHtml(destMatch[1].trim()) : undefined;
 
-  const etaMatch = html.match(/expected to arrive there on\s*<strong>([^<]+)<\/strong>/i);
+  const etaMatch =
+    html.match(/expected to arrive there on\s*<strong>([^<]+)<\/strong>/i) ??
+    html.match(/expected to arrive there on\s+([^.<]{3,40}?)(?:\.|<)/i) ??
+    html.match(/<span class="_mcol12ext">ETA:\s*([^<]+)<\/span>/i);
   const etaIso = etaMatch ? parseAnnouncedEtaToIsoDate(decodeHtml(etaMatch[1]), now) : null;
 
   const area = areaMatch?.[1] ? decodeHtml(areaMatch[1].trim()) : "";

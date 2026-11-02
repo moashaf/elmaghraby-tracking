@@ -120,6 +120,8 @@ export async function syncShipmentVesselTracking(
       hasPosition && isVesselAtArrivalPort(result.lat!, result.lon!, shipment.arrival_port!);
     const portArrival = voyageShowsArrivalAtPort({
       arrivalPort: shipment.arrival_port,
+      destination: result.destination,
+      currentEtaIso: result.etaIso,
       portCalls: result.portCalls,
     });
     const cargoArrived = atPort || portArrival.arrived;

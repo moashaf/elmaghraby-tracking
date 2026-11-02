@@ -102,12 +102,12 @@ function normalizePortKey(value: string) {
 }
 
 const PORT_ALIASES: Record<string, string[]> = {
-  السخنة: ["sokhna", "ain sokhna", "el sokhna", "ain-sokhna", "egsok"],
-  "العين السخنة": ["sokhna", "ain sokhna", "el sokhna"],
+  السخنة: ["sokhna", "ain sokhna", "el sokhna", "ain-sokhna", "egsok", "suez", "suez canal"],
+  "العين السخنة": ["sokhna", "ain sokhna", "el sokhna", "suez", "suez canal"],
   الإسكندرية: ["alexandria", "al iskandariyah"],
   بورسعيد: ["port said", "port-said", "bur said"],
   دمياط: ["damietta", "dumyat"],
-  السويس: ["suez", "as suways", "al suways", "suways"],
+  السويس: ["suez", "suez canal", "as suways", "al suways", "suways"],
   مرسين: ["mersin"],
   جدة: ["jeddah", "jiddah"],
   الدمام: ["dammam"],
@@ -134,6 +134,11 @@ export function destinationMatchesArrivalPort(aisPort: string, arrivalPort: stri
   if (!ais || !arrival) return false;
   if (ais.includes(arrival) || arrival.includes(ais.split(" ")[0] ?? arrival)) return true;
   return aliasTokens(arrivalPort).some((token) => token.length >= 4 && ais.includes(token));
+}
+
+export function destinationServesArrivalPort(aisPort: string, arrivalPort: string) {
+  if (destinationMatchesArrivalPort(aisPort, arrivalPort)) return true;
+  return Boolean(arrivalPort && aisPort && isEgyptPort(arrivalPort) && isEgyptPort(aisPort));
 }
 
 function isEgyptPort(name: string) {
@@ -173,11 +178,17 @@ function pickCargoDate(list: VoyagePortCall[], todayIso: string) {
 
 export function voyageShowsArrivalAtPort(input: {
   arrivalPort?: string | null;
+  destination?: string | null;
+  currentEtaIso?: string | null;
   portCalls?: VoyagePortCall[];
   todayIso?: string;
 }) {
   const arrivalPort = (input.arrivalPort ?? "").trim();
   const todayIso = input.todayIso ?? new Date().toISOString().slice(0, 10);
+  const destination = (input.destination ?? "").trim();
+  if (destination && destinationServesArrivalPort(destination, arrivalPort)) {
+    return { arrived: false, arrivalDateIso: null };
+  }
   const list = cargoPortCalls(arrivalPort, input.portCalls ?? []);
   const pastArrivals = list
     .filter((call) => (call.kind === "ATA" || call.kind === "ATD") && call.dateIso.slice(0, 10) <= todayIso)
@@ -195,18 +206,14 @@ export function resolveArrivalEtaFromVoyage(input: {
 }): string | null {
   const arrivalPort = (input.arrivalPort ?? "").trim();
   const todayIso = input.todayIso ?? new Date().toISOString().slice(0, 10);
-  const calls = input.portCalls ?? [];
-  const cargoDate = pickCargoDate(cargoPortCalls(arrivalPort, calls), todayIso);
-  if (cargoDate) return cargoDate;
-
-  if (
-    input.destination &&
-    arrivalPort &&
-    destinationMatchesArrivalPort(input.destination, arrivalPort) &&
-    input.currentEtaIso
-  ) {
-    return input.currentEtaIso;
+  const destination = (input.destination ?? "").trim();
+  const announcedEta = input.currentEtaIso?.trim() || null;
+  if (announcedEta && (!arrivalPort || (destination && destinationServesArrivalPort(destination, arrivalPort)))) {
+    return announcedEta;
   }
 
-  return null;
+  const cargoDate = pickCargoDate(cargoPortCalls(arrivalPort, input.portCalls ?? []), todayIso);
+  if (cargoDate) return cargoDate;
+
+  return destination && destinationServesArrivalPort(destination, arrivalPort) ? announcedEta : null;
 }

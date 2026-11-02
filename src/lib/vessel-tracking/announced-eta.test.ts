@@ -32,6 +32,28 @@ describe("daysBetweenIsoDates", () => {
 });
 
 describe("parseVesselFinderLocationHtml", () => {
+  it("reads a Suez Canal ETA even when the last AIS report is days old", () => {
+    const html = `
+      The current position of <strong>KAWA WILHELMSHAVEN</strong> is
+      at Indian Coast reported 6 days ago by AIS.
+      The vessel is en route to the port of <strong>Suez Canal, Egypt</strong>, sailing at a speed of 15.7 knots
+      and expected to arrive there on <strong>Nov 6, 08:00</strong>.
+      <div class="vilabel">Destination</div>
+      <a class="_npNa" href="/ports/EGSCN002">Suez Canal, Egypt</a>
+      <div class="_value"><span class="_mcol12ext">ETA: Nov 6, 08:00</span></div>
+      <a class="_npNa" href="/ports/MYPKG001">Port Klang Anch., Malaysia</a>
+      <div class="_value">ATD: Oct 23, 07:51 UTC</div>
+    `;
+    const parsed = parseVesselFinderLocationHtml(html, new Date("2026-11-02T12:00:00"));
+    expect(parsed?.area).toBe("Indian Coast");
+    expect(parsed?.destination).toBe("Suez Canal, Egypt");
+    expect(parsed?.etaIso).toBe("2026-11-06");
+    expect(parsed?.portCalls).toEqual([
+      { port: "Suez Canal, Egypt", kind: "ETA", dateIso: "2026-11-06" },
+      { port: "Port Klang Anch., Malaysia", kind: "ATD", dateIso: "2026-10-23" },
+    ]);
+  });
+
   it("reads announced destination and arrival from the AIS summary", () => {
     const html = `
       The vessel TIGER LONGKOU (IMO 9913547) is currently located in Red Sea reported 8 min ago by AIS.
@@ -101,6 +123,29 @@ describe("resolveArrivalEtaFromVoyage", () => {
       portCalls: [{ port: "As Suways (Suez) Anch., Egypt", kind: "ATD", dateIso: "2026-09-25" }],
     });
     expect(eta).toBe("2026-09-25");
+  });
+
+  it("uses the announced Suez Canal ETA for Sokhna cargo still inbound", () => {
+    const now = "2026-11-02";
+    expect(
+      resolveArrivalEtaFromVoyage({
+        arrivalPort: "السخنة، مصر",
+        destination: "Suez Canal, Egypt",
+        currentEtaIso: "2026-11-06",
+        todayIso: now,
+        portCalls: [{ port: "Port Klang Anch., Malaysia", kind: "ATD", dateIso: "2026-10-23" }],
+      })
+    ).toBe("2026-11-06");
+
+    expect(
+      voyageShowsArrivalAtPort({
+        arrivalPort: "السخنة، مصر",
+        destination: "Suez Canal, Egypt",
+        currentEtaIso: "2026-11-06",
+        todayIso: now,
+        portCalls: [{ port: "As Suways (Suez) Anch., Egypt", kind: "ATD", dateIso: "2026-10-21" }],
+      })
+    ).toEqual({ arrived: false, arrivalDateIso: null });
   });
 });
 
