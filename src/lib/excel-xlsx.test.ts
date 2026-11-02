@@ -9,7 +9,8 @@ const TINY_JPEG = Buffer.from(
 
 async function loadSheet(bytes: Uint8Array) {
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(Buffer.from(bytes));
+  // exceljs types a Node Buffer with extra fields that @types/node 20 Buffer lacks
+  await workbook.xlsx.load(Buffer.from(bytes) as never);
   return workbook.worksheets[0];
 }
 

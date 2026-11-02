@@ -152,7 +152,7 @@ export async function packXlsxWithEmbeddedImages(options: {
       tl: { col: imageColIndex, row: rowNumber - 1 },
       br: { col: imageColIndex + 1, row: rowNumber },
       editAs: "oneCell",
-    });
+    } as Parameters<ExcelJS.Worksheet["addImage"]>[1]);
   }
 
   const bytes = toUint8(await workbook.xlsx.writeBuffer() as Uint8Array | ArrayBuffer);

@@ -7,7 +7,7 @@ const updateUserSchema = z.object({
   supplier_id: z.string().uuid().optional().nullable(),
 });
 
-export async function PATCH(request: Request, context: RouteContext<"/api/users/[id]">) {
+export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const admin = await requireAdmin(request);
   if (!admin.ok) return jsonError(admin.error, admin.status);
 
@@ -35,7 +35,7 @@ export async function PATCH(request: Request, context: RouteContext<"/api/users/
   return Response.json({ ok: true });
 }
 
-export async function DELETE(request: Request, context: RouteContext<"/api/users/[id]">) {
+export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
   const admin = await requireAdmin(request);
   if (!admin.ok) return jsonError(admin.error, admin.status);
 
