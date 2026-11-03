@@ -45,7 +45,6 @@ function QuoteCard({
   quote: FxQuote;
   history: number[];
 }) {
-  const { ui } = useLanguage();
   const last = history[history.length - 1];
   const prev = history[history.length - 2];
   const tickChange = last != null && prev != null ? last - prev : quote.change;
@@ -62,23 +61,25 @@ function QuoteCard({
     <div className="card p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-xs font-semibold text-[var(--muted)]">{quote.nameAr}</div>
-          <div className="mt-1 text-sm font-bold text-[var(--navy)] dark:text-[var(--foreground)]">
-            {quote.code} {FX_SYMBOL[quote.code]}
+          <div className="text-xs font-semibold text-[var(--muted)]">
+            {quote.nameAr} {FX_SYMBOL[quote.code]}
           </div>
+          <div className="mt-1 text-sm font-bold text-[var(--navy)] dark:text-[var(--foreground)]">{quote.code}</div>
         </div>
         <div className={`flex items-center gap-1 text-sm font-bold ${tone}`} dir="ltr">
           <Icon className="h-4 w-4" />
           {up == null ? "—" : `${quote.change > 0 ? "+" : ""}${quote.changePercent.toFixed(2)}%`}
         </div>
       </div>
-      <div
-        dir="ltr"
-        className="mt-3 text-3xl font-extrabold tracking-tight tabular-nums text-[var(--navy)] dark:text-[var(--foreground)]"
-      >
-        {FX_SYMBOL[quote.code]} {formatFxRate(quote.rate)}
+      <div className="mt-3 flex items-baseline gap-2">
+        <span
+          dir="ltr"
+          className="text-3xl font-extrabold tracking-tight tabular-nums text-[var(--navy)] dark:text-[var(--foreground)]"
+        >
+          {formatFxRate(quote.rate)}
+        </span>
+        <span className="text-base font-bold text-[var(--navy)] dark:text-[var(--foreground)]">ج.م</span>
       </div>
-      <div className="mt-1 text-xs text-[var(--muted)]">{ui("جنيه")}</div>
       <div className="mt-3">
         <Sparkline points={history} up={up} />
       </div>
