@@ -8,6 +8,16 @@ import type { FxBoard, FxQuote } from "@/lib/fx-board";
 const POLL_MS = 4000;
 const SPARK_POINTS = 36;
 
+const FX_SYMBOL: Record<FxQuote["code"], string> = {
+  USD: "$",
+  CNY: "¥",
+  EUR: "€",
+};
+
+function formatFxRate(value: number) {
+  return value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function Sparkline({ points, up }: { points: number[]; up: boolean | null }) {
   if (points.length < 2) return <div className="h-8 w-full" />;
   const min = Math.min(...points);
@@ -53,15 +63,20 @@ function QuoteCard({
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-xs font-semibold text-[var(--muted)]">{quote.nameAr}</div>
-          <div className="mt-1 text-sm font-bold text-[var(--navy)] dark:text-[var(--foreground)]">{quote.code}</div>
+          <div className="mt-1 text-sm font-bold text-[var(--navy)] dark:text-[var(--foreground)]">
+            {quote.code} {FX_SYMBOL[quote.code]}
+          </div>
         </div>
-        <div className={`flex items-center gap-1 text-sm font-bold ${tone}`}>
+        <div className={`flex items-center gap-1 text-sm font-bold ${tone}`} dir="ltr">
           <Icon className="h-4 w-4" />
           {up == null ? "—" : `${quote.change > 0 ? "+" : ""}${quote.changePercent.toFixed(2)}%`}
         </div>
       </div>
-      <div className="mt-3 text-3xl font-extrabold tracking-tight tabular-nums text-[var(--navy)] dark:text-[var(--foreground)]">
-        {quote.rate.toLocaleString("ar-EG", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+      <div
+        dir="ltr"
+        className="mt-3 text-3xl font-extrabold tracking-tight tabular-nums text-[var(--navy)] dark:text-[var(--foreground)]"
+      >
+        {FX_SYMBOL[quote.code]} {formatFxRate(quote.rate)}
       </div>
       <div className="mt-1 text-xs text-[var(--muted)]">{ui("جنيه")}</div>
       <div className="mt-3">
@@ -118,7 +133,9 @@ export function FxTicker() {
           <p className="text-xs text-[var(--muted)]">{ui("تحديث مباشر كل 4 ثوانٍ مع مؤشر الصعود والنزول")}</p>
         </div>
         <div className="text-xs text-[var(--muted)]">
-          {updatedAt ? `${ui("آخر تحديث")}: ${updatedAt.toLocaleTimeString("ar-EG")}` : ui("جاري التحميل...")}
+          {updatedAt
+            ? `${ui("آخر تحديث")}: ${updatedAt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`
+            : ui("جاري التحميل...")}
         </div>
       </div>
       {error ? <p className="text-xs text-amber-700">{error}</p> : null}
