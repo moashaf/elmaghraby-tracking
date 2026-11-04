@@ -13,7 +13,7 @@ import {
 } from "@/lib/constants";
 import { getNextActionLabel, getStatusLabel, languageToLocale } from "@/lib/i18n";
 import { downloadExcelWithOptionalImages } from "@/lib/excel-export";
-import { SHIPMENT_TABLE_CLASS } from "@/lib/reports/constants";
+import { SHIPMENT_SERIAL_COLUMN, SHIPMENT_TABLE_CLASS } from "@/lib/reports/constants";
 import { useLanguage } from "@/context/language-context";
 import { useProfile } from "@/context/profile-context";
 import { canTransitionToCustoms, todayIsoDate } from "@/lib/eta";
@@ -242,9 +242,10 @@ export default function ShipmentsPage() {
   }
 
   async function exportExcel() {
-    const rows = filteredShipments.map((shipment) => {
+    const rows = filteredShipments.map((shipment, index) => {
       const invoiceFile = invoiceByShipmentId.get(shipment.id);
       return {
+        [SHIPMENT_SERIAL_COLUMN]: index + 1,
         [tr("رقم الفاتورة", "Shipment no.")]: invoiceFile ? displayInvoiceNumber(invoiceFile) : "-",
         ACID: shipment.acid,
       [tr("الشركة", "Company")]: shipment.companies?.name_ar ?? "-",
@@ -265,6 +266,7 @@ export default function ShipmentsPage() {
     });
 
     rows.push({
+      [SHIPMENT_SERIAL_COLUMN]: "",
       [tr("رقم الفاتورة", "Shipment no.")]: tr("الإجمالي", "Total"),
       ACID: "",
       [tr("الشركة", "Company")]: "",
@@ -355,7 +357,7 @@ export default function ShipmentsPage() {
         {loading ? (
           Array.from({ length: 3 }).map((_, index) => <Skeleton className="h-28 w-full" key={index} />)
         ) : filteredShipments.length ? (
-          filteredShipments.map((shipment) => {
+          filteredShipments.map((shipment, index) => {
             const invoiceFile = invoiceByShipmentId.get(shipment.id);
             const delayed = isShipmentDelayed(
               shipment.eta,
@@ -374,6 +376,7 @@ export default function ShipmentsPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="font-bold">
+                      <span className="me-2 text-[var(--muted)]">{index + 1}.</span>
                       {invoiceFile ? displayInvoiceNumber(invoiceFile) : shipment.shipment_number}
                     </div>
                     <div className="mt-1 text-sm text-[var(--muted)]">{shipment.companies?.name_ar ?? "-"}</div>
@@ -398,6 +401,7 @@ export default function ShipmentsPage() {
             <thead className="table-head">
               <tr>
                 <th className="table-actions-first text-right print:hidden">{ui("إجراءات")}</th>
+                <th className="w-8 text-right">{ui(SHIPMENT_SERIAL_COLUMN)}</th>
                 <th className="col-invoice text-right">{ui("رقم الفاتورة")}</th>
                 <th className="col-cargo-type text-right">{ui("نوع البضاعة")}</th>
                 <th className="text-right">{ui("عدد الكراتين")}</th>
@@ -414,12 +418,12 @@ export default function ShipmentsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="p-4 text-[var(--muted)]" colSpan={12}>
+                  <td className="p-4 text-[var(--muted)]" colSpan={13}>
                     <Skeleton className="h-8 w-full" />
                   </td>
                 </tr>
               ) : filteredShipments.length ? (
-                filteredShipments.map((shipment) => {
+                filteredShipments.map((shipment, index) => {
                   const action = getNextStatusAction(shipment.status);
                   const invoiceFile = invoiceByShipmentId.get(shipment.id);
                   const delayed = isShipmentDelayed(
@@ -483,6 +487,7 @@ export default function ShipmentsPage() {
                           ) : null}
                         </ActionsMenu>
                       </td>
+                      <td className="text-center text-[var(--muted)]">{index + 1}</td>
                       <td className="col-invoice font-semibold">
                         {invoiceFile ? displayInvoiceNumber(invoiceFile) : "-"}
                       </td>
@@ -517,7 +522,7 @@ export default function ShipmentsPage() {
                 })
               ) : (
                 <tr>
-                  <td className="p-4 text-[var(--muted)]" colSpan={12}>
+                  <td className="p-4 text-[var(--muted)]" colSpan={13}>
                     {ui("لا توجد شحنات مطابقة.")}
                   </td>
                 </tr>
@@ -527,6 +532,7 @@ export default function ShipmentsPage() {
               <tfoot className="table-head font-bold">
                 <tr>
                   <td className="print:hidden" />
+                  <td />
                   <td>{ui("الإجمالي")}</td>
                   <td />
                   <td>{listTotals.cartons.toLocaleString(languageToLocale(lang))}</td>
