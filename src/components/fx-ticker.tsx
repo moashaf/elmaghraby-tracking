@@ -18,22 +18,22 @@ function formatFxRate(value: number) {
 
 function QuoteCard({ quote }: { quote: FxQuote }) {
   return (
-    <div className="card p-4">
-      <div className="flex items-center gap-1.5 text-sm font-bold text-[var(--navy)] dark:text-[var(--foreground)]">
+    <div className="card px-3 py-2">
+      <div className="flex items-center gap-1 text-xs font-bold text-[var(--navy)] dark:text-[var(--foreground)]">
         <span>{quote.nameAr}</span>
-        <span className="text-xs font-semibold text-[var(--muted)]" dir="ltr">
+        <span className="text-[11px] font-semibold text-[var(--muted)]" dir="ltr">
           {FX_SYMBOL[quote.code]}
         </span>
-        <span className="text-xs font-semibold text-[var(--muted)]">{quote.code}</span>
+        <span className="text-[11px] font-semibold text-[var(--muted)]">{quote.code}</span>
       </div>
-      <div className="mt-3 flex items-baseline gap-2">
+      <div className="mt-1 flex items-baseline gap-1.5">
         <span
           dir="ltr"
-          className="text-2xl font-extrabold tracking-tight tabular-nums text-[var(--navy)] dark:text-[var(--foreground)]"
+          className="text-lg font-extrabold tracking-tight tabular-nums text-[var(--navy)] dark:text-[var(--foreground)]"
         >
           {formatFxRate(quote.rate)}
         </span>
-        <span className="text-sm font-bold text-[var(--muted)]">ج.م</span>
+        <span className="text-xs font-bold text-[var(--muted)]">ج.م</span>
       </div>
     </div>
   );
@@ -71,12 +71,9 @@ export function FxTicker() {
   }, [ui]);
 
   return (
-    <section className="space-y-3">
+    <section className="space-y-2">
       <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h2 className="text-sm font-bold">{ui("أسعار العملات مقابل الجنيه")}</h2>
-          <p className="text-xs text-[var(--muted)]">{ui("تحديث مباشر كل 4 ثوانٍ")}</p>
-        </div>
+        <h2 className="text-sm font-bold">{ui("أسعار العملات مقابل الجنيه")}</h2>
         <div className="text-xs text-[var(--muted)]">
           {updatedAt
             ? `${ui("آخر تحديث")}: ${updatedAt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`
@@ -84,7 +81,7 @@ export function FxTicker() {
         </div>
       </div>
       {error ? <p className="text-xs text-amber-700">{error}</p> : null}
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-3">
         {(board?.quotes ?? [
           { code: "USD", nameAr: "الدولار", rate: 0, change: 0, changePercent: 0, previousClose: null },
           { code: "CNY", nameAr: "الريمنبي", rate: 0, change: 0, changePercent: 0, previousClose: null },
