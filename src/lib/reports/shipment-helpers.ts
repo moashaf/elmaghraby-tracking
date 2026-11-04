@@ -52,6 +52,11 @@ export function filterShipmentByDate(row: ShipmentReportRow, from: string, to: s
   return inRange(row.eta, from, to);
 }
 
+/** Closed for operational product reports: status closed, or a close date was stored. */
+export function isClosedShipment(row: { status?: string | null; closed_at?: string | null }) {
+  return row.status === "closed" || Boolean(row.closed_at);
+}
+
 export function normalizeShipment(row: Record<string, unknown>): ShipmentReportRow {
   const company = row.companies as { name_ar?: string } | null;
   const supplier = row.suppliers as { name_ar?: string } | null;

@@ -16,6 +16,7 @@ export type ReportSlug =
   | "disassembled-products"
   | "duplicate-products"
   | "date-range-products"
+  | "closed-products"
   | "product-history"
   | "suppliers"
   | "companies"
@@ -38,24 +39,31 @@ export const REPORTS: Array<{
   { slug: "delayed", title: "الشحنات المتأخرة", description: "شحنات تجاوزت ETA ولم تُغلق بعد.", dateFilter: "none" },
   { slug: "arriving-10", title: "وصول خلال 10 أيام", description: "شحنات متوقعة الوصول خلال 10 أيام.", dateFilter: "none" },
   { slug: "closed", title: "الشحنات المغلقة", description: "كل الشحنات التي تم إغلاقها.", dateFilter: "closed", dateHint: "فلترة حسب تاريخ الإغلاق" },
-  { slug: "incoming-products", title: "منتجات واردة", description: "منتجات الشحنات المفتوحة والمغلقة.", dateFilter: "eta", dateHint: "فلترة حسب ETA للشحنة" },
+  { slug: "incoming-products", title: "منتجات واردة", description: "منتجات الشحنات المفتوحة فقط (في البحر والجمارك) — بدون المغلقة.", dateFilter: "eta", dateHint: "فلترة حسب ETA للشحنة" },
   { slug: "china-warehouse", title: "مخزن الصين", description: "الرصيد الحالي المتاح في مخزن الصين (المستلم ناقص المخصص للشحن).", dateFilter: "none" },
   { slug: "china-arrivals", title: "استلامات مخزن الصين (مجدولة)", description: "دفعات التسليم المتوقعة إلى مخزن الصين حسب تاريخ الاستلام مع تجميع حسب الصنف.", dateFilter: "none" },
   { slug: "costs", title: "تقرير المصاريف", description: "تكاليف الشحنات وإجمالي الإغلاق.", dateFilter: "closed", dateHint: "فلترة حسب تاريخ الإغلاق" },
   { slug: "ready-to-close", title: "جاهزة للإغلاق", description: "الشحنات الموجودة في الجمارك.", dateFilter: "none" },
   { slug: "containers", title: "الحاويات", description: "كل الحاويات وأوزانها وكرتينها.", dateFilter: "eta", dateHint: "فلترة حسب ETA للشحنة" },
   { slug: "container-files", title: "ملفات الحاويات", description: "كل ملفات Excel/CSV المرفوعة مع إمكانية التحميل.", dateFilter: "none" },
-  { slug: "new-products", title: "منتجات جديدة", description: "منتجات واردة معلمة كجديدة.", dateFilter: "eta", dateHint: "فلترة حسب ETA للشحنة" },
+  { slug: "new-products", title: "منتجات جديدة", description: "منتجات واردة معلمة كجديدة في الشحنات المفتوحة فقط.", dateFilter: "eta", dateHint: "فلترة حسب ETA للشحنة" },
   {
     slug: "disassembled-products",
     title: "منتجات مفككة",
-    description: "منتجات واردة معلمة كمفككة.",
+    description: "منتجات واردة معلمة كمفككة في الشحنات المفتوحة فقط.",
     dateFilter: "eta",
     dateHint: "فلترة حسب ETA للشحنة",
   },
   { slug: "duplicate-products", title: "منتجات مكررة", description: "منتجات موجودة في أكثر من شحنة مفتوحة.", dateFilter: "none" },
-  { slug: "date-range-products", title: "منتجات بفترة", description: "منتجات الشحنات داخل فترة ETA محددة.", dateFilter: "eta", dateHint: "فلترة حسب ETA للشحنة" },
-  { slug: "product-history", title: "تاريخ منتج", description: "تاريخ استيراد المنتجات من الشحنات.", dateFilter: "eta", dateHint: "فلترة حسب ETA للشحنة" },
+  { slug: "date-range-products", title: "منتجات بفترة", description: "منتجات الشحنات داخل فترة ETA — يشمل المغلقة للتقارير السنوية والفترة.", dateFilter: "eta", dateHint: "فلترة حسب ETA للشحنة" },
+  {
+    slug: "closed-products",
+    title: "منتجات الشحنات المغلقة",
+    description: "منتجات الشحنات التي تم إغلاقها فقط.",
+    dateFilter: "closed",
+    dateHint: "فلترة حسب تاريخ الإغلاق",
+  },
+  { slug: "product-history", title: "تاريخ منتج", description: "تاريخ استيراد المنتجات من الشحنات المفتوحة.", dateFilter: "eta", dateHint: "فلترة حسب ETA للشحنة" },
   { slug: "suppliers", title: "الموردين", description: "ملخص الموردين وعدد الشحنات.", dateFilter: "none" },
   { slug: "companies", title: "شركات الاستيراد", description: "ملخص الشركات وعدد الشحنات.", dateFilter: "none" },
   {

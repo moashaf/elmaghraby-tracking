@@ -138,7 +138,6 @@ export function groupProductLines(
 const STAGE_SECTIONS: Array<{ key: ShipmentStatus; title: string }> = [
   { key: "in_sea", title: "في البحر" },
   { key: "customs", title: "في الجمارك" },
-  { key: "closed", title: "مغلقة" },
 ];
 
 export function lineMatchesShipmentStage(line: ProductLine, stage?: ShipmentStageFilter) {

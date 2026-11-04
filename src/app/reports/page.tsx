@@ -47,6 +47,7 @@ const REPORT_GROUPS: Array<{
       "disassembled-products",
       "duplicate-products",
       "date-range-products",
+      "closed-products",
       "product-history",
       "all-products",
     ],

@@ -3,6 +3,16 @@ import type { ReportSlug } from "@/lib/report-definitions";
 export type ProductKindFilter = "all" | "disassembled" | "complete";
 export type ShipmentStageFilter = "all" | "in_sea" | "customs";
 
+/** Operational product reports exclude closed shipments; these two keep them. */
+export const CLOSED_INCLUDED_PRODUCT_REPORT_SLUGS: ReportSlug[] = [
+  "date-range-products",
+  "closed-products",
+];
+
+export function productReportIncludesClosedShipments(slug: string) {
+  return CLOSED_INCLUDED_PRODUCT_REPORT_SLUGS.includes(slug as ReportSlug);
+}
+
 /** Reports that support optional product images in export/print. */
 export const PRODUCT_IMAGE_REPORT_SLUGS: ReportSlug[] = [
   "incoming-products",
@@ -10,6 +20,7 @@ export const PRODUCT_IMAGE_REPORT_SLUGS: ReportSlug[] = [
   "disassembled-products",
   "duplicate-products",
   "date-range-products",
+  "closed-products",
   "product-history",
   "all-products",
 ];
@@ -20,6 +31,7 @@ export const GROUPED_PRODUCT_REPORT_SLUGS: ReportSlug[] = [
   "new-products",
   "disassembled-products",
   "date-range-products",
+  "closed-products",
 ];
 
 export const INCOMING_FILTER_SLUG = "incoming-products" as const;

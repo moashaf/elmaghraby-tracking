@@ -78,9 +78,9 @@ const REPORT_META: Record<ReportSlug, ReportMeta> = {
   "incoming-products": {
     title: { ar: "منتجات واردة", en: "Incoming products", zh: "在途产品" },
     description: {
-      ar: "منتجات الشحنات المفتوحة والمغلقة.",
-      en: "Products from open and closed shipments.",
-      zh: "来自未结案和已结案货运的产品。",
+      ar: "منتجات الشحنات المفتوحة فقط (في البحر والجمارك) — بدون المغلقة.",
+      en: "Products from open shipments only (at sea and in customs), excluding closed.",
+      zh: "仅未结案货运的产品（在途与清关中），不含已结案。",
     },
     dateFilter: "eta",
     dateHint: {
@@ -156,9 +156,9 @@ const REPORT_META: Record<ReportSlug, ReportMeta> = {
   "new-products": {
     title: { ar: "منتجات جديدة", en: "New products", zh: "新产品" },
     description: {
-      ar: "منتجات واردة معلمة كجديدة.",
-      en: "Incoming products marked as new.",
-      zh: "标记为新到产品的在途产品。",
+      ar: "منتجات واردة معلمة كجديدة في الشحنات المفتوحة فقط.",
+      en: "Incoming products marked as new on open shipments only.",
+      zh: "仅未结案货运中标记为新产品的在途产品。",
     },
     dateFilter: "eta",
     dateHint: {
@@ -170,9 +170,9 @@ const REPORT_META: Record<ReportSlug, ReportMeta> = {
   "disassembled-products": {
     title: { ar: "منتجات مفككة", en: "Disassembled products", zh: "拆散件产品" },
     description: {
-      ar: "منتجات واردة معلمة كمفككة.",
-      en: "Incoming products marked as disassembled.",
-      zh: "标记为拆散件的在途产品。",
+      ar: "منتجات واردة معلمة كمفككة في الشحنات المفتوحة فقط.",
+      en: "Incoming products marked as disassembled on open shipments only.",
+      zh: "仅未结案货运中标记为拆散件的在途产品。",
     },
     dateFilter: "eta",
     dateHint: {
@@ -193,9 +193,9 @@ const REPORT_META: Record<ReportSlug, ReportMeta> = {
   "date-range-products": {
     title: { ar: "منتجات بفترة", en: "Products by date range", zh: "按日期范围的产品" },
     description: {
-      ar: "منتجات الشحنات داخل فترة ETA محددة.",
-      en: "Shipment products within a selected ETA range.",
-      zh: "指定 ETA 范围内的货运产品。",
+      ar: "منتجات الشحنات داخل فترة ETA — يشمل المغلقة للتقارير السنوية والفترة.",
+      en: "Shipment products in an ETA range, including closed shipments for annual/period reports.",
+      zh: "指定 ETA 范围内的货运产品（含已结案，用于年度/期间报表）。",
     },
     dateFilter: "eta",
     dateHint: {
@@ -204,12 +204,26 @@ const REPORT_META: Record<ReportSlug, ReportMeta> = {
       zh: "按货运 ETA 筛选",
     },
   },
+  "closed-products": {
+    title: { ar: "منتجات الشحنات المغلقة", en: "Closed shipment products", zh: "已结案货运产品" },
+    description: {
+      ar: "منتجات الشحنات التي تم إغلاقها فقط.",
+      en: "Products from closed shipments only.",
+      zh: "仅已结案货运的产品。",
+    },
+    dateFilter: "closed",
+    dateHint: {
+      ar: "فلترة حسب تاريخ الإغلاق",
+      en: "Filter by closing date",
+      zh: "按结案日期筛选",
+    },
+  },
   "product-history": {
     title: { ar: "تاريخ منتج", en: "Product history", zh: "产品历史" },
     description: {
-      ar: "تاريخ استيراد المنتجات من الشحنات.",
-      en: "Import history of products across shipments.",
-      zh: "产品在各货运中的进口历史。",
+      ar: "تاريخ استيراد المنتجات من الشحنات المفتوحة.",
+      en: "Import history of products from open shipments.",
+      zh: "未结案货运中的产品进口历史。",
     },
     dateFilter: "eta",
     dateHint: {

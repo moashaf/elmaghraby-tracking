@@ -12,7 +12,11 @@ import { fetchSystemSettings, isShipmentDelayed } from "@/lib/system-settings";
 import { collectDescendantCategoryIds } from "@/lib/category-tree";
 import type { ProductCategory } from "@/lib/types";
 import type { ProductKindFilter, ShipmentStageFilter } from "@/lib/reports/constants";
-import { GROUPED_PRODUCT_REPORT_SLUGS, INCOMING_PRODUCTS_PAGE_SIZE } from "@/lib/reports/constants";
+import {
+  GROUPED_PRODUCT_REPORT_SLUGS,
+  INCOMING_PRODUCTS_PAGE_SIZE,
+  productReportIncludesClosedShipments,
+} from "@/lib/reports/constants";
 import {
   groupProductLines,
   groupProductLinesByShipmentStage,
@@ -24,6 +28,7 @@ import {
 import {
   inRange,
   filterShipmentByDate,
+  isClosedShipment,
   normalizeShipment,
   shipmentSelect,
   todayIso,
@@ -259,6 +264,7 @@ export async function buildReport(
       "disassembled-products",
       "duplicate-products",
       "date-range-products",
+      "closed-products",
       "product-history",
       "costs",
     ].includes(slug)
@@ -629,7 +635,7 @@ async function incomingProductsReport(
 
   const shipments = (shipmentsResult.data as Array<Record<string, unknown>>)
     .map(normalizeShipment)
-    .filter((row) => filterShipmentByDate(row, from, to, "eta"));
+    .filter((row) => !isClosedShipment(row) && filterShipmentByDate(row, from, to, "eta"));
 
   const shipmentById = new Map(shipments.map((row) => [row.id, row]));
   const shipmentIds = shipments.map((row) => row.id);
@@ -746,47 +752,81 @@ async function productsReport(
     return incomingProductsReport(from, to, options);
   }
 
-  const result = await fetchAllFromTable(
+  const shipmentsResult = await fetchAllFromTable(
+    createClient(),
+    "shipments",
+    `id,${shipmentSelect}`,
+    { column: "created_at", ascending: false }
+  );
+  if (shipmentsResult.error) return { error: shipmentsResult.error };
+
+  const dateMode = slug === "closed-products" ? "closed" : "eta";
+  const shipments = (shipmentsResult.data as Array<Record<string, unknown>>)
+    .map(normalizeShipment)
+    .filter((row) => {
+      const closed = isClosedShipment(row);
+      if (slug === "closed-products") return closed && filterShipmentByDate(row, from, to, "closed");
+      if (!productReportIncludesClosedShipments(slug) && closed) return false;
+      return filterShipmentByDate(row, from, to, dateMode);
+    });
+
+  const shipmentById = new Map(shipments.map((row) => [row.id, row]));
+  const shipmentIds = shipments.map((row) => row.id);
+  if (!shipmentIds.length) return { rows: [] };
+
+  const lightResult = await fetchAllWhereIn<ShipmentProductLightRow>(
     createClient(),
     "shipment_products",
-    `quantity,cartons_count,is_new_incoming_product,is_disassembled,products(sku,name_ar,category_id,category,image_url),shipments(${shipmentSelect})`
+    "product_id,shipment_id,quantity,cartons_count,is_new_incoming_product,is_disassembled",
+    "shipment_id",
+    shipmentIds
   );
+  if (lightResult.error) return { error: lightResult.error };
 
-  if (result.error) return { error: result.error };
+  let lightRows = lightResult.data;
+  if (slug === "new-products") lightRows = lightRows.filter((row) => row.is_new_incoming_product);
+  if (slug === "disassembled-products") lightRows = lightRows.filter((row) => row.is_disassembled);
 
-  const invoiceMap = await fetchInvoiceFileNamesByShipmentId();
+  const categoryResult = await resolveReportCategoryIds(options.categoryId);
+  if (categoryResult.error) return { error: categoryResult.error };
+  const categoryIds = categoryResult.categoryIds;
 
-  let joins = (result.data as unknown as ShipmentProductJoin[])
-    .map((row) => ({ ...row, shipments: normalizeShipmentJoin(row.shipments) }))
-    .filter((row) => row.shipments && filterShipmentByDate(row.shipments!, from, to, "eta"));
+  const productIds = [...new Set(lightRows.map((row) => row.product_id))];
+  const productsResult = await fetchAllWhereIn<ProductMeta>(
+    createClient(),
+    "products",
+    "id,sku,name_ar,category_id,category,image_url",
+    "id",
+    productIds
+  );
+  if (productsResult.error) return { error: productsResult.error };
+  const productById = new Map(productsResult.data.map((row) => [row.id, row]));
 
-  if (slug === "new-products") joins = joins.filter((row) => row.is_new_incoming_product);
-  if (slug === "disassembled-products") joins = joins.filter((row) => row.is_disassembled);
+  if (categoryIds?.size) {
+    lightRows = lightRows.filter((row) => {
+      const product = productById.get(row.product_id);
+      return product?.category_id && categoryIds.has(product.category_id);
+    });
+  }
 
   if (slug === "duplicate-products") {
     const openShipmentsBySku = new Map<string, Set<string>>();
-    joins.forEach((row) => {
-      if (row.shipments?.status !== "closed" && row.products?.sku && row.shipments?.id) {
-        const set = openShipmentsBySku.get(row.products.sku) ?? new Set<string>();
-        set.add(row.shipments.id);
-        openShipmentsBySku.set(row.products.sku, set);
-      }
+    lightRows.forEach((row) => {
+      const sku = productById.get(row.product_id)?.sku;
+      const shipment = shipmentById.get(row.shipment_id);
+      if (!sku || !shipment || isClosedShipment(shipment)) return;
+      const set = openShipmentsBySku.get(sku) ?? new Set<string>();
+      set.add(shipment.id);
+      openShipmentsBySku.set(sku, set);
     });
-    joins = joins.filter((row) => row.products?.sku && (openShipmentsBySku.get(row.products.sku)?.size ?? 0) > 1);
+    lightRows = lightRows.filter((row) => {
+      const sku = productById.get(row.product_id)?.sku;
+      return Boolean(sku && (openShipmentsBySku.get(sku)?.size ?? 0) > 1);
+    });
   }
 
-  let categoryIds: Set<string> | undefined;
-  if (options.categoryId) {
-    const categoriesResult = await fetchAllFromTable<ProductCategory>(
-      createClient(),
-      "product_categories",
-      "id,name_ar,parent_id,is_active"
-    );
-    if (categoriesResult.error) return { error: categoriesResult.error };
-    categoryIds = collectDescendantCategoryIds(categoriesResult.data, options.categoryId);
-  }
-
-  const lines = joins.map((row) => toProductLine(row, invoiceMap)).filter((line): line is ProductLine => line !== null);
+  const invoiceMap = await fetchInvoiceFileNamesByShipmentId();
+  const lines = lightRowsToProductLines(lightRows, productById, shipmentById, invoiceMap);
 
   if (slug === "product-history") {
     const grouped = new Map<
@@ -998,7 +1038,9 @@ export async function fetchCategoryShippedProducts(categoryId: string, categorie
   for (const raw of result.data as unknown as ShipmentProductJoin[]) {
     const product = raw.products;
     if (!product?.category_id || !categoryIds.has(product.category_id)) continue;
-    const line = toProductLine({ ...raw, shipments: normalizeShipmentJoin(raw.shipments) }, invoiceMap);
+    const shipment = normalizeShipmentJoin(raw.shipments);
+    if (!shipment || isClosedShipment(shipment)) continue;
+    const line = toProductLine({ ...raw, shipments: shipment }, invoiceMap);
     if (line) lines.push(line);
   }
 
