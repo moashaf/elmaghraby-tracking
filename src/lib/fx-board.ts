@@ -13,12 +13,6 @@ export type FxBoard = {
   source: string;
 };
 
-const PAIRS: Array<{ code: FxQuote["code"]; nameAr: string; yahoo: string; base: "usd" | "cny" | "eur" }> = [
-  { code: "USD", nameAr: "الدولار", yahoo: "USDEGP=X", base: "usd" },
-  { code: "CNY", nameAr: "الريمنبي", yahoo: "CNYEGP=X", base: "cny" },
-  { code: "EUR", nameAr: "اليورو", yahoo: "EUREGP=X", base: "eur" },
-];
-
 async function fetchJson(url: string) {
   const response = await fetch(url, {
     cache: "no-store",
@@ -36,10 +30,6 @@ function roundRate(value: number) {
 function positiveNumber(value: unknown) {
   const rate = Number(value);
   return Number.isFinite(rate) && rate > 0 ? rate : null;
-}
-
-function quoteNumber(row: Record<string, unknown> | undefined, key: string) {
-  return positiveNumber(row?.[key]);
 }
 
 function toQuote(code: FxQuote["code"], nameAr: string, rate: number, previousClose: number | null): FxQuote {
@@ -65,6 +55,54 @@ function boardFromRates(
     asOf,
     source,
   };
+}
+
+type YahooChart = {
+  chart?: {
+    result?: Array<{
+      meta?: {
+        regularMarketPrice?: number;
+        chartPreviousClose?: number;
+        previousClose?: number;
+        regularMarketTime?: number;
+      };
+    }>;
+    error?: { description?: string };
+  };
+};
+
+async function yahooChart(symbol: string) {
+  const hosts = ["query1.finance.yahoo.com", "query2.finance.yahoo.com"];
+  let lastError: unknown;
+  for (const host of hosts) {
+    try {
+      const body = (await fetchJson(
+        `https://${host}/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`
+      )) as YahooChart;
+      const meta = body.chart?.result?.[0]?.meta;
+      const price = positiveNumber(meta?.regularMarketPrice);
+      if (!price) throw new Error(body.chart?.error?.description || `yahoo ${symbol}`);
+      return {
+        price,
+        previous: positiveNumber(meta?.chartPreviousClose ?? meta?.previousClose),
+        asOf: meta?.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : new Date().toISOString(),
+      };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(`yahoo ${symbol}`);
+}
+
+async function fromYahooMarket(): Promise<FxBoard> {
+  const [usd, eur, usdCny] = await Promise.all([yahooChart("USDEGP=X"), yahooChart("EUREGP=X"), yahooChart("USDCNY=X")]);
+  const cny = usd.price / usdCny.price;
+  const cnyPrev = usd.previous && usdCny.previous ? usd.previous / usdCny.previous : null;
+  return boardFromRates(usd.price, cny, eur.price, usd.asOf, "yahoo", {
+    usd: usd.previous,
+    cny: cnyPrev,
+    eur: eur.previous,
+  });
 }
 
 function nestedEgp(body: unknown, base: "usd" | "cny" | "eur") {
@@ -103,69 +141,6 @@ async function fromCurrencyApi(): Promise<FxBoard> {
   throw lastError instanceof Error ? lastError : new Error("currency-api failed");
 }
 
-async function fromCbe(): Promise<FxBoard> {
-  const rows = (await fetchJson("https://api.frankfurter.dev/v2/providers/cbe/rates")) as Array<{
-    date?: string;
-    base?: string;
-    quote?: string;
-    rate?: number;
-  }>;
-  if (!Array.isArray(rows) || rows.length === 0) throw new Error("cbe empty");
-  const byQuote = new Map(rows.map((row) => [String(row.quote), Number(row.rate)]));
-  const eurEgp = positiveNumber(rows.find((row) => row.quote === "EGP")?.rate);
-  const eurUsd = positiveNumber(byQuote.get("USD"));
-  const eurCny = positiveNumber(byQuote.get("CNY"));
-  if (!eurEgp || !eurUsd || !eurCny) throw new Error("cbe missing pairs");
-  return boardFromRates(eurEgp / eurUsd, eurEgp / eurCny, eurEgp, rows[0]?.date ?? null, "cbe");
-}
-
-async function yahooQuotes(symbols: string[]) {
-  const body = (await fetchJson(
-    `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols.join(","))}`
-  )) as {
-    quoteResponse?: { result?: Array<Record<string, unknown>> };
-  };
-  const results = body.quoteResponse?.result ?? [];
-  return new Map(results.map((row) => [String(row.symbol), row]));
-}
-
-async function fromYahoo(): Promise<FxBoard> {
-  const direct = await yahooQuotes(PAIRS.map((pair) => pair.yahoo));
-  const quotes: FxQuote[] = [];
-  for (const pair of PAIRS) {
-    const row = direct.get(pair.yahoo);
-    const rate = quoteNumber(row, "regularMarketPrice");
-    if (rate) {
-      quotes.push(toQuote(pair.code, pair.nameAr, rate, quoteNumber(row, "regularMarketPreviousClose")));
-    }
-  }
-  if (quotes.length === 3) {
-    return { quotes, asOf: new Date().toISOString(), source: "yahoo" };
-  }
-
-  const cross = await yahooQuotes(["USDEGP=X", "EURUSD=X", "USDCNY=X"]);
-  const usd = quoteNumber(cross.get("USDEGP=X"), "regularMarketPrice");
-  const usdPrev = quoteNumber(cross.get("USDEGP=X"), "regularMarketPreviousClose");
-  const eurUsd = quoteNumber(cross.get("EURUSD=X"), "regularMarketPrice");
-  const eurUsdPrev = quoteNumber(cross.get("EURUSD=X"), "regularMarketPreviousClose");
-  const usdCny = quoteNumber(cross.get("USDCNY=X"), "regularMarketPrice");
-  const usdCnyPrev = quoteNumber(cross.get("USDCNY=X"), "regularMarketPreviousClose");
-  if (!usd || !eurUsd || !usdCny) throw new Error("yahoo missing cross rates");
-
-  return boardFromRates(
-    usd,
-    usd / usdCny,
-    usd * eurUsd,
-    new Date().toISOString(),
-    "yahoo-cross",
-    {
-      usd: usdPrev,
-      cny: usdPrev && usdCnyPrev ? usdPrev / usdCnyPrev : null,
-      eur: usdPrev && eurUsdPrev ? usdPrev * eurUsdPrev : null,
-    }
-  );
-}
-
 async function fromOpenRates(): Promise<FxBoard> {
   const body = (await fetchJson("https://open.er-api.com/v6/latest/USD")) as {
     rates?: Record<string, number>;
@@ -179,7 +154,7 @@ async function fromOpenRates(): Promise<FxBoard> {
 }
 
 export async function fetchFxBoard(): Promise<FxBoard> {
-  const sources = [fromCurrencyApi, fromCbe, fromYahoo, fromOpenRates];
+  const sources = [fromYahooMarket, fromCurrencyApi, fromOpenRates];
   let lastError: unknown;
   for (const source of sources) {
     try {
