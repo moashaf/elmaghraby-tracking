@@ -13,7 +13,7 @@ const FX_SYMBOL: Record<FxQuote["code"], string> = {
 };
 
 function formatFxRate(value: number) {
-  return value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return value.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 }
 
 function QuoteCard({ quote }: { quote: FxQuote }) {
