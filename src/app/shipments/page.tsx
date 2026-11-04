@@ -242,7 +242,7 @@ export default function ShipmentsPage() {
   }
 
   async function exportExcel() {
-    const rows = filteredShipments.map((shipment, index) => {
+    const rows: Array<Record<string, string | number>> = filteredShipments.map((shipment, index) => {
       const invoiceFile = invoiceByShipmentId.get(shipment.id);
       return {
         [SHIPMENT_SERIAL_COLUMN]: index + 1,
